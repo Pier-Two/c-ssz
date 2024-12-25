@@ -51,8 +51,6 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
-bin/
-obj/
 .DS_Store
 
 # Ignore all files in the tests folder without extensions (likely binaries)
