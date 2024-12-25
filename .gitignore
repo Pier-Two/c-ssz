@@ -50,3 +50,16 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+bin/
+obj/
+.DS_Store
+
+# Ignore all files in the tests folder without extensions (likely binaries)
+tests/*
+
+# Allow .c files (and other source files) in the tests folder
+!tests/*.c
+
+# Allow .h files in the tests folder (if headers exist)
+!tests/*.h
