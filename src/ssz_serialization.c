@@ -5,25 +5,7 @@
 #include "../include/ssz_serialization.h"
 #include "../include/ssz_constants.h"
 #include "../include/ssz_types.h"
-
-/* 
- * Marking these static inline can help eliminate some function call overhead in hot loops.
- * If the compiler decides inlining is appropriate, it will do so.
- */
-
-static inline void write_offset_le(uint32_t offset, uint8_t *out)
-{
-    out[0] = (uint8_t)(offset & 0xFF);
-    out[1] = (uint8_t)((offset >> 8) & 0xFF);
-    out[2] = (uint8_t)((offset >> 16) & 0xFF);
-    out[3] = (uint8_t)((offset >> 24) & 0xFF);
-}
-
-static inline bool check_max_offset(size_t offset)
-{
-    size_t max_offset = ((size_t)1 << (BYTES_PER_LENGTH_OFFSET * BITS_PER_BYTE));
-    return (offset < max_offset);
-}
+#include "../include/ssz_utils.h"
 
 /* 
  * A helper function that calculates the total size required for serializing fixed-size elements 

@@ -6,38 +6,7 @@
 #include "../include/ssz_deserialization.h"
 #include "../include/ssz_constants.h"
 #include "../include/ssz_types.h"
-
-/*
- * Helper function to check if 'offset' is within the valid SSZ offset range.
- */
-static inline bool check_max_offset(size_t offset)
-{
-    size_t max_offset = ((size_t)1 << (BYTES_PER_LENGTH_OFFSET * BITS_PER_BYTE));
-    return (offset < max_offset);
-}
-
-/*
- * Helper to read a 4-byte little-endian offset from src[offset_index..offset_index+3].
- * Returns false on failure.
- */
-static inline bool read_offset_le(
-    const uint8_t *src,
-    size_t src_size,
-    size_t offset_index,
-    uint32_t *out_offset)
-{
-    if (!src || offset_index + 3 >= src_size)
-    {
-        return false;
-    }
-    uint32_t val = 
-        (uint32_t)src[offset_index]       |
-        ((uint32_t)src[offset_index + 1] << 8)  |
-        ((uint32_t)src[offset_index + 2] << 16) |
-        ((uint32_t)src[offset_index + 3] << 24);
-    *out_offset = val;
-    return true;
-}
+#include "../include/ssz_utils.h"
 
 /*
  * A helper that reads 'count' offsets from the buffer’s “fixed region,” checking each offset
