@@ -289,8 +289,6 @@ static void test_serialize_bitvector(void)
 
     printf("Testing insufficient out_size...\n");
     {
-        // Instead of 8 bits in a 1-byte buffer (which is actually enough),
-        // use 16 bits, which needs 2 bytes, but only give it 1 byte.
         bool bits[16];
         memset(bits, true, sizeof(bits));  // arbitrary data
         uint8_t small_buf[1];
@@ -384,8 +382,6 @@ static void test_serialize_bitlist(void)
 
 static ssz_error_t dummy_subserialize(const void* data, uint8_t* out_buf, size_t* out_size)
 {
-    // This is just a helper for union tests. We pretend to be a sub-serialization function.
-    // We'll just copy a known small block of data to see if it ends up in the final union output.
     if (!data || !out_buf || !out_size) return SSZ_ERROR_SERIALIZATION;
     const char* str = (const char*) data; 
     size_t len = strlen(str);

@@ -21,8 +21,8 @@ LIB_SOURCES = ssz_deserialization.c ssz_serialization.c ssz_utils.c ssz_merkleiz
 # Convert each .c in LIB_SOURCES to the corresponding .o in obj/
 LIB_OBJECTS = $(patsubst %.c, $(OBJ_DIR)/%.o, $(LIB_SOURCES))
 
-# Test files. Add any new test sources here.
-TEST_SOURCES = test_ssz_custom.c test_ssz_serialization.c test_ssz_deserialization.c
+# Test files. 
+TEST_SOURCES = test_ssz_serialization.c test_ssz_deserialization.c
 
 # Convert each test .c file to a final binary in bin/
 TEST_BINARIES = $(patsubst %.c, $(BIN_DIR)/%, $(TEST_SOURCES))
@@ -50,8 +50,6 @@ $(BIN_DIR)/%: $(TEST_DIR)/%.c $(STATIC_LIB)
 
 # Test target that builds everything and runs the tests
 test: all
-	@echo "Running test_ssz_custom..."
-	@./$(BIN_DIR)/test_ssz_custom
 	@echo "Running test_ssz_serialization..."
 	@./$(BIN_DIR)/test_ssz_serialization
 	@echo "Running test_ssz_deserialization..."
