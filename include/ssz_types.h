@@ -5,12 +5,6 @@
 #include <stdbool.h>
 
 /**
- * Defines an alias for the SSZ boolean type.
- * This is primarily for clarity, though 'bool' can be used directly.
- */
-typedef bool ssz_boolean;
-
-/**
  * Enumerates error codes used throughout the library.
  * These codes indicate success or specific types of failures.
  */
