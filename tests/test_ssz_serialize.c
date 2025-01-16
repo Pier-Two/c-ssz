@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include "ssz_serialization.h"
+#include "ssz_serialize.h"
 #include "ssz_types.h"
 
 static void test_serialize_uintN(void)

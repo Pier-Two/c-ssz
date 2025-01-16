@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "ssz_serialization.h"
+#include "ssz_serialize.h"
 #include "ssz_constants.h"
 #include "ssz_types.h"
 #include "ssz_utils.h"
@@ -12,7 +12,6 @@
  * required for fixed-size elements and offsets for variable-size data. This function
  * writes the offsets into the output buffer and computes the total size used.
  * 
- * @param elements Pointer to the input elements.
  * @param element_count The number of elements in the array.
  * @param element_sizes Array of sizes for each element.
  * @param out_buf The output buffer to write the offsets.
@@ -22,7 +21,6 @@
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 static ssz_error_t prepare_variable_sized_array(
-    const void *elements,
     size_t element_count,
     const size_t *element_sizes,
     uint8_t *out_buf,
@@ -35,9 +33,11 @@ static ssz_error_t prepare_variable_sized_array(
     {
         return SSZ_ERROR_SERIALIZATION;
     }
+
     *fixed_region_size_out = fixed_region_size;
     uint8_t *offset_ptr = out_buf;
     size_t variable_offset = 0;
+
     for (size_t i = 0; i < element_count; i++)
     {
         size_t elem_size = element_sizes[i];
@@ -46,13 +46,17 @@ static ssz_error_t prepare_variable_sized_array(
         {
             return SSZ_ERROR_SERIALIZATION;
         }
+
         write_offset_le(this_offset_le, &offset_ptr[i * BYTES_PER_LENGTH_OFFSET]);
+
         if (fixed_region_size + variable_offset + elem_size > *out_size)
         {
             return SSZ_ERROR_SERIALIZATION;
         }
+
         variable_offset += elem_size;
     }
+
     *variable_offset_out = variable_offset;
     return SSZ_SUCCESS;
 }
@@ -93,7 +97,6 @@ static ssz_error_t copy_variable_sized_array(
  * Serializes a variable-sized array by writing offsets and copying data into the output buffer.
  * This function performs the serialization in two phases: offset writing and data copying.
  * 
- * @param elements Pointer to the input elements.
  * @param element_count The number of elements in the array.
  * @param element_sizes Array of sizes for each element.
  * @param out_buf The output buffer to write the serialized data.
@@ -109,29 +112,33 @@ static ssz_error_t serialize_variable_sized_array(
 {
     size_t fixed_region_size = 0;
     size_t variable_offset = 0;
+
     ssz_error_t ret = prepare_variable_sized_array(
-        elements,
-        element_count,
+        element_count,         /* Removed the 'elements' pointer here */
         element_sizes,
         out_buf,
         out_size,
         &fixed_region_size,
         &variable_offset
     );
+
     if (ret != SSZ_SUCCESS)
     {
         return ret;
     }
+
     ret = copy_variable_sized_array(elements, element_count, element_sizes, out_buf, fixed_region_size);
     if (ret != SSZ_SUCCESS)
     {
         return ret;
     }
+
     size_t total_used = fixed_region_size + variable_offset;
     if (!check_max_offset(total_used))
     {
         return SSZ_ERROR_SERIALIZATION;
     }
+
     *out_size = total_used;
     return SSZ_SUCCESS;
 }

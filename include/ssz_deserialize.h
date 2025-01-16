@@ -1,5 +1,5 @@
-#ifndef SSZ_DESERIALIZATION_H
-#define SSZ_DESERIALIZATION_H
+#ifndef SSZ_DESERIALIZE_H
+#define SSZ_DESERIALIZE_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -140,4 +140,4 @@ ssz_error_t ssz_deserialize_list(
     size_t *out_actual_count
 );
 
-#endif /* SSZ_DESERIALIZATION_H */
+#endif /* SSZ_DESERIALIZE_H */

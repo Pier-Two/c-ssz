@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "ssz_deserialization.h"
+#include "ssz_deserialize.h"
 #include "ssz_constants.h"
 #include "ssz_types.h"
 #include "ssz_utils.h"
@@ -21,7 +21,6 @@
  * @param buffer_size         The size of the input buffer.
  * @param count               The number of offsets to read.
  * @param out_offsets         Pointer to store the allocated array of offsets. Caller must free this array.
- * @param strict_count_match  If true, ensures no leftover bytes in the buffer for vectors.
  * 
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
@@ -29,8 +28,7 @@ static ssz_error_t read_variable_offsets_and_check_ascending(
     const uint8_t *buffer,
     size_t buffer_size,
     size_t count,
-    uint32_t **out_offsets,
-    bool strict_count_match)
+    uint32_t **out_offsets)
 {
     size_t offset_region = count * BYTES_PER_LENGTH_OFFSET;
     if (offset_region > buffer_size)
@@ -410,8 +408,7 @@ ssz_error_t ssz_deserialize_vector(
         uint32_t *offsets = NULL;
         ssz_error_t ret = read_variable_offsets_and_check_ascending(
             buffer, buffer_size,
-            element_count, &offsets,
-            true 
+            element_count, &offsets 
         );
         if (ret != SSZ_SUCCESS)
         {

@@ -1,5 +1,5 @@
-#ifndef SSZ_MERKLEIZATION_H
-#define SSZ_MERKLEIZATION_H
+#ifndef SSZ_MERKLE_H
+#define SSZ_MERKLE_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -90,4 +90,4 @@ ssz_error_t ssz_mix_in_selector(
     uint8_t selector,
     uint8_t *out_root);
 
-#endif /* SSZ_MERKLEIZATION_H */
+#endif /* SSZ_MERKLE_H */

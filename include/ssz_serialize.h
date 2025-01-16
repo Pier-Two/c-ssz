@@ -1,5 +1,5 @@
-#ifndef SSZ_SERIALIZATION_H
-#define SSZ_SERIALIZATION_H
+#ifndef SSZ_SERIALIZE_H
+#define SSZ_SERIALIZE_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -129,4 +129,4 @@ ssz_error_t ssz_serialize_list(
     size_t *out_size
 );
 
-#endif /* SSZ_SERIALIZATION_H */
+#endif /* SSZ_SERIALIZE_H */
