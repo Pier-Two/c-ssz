@@ -173,7 +173,6 @@ ssz_error_t ssz_serialize_bitvector(const bool *bits, size_t num_bits, uint8_t *
         return SSZ_ERROR_SERIALIZATION;
     }
 
-    // Explicitly reject zero-length bitvectors:
     if (num_bits == 0)
     {
         return SSZ_ERROR_SERIALIZATION;
@@ -340,92 +339,4 @@ ssz_error_t ssz_serialize_list(
     {
         return serialize_variable_sized_array(elements, element_count, element_sizes, out_buf, out_size);
     }
-}
-
-/* 
- * We can also improve container serialization by splitting out the offset calculation 
- * from the copying. We do a single pass that calculates total variable offset usage, writes offsets, 
- * and then a second pass to do the actual copying. 
- */
-ssz_error_t ssz_serialize_container(
-    const void *container_data,
-    size_t field_count,
-    const bool *field_is_variable_size,
-    const size_t *field_sizes,
-    uint8_t *out_buf,
-    size_t *out_size)
-{
-    if (!container_data || !field_is_variable_size || !field_sizes || !out_buf || !out_size)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-    if (field_count == 0)
-    {
-        *out_size = 0;
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    size_t fixed_region_size = 0;
-    for (size_t i = 0; i < field_count; i++)
-    {
-        if (field_is_variable_size[i])
-        {
-            fixed_region_size += BYTES_PER_LENGTH_OFFSET;
-        }
-        else
-        {
-            fixed_region_size += field_sizes[i];
-        }
-    }
-    if (*out_size < fixed_region_size)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-    uint8_t *buf_fixed = out_buf;
-    uint8_t *buf_variable = out_buf + fixed_region_size;
-    const uint8_t *src = (const uint8_t *)container_data;
-    size_t variable_offset = 0;
-    size_t data_offset = 0;
-
-    for (size_t i = 0; i < field_count; i++)
-    {
-        if (!field_is_variable_size[i])
-        {
-            size_t fs = field_sizes[i];
-            if (buf_fixed + fs > out_buf + fixed_region_size)
-            {
-                return SSZ_ERROR_SERIALIZATION;
-            }
-            memcpy(buf_fixed, src + data_offset, fs);
-            buf_fixed += fs;
-            data_offset += fs;
-        }
-        else
-        {
-            uint32_t offset_le = (uint32_t)(fixed_region_size + variable_offset);
-            if (!check_max_offset(offset_le))
-            {
-                return SSZ_ERROR_SERIALIZATION;
-            }
-            write_offset_le(offset_le, buf_fixed);
-            buf_fixed += BYTES_PER_LENGTH_OFFSET;
-            size_t fs = field_sizes[i];
-            if (fixed_region_size + variable_offset + fs > *out_size)
-            {
-                return SSZ_ERROR_SERIALIZATION;
-            }
-            memcpy(buf_variable, src + data_offset, fs);
-            buf_variable += fs;
-            data_offset += fs;
-            variable_offset += fs;
-        }
-    }
-
-    size_t total_used = fixed_region_size + variable_offset;
-    if (!check_max_offset(total_used))
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-    *out_size = total_used;
-    return SSZ_SUCCESS;
 }

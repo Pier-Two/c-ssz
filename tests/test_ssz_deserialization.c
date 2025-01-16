@@ -8,10 +8,7 @@
 #include "../include/ssz_serialization.h"
 #include "../include/ssz_constants.h"
 
-/*
- * We'll define a helper function to compare two boolean arrays of a given length,
- * returning true if they match exactly.
- */
+
 static bool compare_bool_arrays(const bool *arr1, const bool *arr2, size_t len)
 {
     for (size_t i = 0; i < len; i++)
@@ -32,9 +29,6 @@ static ssz_error_t union_subtype_cb(const uint8_t *b, size_t bs, void **out_data
     return SSZ_SUCCESS;
 }
 
-/*
- * Tests for ssz_deserialize_uintN, covering valid, invalid, and boundary scenarios.
- */
 static void test_deserialize_uintN(void)
 {
     printf("Running tests for ssz_deserialize_uintN...\n");
@@ -115,9 +109,6 @@ static void test_deserialize_uintN(void)
     }
 }
 
-/*
- * Tests for ssz_deserialize_boolean, covering true/false values, invalid values, and small buffers.
- */
 static void test_deserialize_boolean(void)
 {
     printf("\nRunning tests for ssz_deserialize_boolean...\n");
@@ -187,10 +178,6 @@ static void test_deserialize_boolean(void)
     }
 }
 
-/*
- * Tests for ssz_deserialize_bitvector, covering exact bit lengths, boundary checks,
- * and verifying behavior when buffer sizes are mismatched.
- */
 static void test_deserialize_bitvector(void)
 {
     printf("\nRunning tests for ssz_deserialize_bitvector...\n");
@@ -268,10 +255,6 @@ static void test_deserialize_bitvector(void)
     }
 }
 
-/*
- * Tests for ssz_deserialize_bitlist, verifying the boundary bit detection,
- * the maximum bits limit, and empty or null buffers.
- */
 static void test_deserialize_bitlist(void)
 {
     printf("\nRunning tests for ssz_deserialize_bitlist...\n");
@@ -352,10 +335,6 @@ static void test_deserialize_bitlist(void)
     }
 }
 
-/*
- * Tests for ssz_deserialize_union, checking valid selectors, invalid selectors,
- * and the handling of sub-type deserialization.
- */
 static void test_deserialize_union(void)
 {
     printf("\nRunning tests for ssz_deserialize_union...\n");
@@ -408,9 +387,6 @@ static void test_deserialize_union(void)
     }
 }
 
-/*
- * Tests for ssz_deserialize_vector, covering both fixed-size and variable-size elements.
- */
 static void test_deserialize_vector(void)
 {
     printf("\nRunning tests for ssz_deserialize_vector...\n");
@@ -480,10 +456,6 @@ static void test_deserialize_vector(void)
     }
 }
 
-/*
- * Tests for ssz_deserialize_list, covering partial parsing, capacity checks, fixed-size
- * and variable-size elements, and error cases.
- */
 static void test_deserialize_list(void)
 {
     printf("\nRunning tests for ssz_deserialize_list...\n");
@@ -542,7 +514,7 @@ static void test_deserialize_list(void)
 
     {
         printf("  Checking list with invalid offsets to ensure error detection...\n");
-        // We'll build a serialized payload with out-of-order offsets to check if it's rejected.
+
         uint8_t bad_serial[8] = {0x04, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00};
         size_t field_sizes[2] = {1, 1};
         uint8_t recovered[2] = {0};
@@ -555,83 +527,6 @@ static void test_deserialize_list(void)
     }
 }
 
-/*
- * Tests for ssz_deserialize_container, covering a mix of fixed-size and variable-size fields,
- * and checking correct ordering of variable offsets.
- */
-static void test_deserialize_container(void)
-{
-    printf("\nRunning tests for ssz_deserialize_container...\n");
-
-    {
-        printf("  Checking container with 2 fixed fields and 1 variable field...\n");
-        // field0 (4 bytes fixed): 0xAA, 0xBB, 0xCC, 0xDD
-        // field1 (4 bytes fixed): 0x99, 0x88, 0x77, 0x66
-        // field2 (2 bytes variable): 0x11, 0x22
-        uint8_t container_data[10] = {
-            0xAA, 0xBB, 0xCC, 0xDD,
-            0x99, 0x88, 0x77, 0x66,
-            0x11, 0x22};
-        bool field_is_variable_size[3] = {false, false, true};
-        size_t field_sizes[3] = {4, 4, 2};
-
-        uint8_t serialized[32] = {0};
-        size_t out_size = sizeof(serialized);
-
-        ssz_error_t serr = ssz_serialize_container(container_data, 3, field_is_variable_size, field_sizes, serialized, &out_size);
-        if (serr != SSZ_SUCCESS)
-        {
-            printf("    Failure: could not serialize container.\n");
-        }
-        else
-        {
-            uint8_t recovered[10] = {0};
-            ssz_error_t derr = ssz_deserialize_container(serialized, out_size, 3, field_is_variable_size, field_sizes, recovered);
-            if (derr == SSZ_SUCCESS && memcmp(container_data, recovered, 10) == 0)
-                printf("    Success: container round-trip.\n");
-            else
-                printf("    Failure: container mismatch.\n");
-        }
-    }
-
-    {
-        printf("  Checking container with variable fields out of ascending order...\n");
-        uint8_t bad_serial[20] = {
-            // fixed region: 2 offsets, each 4 bytes, out of order
-            0x08, 0x00, 0x00, 0x00,
-            0x04, 0x00, 0x00, 0x00,
-            // then random data
-            0x99, 0x88, 0x77, 0x66,
-            0xDE, 0xAD, 0xBE, 0xEF,
-            0x11, 0x22, 0x33, 0x44};
-        // Suppose we define 2 variable fields, each of size 4, for demonstration.
-        bool field_is_variable_size[2] = {true, true};
-        size_t field_sizes[2] = {4, 4};
-        uint8_t recovered[8] = {0};
-
-        ssz_error_t derr = ssz_deserialize_container(bad_serial, 20, 2, field_is_variable_size, field_sizes, recovered);
-        if (derr == SSZ_ERROR_DESERIALIZATION)
-            printf("    Success: caught invalid ascending offsets.\n");
-        else
-            printf("    Failure: did not catch ascending offset error.\n");
-    }
-
-    {
-        printf("  Checking container with zero fields (illegal in SSZ, verifying error code)...\n");
-        bool field_is_variable_size[1] = {false};
-        size_t field_sizes[1] = {4};
-        uint8_t container[4] = {0xAA, 0xBB, 0xCC, 0xDD};
-        ssz_error_t derr = ssz_deserialize_container(container, 4, 0, field_is_variable_size, field_sizes, NULL);
-        if (derr == SSZ_ERROR_DESERIALIZATION)
-            printf("    Success: container with zero fields not allowed.\n");
-        else
-            printf("    Failure: did not catch zero-field container.\n");
-    }
-}
-
-/*
- * The main entry point that runs all deserialization tests in sequence.
- */
 int main(void)
 {
     test_deserialize_uintN();
@@ -641,7 +536,6 @@ int main(void)
     test_deserialize_union();
     test_deserialize_vector();
     test_deserialize_list();
-    test_deserialize_container();
 
     printf("\nFinished running ssz_deserialization tests.\n");
     return 0;

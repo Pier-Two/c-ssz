@@ -7,6 +7,7 @@
 #include "../include/ssz_serialization.h"
 #include "../include/ssz_types.h"
 
+
 static void test_serialize_uintN(void)
 {
     printf("\n--- Testing ssz_serialize_uintN ---\n");
@@ -661,126 +662,6 @@ static void test_serialize_list(void)
     }
 }
 
-static void test_serialize_container(void)
-{
-    printf("\n--- Testing ssz_serialize_container ---\n");
-
-    // We'll construct a container with 5 fields: 
-    //   - field 0: a uint32 (4 bytes, fixed)
-    //   - field 1: a 2-byte array (variable in the real world, but let's treat it as variable for testing)
-    //   - field 2: a single byte (fixed)
-    //   - field 3: a 6-byte array (variable)
-    //   - field 4: a 4-byte array (fixed)
-    // We'll then confirm the offsets in the fixed region and the correct concatenation of the variable data.
-
-    // The container data in memory will be in the order: [field0, field1, field2, field3, field4].
-    // We'll assemble them into a single buffer "mock_container_data".
-    // field0 -> 4 bytes: {0x11, 0x22, 0x33, 0x44}
-    // field1 -> 2 bytes: {0xAA, 0xBB}
-    // field2 -> 1 byte:  {0xFF}
-    // field3 -> 6 bytes: {0x10,0x20,0x30,0x40,0x50,0x60}
-    // field4 -> 4 bytes: {0xDE, 0xAD, 0xBE, 0xEF}
-
-    uint8_t mock_container_data[17] = {
-        // field0
-        0x11, 0x22, 0x33, 0x44,
-        // field1
-        0xAA, 0xBB,
-        // field2
-        0xFF,
-        // field3
-        0x10, 0x20, 0x30, 0x40, 0x50, 0x60,
-        // field4
-        0xDE, 0xAD, 0xBE, 0xEF
-    };
-
-    bool field_is_variable_size[5] = {
-        false,  // field0
-        true,   // field1
-        false,  // field2
-        true,   // field3
-        false   // field4
-    };
-
-    size_t field_sizes[5] = {
-        4, // field0
-        2, // field1
-        1, // field2
-        6, // field3
-        4  // field4
-    };
-
-    uint8_t out_buf[64];
-    memset(out_buf, 0, sizeof(out_buf));
-    size_t out_size = sizeof(out_buf);
-    ssz_error_t err = ssz_serialize_container(
-        mock_container_data,
-        5,
-        field_is_variable_size,
-        field_sizes,
-        out_buf,
-        &out_size);
-
-    printf("Testing container with 5 fields, expecting correct offsets and variable region...\n");
-    if (err == SSZ_SUCCESS)
-    {
-        // The fixed region size is: field0(4 bytes) + offset(4 bytes) + field2(1 byte) + offset(4 bytes) + field4(4 bytes) = 17 bytes total.
-        // Those 17 bytes in the output must be:
-        //   field0(4B) => 0x11,0x22,0x33,0x44
-        //   offset for field1(4B) => we expect 17 + 0 so 17(0x11) in little-endian => 0x11,0x00,0x00,0x00
-        //   field2(1B) => 0xFF
-        //   offset for field3(4B) => we expect 17 + 2=19 => 0x13,0x00,0x00,0x00
-        //   field4(4B) => 0xDE,0xAD,0xBE,0xEF
-        // Then the variable region is field1(2B) => 0xAA,0xBB, field3(6B) => 0x10,0x20,0x30,0x40,0x50,0x60.
-
-        // Let's verify out_size. The total used is 17 + (2 + 6) = 25. 
-        if (out_size == 25)
-        {
-            bool pass = true;
-            if (out_buf[0] != 0x11 || out_buf[1] != 0x22 || out_buf[2] != 0x33 || out_buf[3] != 0x44) pass = false;
-            if (out_buf[4] != 0x11 || out_buf[5] != 0x00 || out_buf[6] != 0x00 || out_buf[7] != 0x00) pass = false;
-            if (out_buf[8] != 0xFF) pass = false;
-            if (out_buf[9] != 0x13 || out_buf[10] != 0x00 || out_buf[11] != 0x00 || out_buf[12] != 0x00) pass = false;
-            if (out_buf[13] != 0xDE || out_buf[14] != 0xAD || out_buf[15] != 0xBE || out_buf[16] != 0xEF) pass = false;
-            if (out_buf[17] != 0xAA || out_buf[18] != 0xBB) pass = false;
-            if (out_buf[19] != 0x10 || out_buf[20] != 0x20 || out_buf[21] != 0x30 || out_buf[22] != 0x40 ||
-                out_buf[23] != 0x50 || out_buf[24] != 0x60) pass = false;
-
-            if (pass)
-            {
-                printf("  OK: Container serialized correctly.\n");
-            }
-            else
-            {
-                printf("  FAIL: Container data mismatch.\n");
-            }
-        }
-        else
-        {
-            printf("  FAIL: Container total size is not as expected.\n");
-        }
-    }
-    else
-    {
-        printf("  FAIL: ssz_serialize_container returned error.\n");
-    }
-
-    printf("Testing container with zero fields => should fail...\n");
-    {
-        size_t out_size2 = sizeof(out_buf);
-        memset(out_buf, 0, sizeof(out_buf));
-        err = ssz_serialize_container(mock_container_data, 0, field_is_variable_size, field_sizes, out_buf, &out_size2);
-        if (err == SSZ_ERROR_SERIALIZATION)
-        {
-            printf("  OK: Container with zero fields was correctly rejected.\n");
-        }
-        else
-        {
-            printf("  FAIL: Zero-field container was not rejected.\n");
-        }
-    }
-}
-
 int main(void)
 {
     test_serialize_uintN();
@@ -790,6 +671,5 @@ int main(void)
     test_serialize_union();
     test_serialize_vector();
     test_serialize_list();
-    test_serialize_container();
     return 0;
 }

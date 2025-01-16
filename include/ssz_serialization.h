@@ -68,15 +68,4 @@ ssz_error_t ssz_serialize_list(
     size_t *out_size
 );
 
-// Serializes a container by interleaving offsets for any variable-size fields and 
-// writing fixed-size fields directly.
-ssz_error_t ssz_serialize_container(
-    const void *container_data,
-    size_t field_count,
-    const bool *field_is_variable_size,
-    const size_t *field_sizes,
-    uint8_t *out_buf,
-    size_t *out_size
-);
-
 #endif /* SSZ_SERIALIZATION_H */

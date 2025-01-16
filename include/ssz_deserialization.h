@@ -77,17 +77,4 @@ ssz_error_t ssz_deserialize_list(
     size_t *out_actual_count
 );
 
-/*
- * Deserializes a container of field_count fields, each with a size in field_sizes[i] 
- * or an offset if variable. Writes data into out_container_data.
- */
-ssz_error_t ssz_deserialize_container(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t field_count,
-    const bool *field_is_variable_size,
-    const size_t *field_sizes,
-    void *out_container_data
-);
-
 #endif /* SSZ_DESERIALIZATION_H */
