@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include "../include/ssz_serialization.h"
 
+
 static bool parse_hex(const char *hex, uint8_t *out, size_t out_len) {
     size_t hex_len = strlen(hex);
     if (hex_len < (out_len * 2)) {
