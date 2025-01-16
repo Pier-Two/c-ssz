@@ -2,16 +2,24 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "../include/ssz_serialization.h"
-#include "../include/ssz_constants.h"
-#include "../include/ssz_types.h"
-#include "../include/ssz_utils.h"
+#include "ssz_serialization.h"
+#include "ssz_constants.h"
+#include "ssz_types.h"
+#include "ssz_utils.h"
 
-/* 
- * A helper function that calculates the total size required for serializing fixed-size elements 
- * and also calculates offsets for variable-size data. This is used by both vector and list logic. 
- * It consolidates the offset writing in one pass and returns the final total used on success. 
- * The 'elements' pointer is not actually copied here; we only compute offsets and write them. 
+/**
+ * Prepares the serialization of a variable-sized array by calculating the total size
+ * required for fixed-size elements and offsets for variable-size data. This function
+ * writes the offsets into the output buffer and computes the total size used.
+ * 
+ * @param elements Pointer to the input elements.
+ * @param element_count The number of elements in the array.
+ * @param element_sizes Array of sizes for each element.
+ * @param out_buf The output buffer to write the offsets.
+ * @param out_size Pointer to the size of the output buffer. Updated with the total size used.
+ * @param fixed_region_size_out Pointer to store the size of the fixed region.
+ * @param variable_offset_out Pointer to store the size of the variable region.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 static ssz_error_t prepare_variable_sized_array(
     const void *elements,
@@ -49,9 +57,17 @@ static ssz_error_t prepare_variable_sized_array(
     return SSZ_SUCCESS;
 }
 
-/* 
- * This helper does the actual data copying of variable elements after the offsets have been written. 
- * It consolidates the copying into a single pass for better locality and fewer repeated pointer increments.
+/**
+ * Copies variable-sized elements into the output buffer after the offsets have been written.
+ * This function performs the data copying in a single pass to improve memory locality
+ * and reduce redundant pointer arithmetic.
+ * 
+ * @param elements Pointer to the input elements.
+ * @param element_count The number of elements in the array.
+ * @param element_sizes Array of sizes for each element.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param fixed_region_size The size of the fixed region containing offsets.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 static ssz_error_t copy_variable_sized_array(
     const void *elements,
@@ -73,10 +89,16 @@ static ssz_error_t copy_variable_sized_array(
     return SSZ_SUCCESS;
 }
 
-/* 
- * A single helper that encapsulates the “variable-size” portion of vectors/lists. 
- * It does the offset writing and the data copying in two phases, which can be 
- * more performant than interleaving them each iteration in a single loop. 
+/**
+ * Serializes a variable-sized array by writing offsets and copying data into the output buffer.
+ * This function performs the serialization in two phases: offset writing and data copying.
+ * 
+ * @param elements Pointer to the input elements.
+ * @param element_count The number of elements in the array.
+ * @param element_sizes Array of sizes for each element.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the total size used.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 static ssz_error_t serialize_variable_sized_array(
     const void *elements,
@@ -114,6 +136,17 @@ static ssz_error_t serialize_variable_sized_array(
     return SSZ_SUCCESS;
 }
 
+/**
+ * Serializes an unsigned integer of a specified bit size into a buffer.
+ * Supports bit sizes of 8, 16, 32, 64, 128, and 256. The serialized value
+ * is written in little-endian format.
+ * 
+ * @param value Pointer to the integer value to serialize.
+ * @param bit_size The size of the integer in bits.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 ssz_error_t ssz_serialize_uintN(
     const void *value,
     size_t bit_size,
@@ -150,6 +183,14 @@ ssz_error_t ssz_serialize_uintN(
     return SSZ_SUCCESS;
 }
 
+/**
+ * Serializes a boolean value into a single byte.
+ * 
+ * @param value The boolean value to serialize.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 ssz_error_t ssz_serialize_boolean(bool value, uint8_t *out_buf, size_t *out_size)
 {
     if (!out_buf || !out_size || *out_size < 1)
@@ -161,10 +202,15 @@ ssz_error_t ssz_serialize_boolean(bool value, uint8_t *out_buf, size_t *out_size
     return SSZ_SUCCESS;
 }
 
-/* 
- * In principle, you could optimize bitvector serialization using bit tricks or 
- * by grouping bits in bytes at once, but this is already fairly compact. 
- * You can consider unrolling if you need further speed. For now, only small refactoring. 
+/** 
+ * Serializes a bitvector into a compact byte array. Each bit in the input
+ * is packed into the output buffer, with unused bits in the last byte set to 0.
+ * 
+ * @param bits Pointer to the input bit array.
+ * @param num_bits The number of bits to serialize.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_serialize_bitvector(const bool *bits, size_t num_bits, uint8_t *out_buf, size_t *out_size)
 {
@@ -197,6 +243,16 @@ ssz_error_t ssz_serialize_bitvector(const bool *bits, size_t num_bits, uint8_t *
     return SSZ_SUCCESS;
 }
 
+/**
+ * Serializes a bitlist into a compact byte array. A bitlist is similar to a bitvector,
+ * but includes an additional "end bit" to indicate the end of the list.
+ * 
+ * @param bits Pointer to the input bit array.
+ * @param num_bits The number of bits to serialize.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 ssz_error_t ssz_serialize_bitlist(const bool *bits, size_t num_bits, uint8_t *out_buf, size_t *out_size)
 {
     if (!bits || !out_buf || !out_size)
@@ -222,6 +278,16 @@ ssz_error_t ssz_serialize_bitlist(const bool *bits, size_t num_bits, uint8_t *ou
     return SSZ_SUCCESS;
 }
 
+/**
+ * Serializes a union type, which includes a selector and optional data.
+ * The selector determines the type of the union, and the data is serialized
+ * using the provided serialization function.
+ * 
+ * @param u Pointer to the union to serialize.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 ssz_error_t ssz_serialize_union(const ssz_union_t *u, uint8_t *out_buf, size_t *out_size)
 {
     if (!u || !out_buf || !out_size || *out_size < 1)
@@ -258,9 +324,17 @@ ssz_error_t ssz_serialize_union(const ssz_union_t *u, uint8_t *out_buf, size_t *
     return SSZ_SUCCESS;
 }
 
-/* 
- * The vector function is now shorter and uses the new serialize_variable_sized_array helper 
- * if the elements are variable-size. 
+/**
+ * Serializes a vector, which is a fixed-length collection of elements.
+ * If the elements are variable-sized, offsets are included in the serialization.
+ * 
+ * @param elements Pointer to the input elements.
+ * @param element_count The number of elements in the vector.
+ * @param element_sizes Array of sizes for each element.
+ * @param is_variable_size Whether the elements are variable-sized.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_serialize_vector(
     const void *elements,
@@ -299,9 +373,17 @@ ssz_error_t ssz_serialize_vector(
     }
 }
 
-/* 
- * The list function is also simplified thanks to our serialize_variable_sized_array helper. 
- * We allow zero elements. 
+/**
+ * Serializes a list, which is a variable-length collection of elements.
+ * If the elements are variable-sized, offsets are included in the serialization.
+ * 
+ * @param elements Pointer to the input elements.
+ * @param element_count The number of elements in the list.
+ * @param element_sizes Array of sizes for each element.
+ * @param is_variable_size Whether the elements are variable-sized.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_serialize_list(
     const void *elements,

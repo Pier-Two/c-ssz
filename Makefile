@@ -59,9 +59,9 @@ test: all
 
 # Clean up everything
 clean:
-	find $(OBJ_DIR) -mindepth 1 ! -name '.emptydir' -exec rm -rf {} +
-	find $(BIN_DIR) -mindepth 1 ! -name '.emptydir' -exec rm -rf {} +
-	find $(LIB_DIR) -mindepth 1 ! -name '.emptydir' -exec rm -rf {} +
+	find $(OBJ_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
+	find $(BIN_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
+	find $(LIB_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
 
 # Provide a helpful alias if someone tries to type 'make run-tests'
 run-tests: test

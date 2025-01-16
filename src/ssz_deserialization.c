@@ -3,17 +3,27 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "../include/ssz_deserialization.h"
-#include "../include/ssz_constants.h"
-#include "../include/ssz_types.h"
-#include "../include/ssz_utils.h"
+#include "ssz_deserialization.h"
+#include "ssz_constants.h"
+#include "ssz_types.h"
+#include "ssz_utils.h"
 
-/*
- * A helper that reads 'count' offsets from the buffer’s “fixed region,” checking each offset
- * for validity and ensuring they are strictly ascending. If successful, it stores them in an
- * allocated array (*out_offsets). The caller must free that array. For vectors, 'strict_count_match'
- * ensures we do not accept leftover bytes in the buffer. For lists, we may parse as many as
- * we can if the function design allows it.
+/**
+ * Reads and validates 'count' offsets from the fixed region of the buffer.
+ * 
+ * This function ensures that the offsets are valid, strictly ascending, and within the buffer's bounds.
+ * If successful, it allocates an array to store the offsets and assigns it to *out_offsets. The caller
+ * is responsible for freeing this array. For vectors, the 'strict_count_match' parameter ensures that
+ * no leftover bytes remain in the buffer. For lists, the function allows parsing as many offsets as
+ * possible, depending on the design.
+ * 
+ * @param buffer              The input buffer containing the serialized data.
+ * @param buffer_size         The size of the input buffer.
+ * @param count               The number of offsets to read.
+ * @param out_offsets         Pointer to store the allocated array of offsets. Caller must free this array.
+ * @param strict_count_match  If true, ensures no leftover bytes in the buffer for vectors.
+ * 
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 static ssz_error_t read_variable_offsets_and_check_ascending(
     const uint8_t *buffer,
@@ -51,25 +61,26 @@ static ssz_error_t read_variable_offsets_and_check_ascending(
             return SSZ_ERROR_DESERIALIZATION;
         }
     }
-    /*
-     * If this is for a vector, we often need to ensure the data region
-     * ends exactly at buffer_size. That means the last offset plus that
-     * field’s size must match the buffer boundary. We won’t do that just yet;
-     * we let the caller handle verifying each element’s length plus offset
-     * matches up to buffer_size. If strict_count_match is set, we can do
-     * an extra check to ensure the final offset points to the end of the buffer
-     * after reading that last slice, but we’ll let the caller do the final
-     * checks element-by-element. 
-     */
     *out_offsets = offsets;
     return SSZ_SUCCESS;
 }
 
-/*
- * Helper function to copy variable-sized slices from the buffer to out_elements, using the
- * provided offsets, ensuring each slice matches field_sizes[i]. If this is for a vector,
- * we confirm that slice_len == field_sizes[i]. If for a list, we can stop once we run
- * out of offsets or buffer.
+/**
+ * Copies variable-sized slices from the buffer to the output elements.
+ * 
+ * This function uses the provided offsets to extract slices from the buffer and copies them
+ * into the output elements. It ensures that each slice matches the corresponding size in
+ * the field_sizes array. If the slices are invalid or out of bounds, the function returns
+ * an error.
+ * 
+ * @param buffer       The input buffer containing the serialized data.
+ * @param buffer_size  The size of the input buffer.
+ * @param count        The number of slices to copy.
+ * @param field_sizes  Array of sizes for each field.
+ * @param offsets      Array of offsets indicating the start of each slice.
+ * @param out_elements Pointer to store the deserialized elements.
+ * 
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 static ssz_error_t copy_variable_sized_slices(
     const uint8_t *buffer,
@@ -100,8 +111,19 @@ static ssz_error_t copy_variable_sized_slices(
     return SSZ_SUCCESS;
 }
 
-/*
- * Deserializes a uintN with bit_size in [8,16,32,64,128,256].
+/**
+ * Deserializes a uintN value with a bit size in [8, 16, 32, 64, 128, 256].
+ * 
+ * This function extracts a fixed-size unsigned integer from the buffer. For bit sizes
+ * up to 64, the value is stored in a uint64_t. For larger sizes, the value is directly
+ * copied into the output buffer.
+ * 
+ * @param buffer      The input buffer containing the serialized data.
+ * @param buffer_size The size of the input buffer.
+ * @param bit_size    The bit size of the uintN value.
+ * @param out_value   Pointer to store the deserialized uintN value.
+ * 
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_uintN(
     const uint8_t *buffer,
@@ -140,8 +162,17 @@ ssz_error_t ssz_deserialize_uintN(
     return SSZ_SUCCESS;
 }
 
-/*
- * Deserializes a boolean (0x00 => false, 0x01 => true).
+/**
+ * Deserializes a boolean value (0x00 => false, 0x01 => true).
+ * 
+ * This function reads a single byte from the buffer and interprets it as a boolean value.
+ * Any value other than 0x00 or 0x01 is considered invalid.
+ * 
+ * @param buffer      The input buffer containing the serialized data.
+ * @param buffer_size The size of the input buffer.
+ * @param out_value   Pointer to store the deserialized boolean value.
+ * 
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_boolean(
     const uint8_t *buffer,
@@ -167,9 +198,19 @@ ssz_error_t ssz_deserialize_boolean(
     return SSZ_SUCCESS;
 }
 
-/*
+/**
  * Deserializes a bitvector of exactly num_bits length.
- * Reads (num_bits+7)//8 bytes and populates out_bits accordingly.
+ * 
+ * This function reads a fixed-length bitvector from the buffer. The number of bits
+ * is specified by num_bits, and the function ensures that the buffer size matches
+ * the required number of bytes.
+ * 
+ * @param buffer      The input buffer containing the serialized data.
+ * @param buffer_size The size of the input buffer.
+ * @param num_bits    The number of bits in the bitvector.
+ * @param out_bits    Pointer to store the deserialized bitvector.
+ * 
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_bitvector(
     const uint8_t *buffer,
@@ -195,10 +236,20 @@ ssz_error_t ssz_deserialize_bitvector(
     return SSZ_SUCCESS;
 }
 
-/*
- * Deserializes a bitlist with up to max_bits. It looks for the highest set bit as the "boundary bit."
- * That boundary must fall within max_bits+1. All bits above the boundary must be zero.
- * Then the bits up to boundary-1 become the data bits. 
+/**
+ * Deserializes a bitlist with up to max_bits.
+ * 
+ * This function reads a bitlist from the buffer, ensuring that the highest set bit
+ * (the boundary bit) is within max_bits + 1. All bits above the boundary must be zero.
+ * The bits up to boundary - 1 are considered the data bits.
+ * 
+ * @param buffer           The input buffer containing the serialized data.
+ * @param buffer_size      The size of the input buffer.
+ * @param max_bits         The maximum number of bits in the bitlist.
+ * @param out_bits         Pointer to store the deserialized bitlist.
+ * @param out_actual_bits  Pointer to store the actual number of bits in the bitlist.
+ * 
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_bitlist(
     const uint8_t *buffer,
@@ -270,9 +321,18 @@ ssz_error_t ssz_deserialize_bitlist(
     return SSZ_SUCCESS;
 }
 
-/*
- * Deserializes a union by reading the first byte as selector (<= 127).
- * If selector == 0, data is NULL, else we parse using out_union->deserialize_fn.
+/**
+ * Deserializes a union by reading the first byte as a selector.
+ * 
+ * This function interprets the first byte of the buffer as a selector value. If the selector
+ * is 0, the union's data is set to NULL. Otherwise, the function uses the provided
+ * deserialize_fn to parse the union's data.
+ * 
+ * @param buffer      The input buffer containing the serialized data.
+ * @param buffer_size The size of the input buffer.
+ * @param out_union   Pointer to store the deserialized union.
+ * 
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_union(
     const uint8_t *buffer,
@@ -303,9 +363,21 @@ ssz_error_t ssz_deserialize_union(
     return out_union->deserialize_fn(subtype_buf, subtype_size, &out_union->data);
 }
 
-/*
- * Deserializes a vector of elements. For variable-size, we read offsets in one pass
- * (ensuring strict ascending order), then copy all slices in a second pass.
+/**
+ * Deserializes a vector of elements.
+ * 
+ * This function deserializes a fixed or variable-sized vector of elements from the buffer.
+ * For variable-sized elements, it first reads and validates offsets, then copies the slices
+ * into the output elements.
+ * 
+ * @param buffer          The input buffer containing the serialized data.
+ * @param buffer_size     The size of the input buffer.
+ * @param element_count   The number of elements in the vector.
+ * @param field_sizes     Array of sizes for each field.
+ * @param is_variable_size Indicates if the elements are variable-sized.
+ * @param out_elements    Pointer to store the deserialized vector elements.
+ * 
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_vector(
     const uint8_t *buffer,
@@ -339,7 +411,7 @@ ssz_error_t ssz_deserialize_vector(
         ssz_error_t ret = read_variable_offsets_and_check_ascending(
             buffer, buffer_size,
             element_count, &offsets,
-            true /* for a vector we generally expect strict matching, but we'll do final checks below */
+            true 
         );
         if (ret != SSZ_SUCCESS)
         {
@@ -351,11 +423,23 @@ ssz_error_t ssz_deserialize_vector(
     }
 }
 
-/*
- * Deserializes a list of elements. For variable-size, we read offsets in one pass,
- * then copy slices. We allow the possibility that not all offsets are valid if the
- * buffer is truncated; we parse as many as we can. out_actual_count is how many
- * elements we actually read successfully.
+/**
+ * Deserializes a list of elements.
+ * 
+ * This function deserializes a fixed or variable-sized list of elements from the buffer.
+ * For variable-sized elements, it reads and validates offsets, then copies the slices
+ * into the output elements. The function also tracks the actual number of successfully
+ * deserialized elements.
+ * 
+ * @param buffer            The input buffer containing the serialized data.
+ * @param buffer_size       The size of the input buffer.
+ * @param element_count     The number of elements in the list.
+ * @param field_sizes       Array of sizes for each field.
+ * @param is_variable_size  Indicates if the elements are variable-sized.
+ * @param out_elements      Pointer to store the deserialized list elements.
+ * @param out_actual_count  Pointer to store the actual number of elements deserialized.
+ * 
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_list(
     const uint8_t *buffer,
@@ -395,10 +479,6 @@ ssz_error_t ssz_deserialize_list(
     }
     else
     {
-        /*
-         * We need to figure out how many offsets we can read. We might not read all 'element_count'
-         * if the buffer is too small. 
-         */
         size_t max_possible = buffer_size / BYTES_PER_LENGTH_OFFSET;
         if (max_possible < element_count)
         {
@@ -428,10 +508,7 @@ ssz_error_t ssz_deserialize_list(
             }
             valid_offsets++;
         }
-        /*
-         * Now copy slices for however many offsets we validated. We treat each field_sizes[i]
-         * individually up to valid_offsets. 
-         */
+
         uint8_t *write_ptr = (uint8_t *)out_elements;
         size_t total_parsed = 0;
         for (size_t i = 0; i < valid_offsets; i++)

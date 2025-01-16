@@ -4,9 +4,8 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include "../include/ssz_serialization.h"
-#include "../include/ssz_types.h"
-
+#include "ssz_serialization.h"
+#include "ssz_types.h"
 
 static void test_serialize_uintN(void)
 {
@@ -502,9 +501,6 @@ static void test_serialize_union(void)
 static void test_serialize_vector(void)
 {
     printf("\n--- Testing ssz_serialize_vector ---\n");
-
-    // We'll re-use the logic from the list tests, but with the requirement that the vector cannot have zero elements.
-    // We'll test both fixed-size and variable-size logic.
 
     uint8_t buffer[64];
     memset(buffer, 0, sizeof(buffer));

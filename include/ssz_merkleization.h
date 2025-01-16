@@ -7,12 +7,15 @@
 #include "ssz_types.h"
 
 /**
- * This function takes an array of BYTES_PER_CHUNK-sized chunks and Merkleizes them.
- * The 'chunk_count' parameter is the number of input chunks. If 'limit' is non-zero,
- * it enforces a maximum number of chunks for padding and will return an error if
- * 'chunk_count' exceeds that limit. Internally, it will pad to the next power of two
- * (or 'limit' if specified), then build the Merkle tree and return the resulting
- * 32-byte root in 'out_root'.
+ * Merkleizes an array of BYTES_PER_CHUNK-sized chunks.
+ * Pads the input to the next power of two (or 'limit' if specified), builds the Merkle tree,
+ * and writes the resulting 32-byte root to 'out_root'.
+ * 
+ * @param chunks Pointer to the input chunks.
+ * @param chunk_count The number of input chunks.
+ * @param limit The maximum number of chunks for padding. If 0, no limit is enforced.
+ * @param out_root Pointer to the output buffer for the Merkle root.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_merkleize(
     const uint8_t *chunks,
@@ -21,13 +24,16 @@ ssz_error_t ssz_merkleize(
     uint8_t *out_root);
 
 /**
- * Packs an array of basic-type values into BYTES_PER_CHUNK-sized chunks. It writes
- * the final chunk-aligned data into 'out_chunks'. The total number of chunks is
- * returned in 'out_chunk_count'. The function zero-pads to a multiple of
- * BYTES_PER_CHUNK if necessary. The 'value_size' is the size in bytes of each
- * basic-type element, and 'value_count' is how many such elements there are.
- * This routine is essential for transforming arrays of integers or bytes into a
- * form suitable for Merkleization.
+ * Packs an array of basic-type values into BYTES_PER_CHUNK-sized chunks.
+ * Zero-pads the data to a multiple of BYTES_PER_CHUNK if necessary and writes the
+ * chunk-aligned data to 'out_chunks'. The total number of chunks is returned in 'out_chunk_count'.
+ * 
+ * @param values Pointer to the input values.
+ * @param value_size The size in bytes of each basic-type element.
+ * @param value_count The number of elements in the input array.
+ * @param out_chunks Pointer to the output buffer for the packed chunks.
+ * @param out_chunk_count Pointer to store the total number of chunks.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_pack(
     const uint8_t *values,
@@ -37,12 +43,16 @@ ssz_error_t ssz_pack(
     size_t *out_chunk_count);
 
 /**
- * Packs bits (for bitvector or bitlist, excluding the trailing bit for bitlists)
- * into BYTES_PER_CHUNK-sized chunks. The function first packs the bits into an array
- * of bytes in little-endian bit ordering, then it zero-pads to the chunk boundary,
- * and finally it splits into BYTES_PER_CHUNK-sized chunks suitable for Merkleization.
- * The resulting chunks are written to 'out_chunks', and the total chunk count is
- * written to 'out_chunk_count'.
+ * Packs bits into BYTES_PER_CHUNK-sized chunks.
+ * Packs the bits into an array of bytes in little-endian bit ordering, zero-pads to the
+ * chunk boundary, and splits into BYTES_PER_CHUNK-sized chunks. The resulting chunks
+ * are written to 'out_chunks', and the total chunk count is written to 'out_chunk_count'.
+ * 
+ * @param bits Pointer to the input bit array.
+ * @param bit_count The number of bits to pack.
+ * @param out_chunks Pointer to the output buffer for the packed chunks.
+ * @param out_chunk_count Pointer to store the total number of chunks.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_pack_bits(
     const bool *bits,
@@ -51,11 +61,14 @@ ssz_error_t ssz_pack_bits(
     size_t *out_chunk_count);
 
 /**
- * Combines a Merkle root with a length value (of type uint256 in little-endian format)
- * to produce a new root, in accordance with the SSZ spec's 'mix_in_length'. Typically,
- * this is used to finalize the root of a list or bitlist. The length is provided as
- * a 64-bit value for convenience, but the function will zero-pad it to 256 bits
- * internally as needed before hashing.
+ * Combines a Merkle root with a length value to produce a new root.
+ * The length is provided as a 64-bit value and zero-padded to 256 bits internally
+ * before hashing, in accordance with the SSZ spec's 'mix_in_length'.
+ * 
+ * @param root Pointer to the input Merkle root.
+ * @param length The length value to mix in.
+ * @param out_root Pointer to the output buffer for the new root.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_mix_in_length(
     const uint8_t *root,
@@ -63,10 +76,14 @@ ssz_error_t ssz_mix_in_length(
     uint8_t *out_root);
 
 /**
- * Similar to mix_in_length, but instead of length, we mix in a union selector. The spec
- * treats the selector the same way (a 256-bit value in little-endian), so we zero-pad
- * the single-byte selector to 256 bits and compute a new hash with the given 'root'.
- * The resulting mixed-in root is written to 'out_root'.
+ * Combines a Merkle root with a union selector to produce a new root.
+ * The selector is zero-padded to 256 bits internally before hashing, in accordance
+ * with the SSZ spec's 'mix_in_selector'.
+ * 
+ * @param root Pointer to the input Merkle root.
+ * @param selector The union selector to mix in.
+ * @param out_root Pointer to the output buffer for the new root.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_mix_in_selector(
     const uint8_t *root,

@@ -4,8 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stddef.h>
-#include "../include/ssz_serialization.h"
-
+#include "ssz_serialization.h"
 
 static bool parse_hex(const char *hex, uint8_t *out, size_t out_len) {
     size_t hex_len = strlen(hex);
@@ -91,6 +90,5 @@ void run_test_1()
 int main(void)
 {
     //run_test_1();
-
     return 0;
 }

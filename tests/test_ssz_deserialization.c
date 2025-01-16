@@ -4,10 +4,9 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include "../include/ssz_deserialization.h"
-#include "../include/ssz_serialization.h"
-#include "../include/ssz_constants.h"
-
+#include "ssz_deserialization.h"
+#include "ssz_serialization.h"
+#include "ssz_constants.h"
 
 static bool compare_bool_arrays(const bool *arr1, const bool *arr2, size_t len)
 {

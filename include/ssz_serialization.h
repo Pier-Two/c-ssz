@@ -4,10 +4,19 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "../include/ssz_types.h"
+#include "ssz_types.h"
 
-// Serializes a uintN (8,16,32,64,128,256 bits). 
-// 'bit_size' is N, 'value' is a pointer to the integer, and 'out_buf' is the destination.
+/**
+ * Serializes an unsigned integer of a specified bit size into a buffer.
+ * Supports bit sizes of 8, 16, 32, 64, 128, and 256. The serialized value
+ * is written in little-endian format.
+ * 
+ * @param value Pointer to the integer value to serialize.
+ * @param bit_size The size of the integer in bits.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 ssz_error_t ssz_serialize_uintN(
     const void *value,
     size_t bit_size,
@@ -15,14 +24,30 @@ ssz_error_t ssz_serialize_uintN(
     size_t *out_size
 );
 
-// Serializes a boolean to a single byte of 0x00 or 0x01.
+/**
+ * Serializes a boolean value into a single byte.
+ * 
+ * @param value The boolean value to serialize.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 ssz_error_t ssz_serialize_boolean(
     bool value,
     uint8_t *out_buf,
     size_t *out_size
 );
 
-// Serializes a bitvector of fixed length 'num_bits'.
+/**
+ * Serializes a bitvector into a compact byte array. Each bit in the input
+ * is packed into the output buffer, with unused bits in the last byte set to 0.
+ * 
+ * @param bits Pointer to the input bit array.
+ * @param num_bits The number of bits to serialize.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 ssz_error_t ssz_serialize_bitvector(
     const bool *bits,
     size_t num_bits,
@@ -30,7 +55,16 @@ ssz_error_t ssz_serialize_bitvector(
     size_t *out_size
 );
 
-// Serializes a bitlist of length 'num_bits' (plus boundary bit).
+/**
+ * Serializes a bitlist into a compact byte array. A bitlist is a variable-length
+ * collection of bits, with a boundary bit indicating the end of the list.
+ * 
+ * @param bits Pointer to the input bit array.
+ * @param num_bits The number of bits in the bitlist (excluding the boundary bit).
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 ssz_error_t ssz_serialize_bitlist(
     const bool *bits,
     size_t num_bits,
@@ -38,16 +72,33 @@ ssz_error_t ssz_serialize_bitlist(
     size_t *out_size
 );
 
-// Serializes a union by writing the selector byte and 
-// optionally the serialized data for that union variant.
+/**
+ * Serializes a union by writing the selector byte and optionally the serialized
+ * data for the selected union variant.
+ * 
+ * @param u Pointer to the union to serialize.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 ssz_error_t ssz_serialize_union(
     const ssz_union_t *u,
     uint8_t *out_buf,
     size_t *out_size
 );
 
-// Serializes a vector of elements that may be either fixed or variable size. 
-// An empty vector is invalid by SSZ rules, so this returns an error if 'element_count' is zero.
+/**
+ * Serializes a vector of elements into a buffer. A vector is a fixed-length
+ * collection of elements, which may be either fixed-size or variable-size.
+ * 
+ * @param elements Pointer to the input elements.
+ * @param element_count The number of elements in the vector.
+ * @param element_sizes Array of sizes for each element.
+ * @param is_variable_size Indicates whether the elements are variable-size.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 ssz_error_t ssz_serialize_vector(
     const void *elements,
     size_t element_count,
@@ -57,8 +108,18 @@ ssz_error_t ssz_serialize_vector(
     size_t *out_size
 );
 
-// Serializes a list of elements that may be either fixed or variable size. 
-// An empty list is valid, so this can produce zero bytes of output if 'element_count' is zero.
+/**
+ * Serializes a list of elements into a buffer. A list is a variable-length
+ * collection of elements, which may be either fixed-size or variable-size.
+ * 
+ * @param elements Pointer to the input elements.
+ * @param element_count The number of elements in the list.
+ * @param element_sizes Array of sizes for each element.
+ * @param is_variable_size Indicates whether the elements are variable-size.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 ssz_error_t ssz_serialize_list(
     const void *elements,
     size_t element_count,

@@ -4,42 +4,64 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// We define a SSZ boolean alias here just for clarity, though we can directly use 'bool' too.
+/**
+ * Defines an alias for the SSZ boolean type.
+ * This is primarily for clarity, though 'bool' can be used directly.
+ */
 typedef bool ssz_boolean;
 
-// An example of some error codes that we might use in the library.
-// We'll keep this simple for now, and we can expand as needed.
+/**
+ * Enumerates error codes used throughout the library.
+ * These codes indicate success or specific types of failures.
+ */
 typedef enum
 {
-    SSZ_SUCCESS = 0,
-    SSZ_ERROR_INVALID_OFFSET,
-    SSZ_ERROR_OUT_OF_RANGE,
-    SSZ_ERROR_DESERIALIZATION,
-    SSZ_ERROR_SERIALIZATION
+    SSZ_SUCCESS = 0,              /**< Operation completed successfully. */
+    SSZ_ERROR_INVALID_OFFSET,     /**< An invalid offset was encountered. */
+    SSZ_ERROR_OUT_OF_RANGE,       /**< A value was out of the acceptable range. */
+    SSZ_ERROR_DESERIALIZATION,    /**< An error occurred during deserialization. */
+    SSZ_ERROR_SERIALIZATION       /**< An error occurred during serialization. */
 } ssz_error_t;
 
-// Define a function pointer type for serializing union data.
+/**
+ * Defines a function pointer type for serializing union data.
+ * 
+ * @param data Pointer to the data to serialize.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 typedef ssz_error_t (*ssz_union_data_serialize_fn)(
     const void *data,
     uint8_t *out_buf,
     size_t *out_size
 );
 
+/**
+ * Defines a function pointer type for deserializing union data.
+ * 
+ * @param buffer Pointer to the input buffer containing the serialized data.
+ * @param buffer_size The size of the input buffer in bytes.
+ * @param out_obj Pointer to store the deserialized object.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
 typedef ssz_error_t (*ssz_union_data_deserialize_fn)(
     const uint8_t *buffer,
     size_t buffer_size,
     void **out_obj
 );
 
-// A union structure is needed for the SSZ "Union" type. We'll store the selector
-// (an 8-bit value), a pointer to whatever data we want to keep, and a function pointer
-// to handle serialization for that data if the selector != 0.
+/**
+ * Represents a union structure for the SSZ "Union" type.
+ * This structure includes a selector (an 8-bit value), a pointer to the associated data,
+ * and function pointers for serialization and deserialization of the data.
+ */
 typedef struct
 {
-    uint8_t selector;
-    void *data;
-    ssz_union_data_serialize_fn serialize_fn;   // For serialization
-    ssz_union_data_deserialize_fn deserialize_fn; // For deserialization
+    uint8_t selector;                              /**< The union selector value. */
+    void *data;                                    /**< Pointer to the union's data. */
+    ssz_union_data_serialize_fn serialize_fn;     /**< Function pointer for serialization. */
+    ssz_union_data_deserialize_fn deserialize_fn; /**< Function pointer for deserialization. */
 } ssz_union_t;
 
 #endif /* SSZ_TYPES_H */

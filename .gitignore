@@ -61,3 +61,6 @@ tests/*
 
 # Allow .h files in the tests folder (if headers exist)
 !tests/*.h
+
+# IDE Settings
+.vscode/*
