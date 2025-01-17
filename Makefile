@@ -1,73 +1,56 @@
-# Set the compiler. You can override this via environment variable if you like, e.g. CC=clang make
 CC ?= gcc
-
-# Compiler flags: warnings, optimization, debug, etc. Feel free to adjust as needed.
 CFLAGS = -Wall -Wextra -O3 -g -Iinclude
-
-# Archive tool for building static libraries
 AR = ar
 ARFLAGS = rcs
 
-# Directories
 SRC_DIR = src
 OBJ_DIR = obj
 BIN_DIR = bin
 TEST_DIR = tests
 LIB_DIR = lib
+BENCH_DIR = bench
 
-# Criterion flags. Adjust if your Criterion is installed in a different prefix.
 CRITERION_CFLAGS ?= -I/opt/homebrew/opt/criterion/include
 CRITERION_LDFLAGS ?= -L/opt/homebrew/opt/criterion/lib -lcriterion
 
-# Source files for the library
 LIB_SOURCES = ssz_deserialize.c ssz_serialize.c ssz_utils.c ssz_merkle.c
-
-# Convert each .c in LIB_SOURCES to the corresponding .o in obj/
 LIB_OBJECTS = $(patsubst %.c, $(OBJ_DIR)/%.o, $(LIB_SOURCES))
+STATIC_LIB = $(LIB_DIR)/libssz.a
 
-# Test files 
 TEST_SOURCES = test_ssz_serialize.c test_ssz_deserialize.c
-# Convert each test .c file to a final binary in bin/
 TEST_BINARIES = $(patsubst %.c, $(BIN_DIR)/%, $(TEST_SOURCES))
 
-# Criterion-based test files
 CRITERION_TEST_SOURCES = test_ssz_serialize_criterion.c test_ssz_deserialize_criterion.c
 CRITERION_TEST_BINARIES = $(patsubst %.c, $(BIN_DIR)/criterion_%, $(CRITERION_TEST_SOURCES))
 
-# The final static library we'll produce
-STATIC_LIB = $(LIB_DIR)/libssz.a
+BENCH_SOURCES := $(wildcard $(BENCH_DIR)/bench_ssz_*.c)
+BENCH_BASENAMES := $(patsubst bench_ssz_%.c,%, $(notdir $(BENCH_SOURCES)))
+SUB_BENCHES := $(BENCH_BASENAMES)
 
-# Default target
 all: $(STATIC_LIB) $(TEST_BINARIES)
 
-# Rule to build the static library
 $(STATIC_LIB): $(LIB_OBJECTS)
 	@mkdir -p $(LIB_DIR)
 	$(AR) $(ARFLAGS) $@ $^
 
-# Pattern rule to compile any .c file in src to an .o in obj
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Rules to build each legacy test binary
 $(BIN_DIR)/%: $(TEST_DIR)/%.c $(STATIC_LIB)
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) $< -o $@ -L$(LIB_DIR) -lssz
 
-# Rules to build each Criterion-based test binary
 $(BIN_DIR)/criterion_%: $(TEST_DIR)/%.c $(STATIC_LIB)
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) $(CRITERION_CFLAGS) $< -o $@ -L$(LIB_DIR) -lssz $(CRITERION_LDFLAGS)
+	$(CC) $(CFLAGS) $(CRITERION_CFLAGS) $< -o $@ -L$(LIB_DIR) -lssz $(CRITERion_LDFLAGS)
 
-# Test target that builds everything and runs the legacy tests
 test: all
 	@echo "Running test_ssz_serialize..."
 	@./$(BIN_DIR)/test_ssz_serialize
 	@echo "Running test_ssz_deserialize..."
 	@./$(BIN_DIR)/test_ssz_deserialize
 
-# Criterion test target that builds and runs the Criterion test binaries
 criterion-tests: all $(CRITERION_TEST_BINARIES)
 	@echo "Running Criterion tests..."
 	@for testbin in $(CRITERION_TEST_BINARIES); do \
@@ -75,14 +58,46 @@ criterion-tests: all $(CRITERION_TEST_BINARIES)
 		./$$testbin; \
 	done
 
-# Clean up everything
 clean:
-	find $(OBJ_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
-	find $(BIN_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
-	find $(LIB_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
+	@echo "Removing object files from $(OBJ_DIR)"
+	@find $(OBJ_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
+	@echo "Removing binaries from $(BIN_DIR)"
+	@find $(BIN_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
+	@echo "Removing library files from $(LIB_DIR)"
+	@find $(LIB_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
 
-# Provide a helpful alias if someone tries to type 'make run-tests'
 run-tests: test
 
-# Phony targets
-.PHONY: all test clean run-tests criterion-tests
+$(BIN_DIR)/bench_ssz_%: $(BENCH_DIR)/bench_ssz_%.c $(STATIC_LIB)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) $< -o $@ -L$(LIB_DIR) -lssz
+
+bench: all
+	@ second="$(word 2, $(MAKECMDGOALS))"; \
+	if [ -z "$$second" ]; then \
+	  echo "No <type> provided, running ALL benchmarks..."; \
+	  for b in $(SUB_BENCHES); do \
+	    echo "Building bench_ssz_$$b..."; \
+	    $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$$b; \
+	    echo "Running bench_ssz_$$b..."; \
+	    ./$(BIN_DIR)/bench_ssz_$$b; \
+	  done; \
+	elif echo "$(SUB_BENCHES)" | grep -qw "$$second"; then \
+	  echo "Building only bench_ssz_$$second..."; \
+	  $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$$second; \
+	  echo "Running bench_ssz_$$second..."; \
+	  ./$(BIN_DIR)/bench_ssz_$$second; \
+	else \
+	  echo "Argument '$$second' not recognized, running ALL benchmarks..."; \
+	  for b in $(SUB_BENCHES); do \
+	    echo "Building bench_ssz_$$b..."; \
+	    $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$$b; \
+	    echo "Running bench_ssz_$$b..."; \
+	    ./$(BIN_DIR)/bench_ssz_$$b; \
+	  done; \
+	fi
+
+$(SUB_BENCHES):
+	@:
+
+.PHONY: all test clean run-tests criterion-tests bench $(SUB_BENCHES)

@@ -417,3 +417,4 @@ Test(ssz_serialize_list, varsize_list_3_elements)
     cr_assert(buffer[18] == 0x99 && buffer[20] == 0x77,
               "Var-size list's third payload incorrectly serialized");
 }
+

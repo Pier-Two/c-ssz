@@ -290,7 +290,6 @@ static void test_deserialize_bitlist(void)
     {
         printf("  Checking boundary bit out of max_bits range...\n");
         uint8_t buffer[2] = {0xFF, 0xFF};
-        // This will set boundary bits beyond a small max_bits for demonstration.
         bool recovered[8] = {false};
         size_t actual_bits = 0;
         ssz_error_t derr = ssz_deserialize_bitlist(buffer, 2, 7, recovered, &actual_bits);
@@ -364,7 +363,6 @@ static void test_deserialize_union(void)
 
     {
         printf("  Checking sub-type deserialization callback...\n");
-        // We'll define a small callback that just expects a single byte that must be 0xAA.
         ssz_union_t un;
         un.deserialize_fn = union_subtype_cb;
         uint8_t buffer[2] = {0x01, 0xAA};
