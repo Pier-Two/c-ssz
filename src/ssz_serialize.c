@@ -114,7 +114,7 @@ static ssz_error_t serialize_variable_sized_array(
     size_t variable_offset = 0;
 
     ssz_error_t ret = prepare_variable_sized_array(
-        element_count,         /* Removed the 'elements' pointer here */
+        element_count,        
         element_sizes,
         out_buf,
         out_size,
