@@ -1,8 +1,8 @@
-#include "yaml_parser.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include "yaml_parser.h"
 
 static int get_indentation(const char *line)
 {

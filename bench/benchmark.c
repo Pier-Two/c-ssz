@@ -1,4 +1,4 @@
-#include "bench_ssz_benchmark.h"
+#include "benchmark.h"
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <Windows.h>

@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "bench_ssz_benchmark.h"
+#include "benchmark.h"
 #include "ssz_serialize.h"
 
 typedef struct

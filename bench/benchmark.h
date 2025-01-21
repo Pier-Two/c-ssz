@@ -1,5 +1,5 @@
-#ifndef BENCH_SSZ_BENCHMARK_H  
-#define BENCH_SSZ_BENCHMARK_H  
+#ifndef BENCHMARK_H  
+#define BENCHMARK_H  
 
 typedef void (*bench_ssz_test_func_t)(void* user_data);  
 
@@ -18,4 +18,4 @@ bench_ssz_stats_t bench_ssz_run_benchmark(
 
 void bench_ssz_print_stats(const char* label, const bench_ssz_stats_t* stats);  
 
-#endif /* BENCH_SSZ_BENCHMARK_H */  
+#endif /* BENCHMARK_H */  

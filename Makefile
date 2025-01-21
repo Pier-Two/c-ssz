@@ -28,7 +28,7 @@ CRITERION_TEST_BINARIES = $(patsubst %.c, $(BIN_DIR)/criterion_%, $(CRITERION_TE
 
 BENCH_SOURCES := $(wildcard $(BENCH_DIR)/bench_ssz_*.c)
 
-BENCH_COMMON_SOURCES = $(BENCH_DIR)/bench_ssz_benchmark.c
+BENCH_COMMON_SOURCES = $(BENCH_DIR)/benchmark.c
 BENCH_COMMON_OBJECTS = $(patsubst $(BENCH_DIR)/%.c, $(OBJ_DIR)/bench/%.o, $(BENCH_COMMON_SOURCES))
 
 BENCH_EXTRA_SOURCES = yaml_parser.c

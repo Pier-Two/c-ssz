@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include "bench_ssz_benchmark.h"
+#include "benchmark.h"
 #include "ssz_serialize.h"
 #include "ssz_deserialize.h"
 #include "ssz_constants.h"
@@ -140,11 +140,6 @@ static ssz_error_t ssz_serialize_bits_generic_db(const bool *bits, size_t bit_co
     ssz_error_t err = db_append(db, tmp, byte_count);
     free(tmp);
     return err;
-}
-
-static ssz_error_t ssz_serialize_bitvector_db(const bool *bits, size_t bit_count, DynamicBuffer *db)
-{
-    return ssz_serialize_bits_generic_db(bits, bit_count, db);
 }
 
 static ssz_error_t ssz_serialize_bitlist_db(const bool *bits, size_t bit_count, DynamicBuffer *db)
@@ -502,6 +497,8 @@ int main(void)
         NULL,
         warmup_iterations,
         measured_iterations);
+    
+    print_attestation(&g_original);
     bench_ssz_print_stats("SSZ Attestation serialization", &stats_serialize);
     bench_ssz_print_stats("SSZ Attestation deserialization", &stats_deserialize);
     return 0;
