@@ -400,7 +400,7 @@ ssz_error_t ssz_serialize_list(
     uint8_t *out_buf,
     size_t *out_size)
 {
-    if (!elements || !element_sizes || !out_buf || !out_size)
+    if (!out_buf || !out_size)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -408,6 +408,10 @@ ssz_error_t ssz_serialize_list(
     {
         *out_size = 0;
         return SSZ_SUCCESS;
+    }
+    if (!elements || !element_sizes)
+    {
+        return SSZ_ERROR_SERIALIZATION;
     }
     if (!is_variable_size)
     {

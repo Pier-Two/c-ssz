@@ -222,8 +222,6 @@ static void test_deserialize_bitvector(void)
         }
         else
         {
-            // Now deserialize with a deliberately incorrect buffer_size
-            // to see if it catches the mismatch.
             bool recovered[12] = {false};
             ssz_error_t derr = ssz_deserialize_bitvector(buffer, 1, 12, recovered);
             if (derr == SSZ_ERROR_DESERIALIZATION)
