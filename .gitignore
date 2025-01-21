@@ -53,7 +53,7 @@ dkms.conf
 
 .DS_Store
 
-# Ignore all files in the tests folder without extensions (likely binaries)
+# Ignore all files in the tests folder without extensions 
 tests/*
 
 # Allow .c files (and other source files) in the tests folder
@@ -61,6 +61,10 @@ tests/*
 
 # Allow .h files in the tests folder (if headers exist)
 !tests/*.h
+
+# Ignore all files in the bin folder without extensions 
+bin/*
+!bin/.emptydir
 
 # IDE Settings
 .vscode/*
