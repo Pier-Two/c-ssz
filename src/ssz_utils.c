@@ -69,24 +69,6 @@ bool check_max_offset(size_t offset)
 }
 
 /**
- * Writes a 4-byte little-endian representation of a 32-bit offset into the output buffer.
- * 
- * The offset is split into four bytes, with the least significant byte written first
- * and the most significant byte written last. This function is commonly used in
- * serialization routines to encode offset markers in a buffer.
- * 
- * @param offset The 32-bit offset to write.
- * @param out Pointer to the output buffer.
- */
-void write_offset_le(uint32_t offset, uint8_t *out)
-{
-    out[0] = (uint8_t)(offset & 0xFF);
-    out[1] = (uint8_t)((offset >> 8) & 0xFF);
-    out[2] = (uint8_t)((offset >> 16) & 0xFF);
-    out[3] = (uint8_t)((offset >> 24) & 0xFF);
-}
-
-/**
  * Reads a 4-byte little-endian offset from the source buffer at the specified index.
  * 
  * The function reads four bytes starting at the given offset index in the source

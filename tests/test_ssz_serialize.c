@@ -10,18 +10,94 @@
 static void test_serialize_uintN(void)
 {
     printf("\n--- Testing ssz_serialize_uintN ---\n");
-
     uint8_t buffer[64];
     memset(buffer, 0, sizeof(buffer));
     ssz_error_t err;
     size_t out_size;
 
+    printf("Testing valid 8-bit serialization...\n");
+    {
+        uint8_t val8 = 0xAB;
+        out_size = sizeof(buffer);
+        err = ssz_serialize_uint8(&val8, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 1 && buffer[0] == 0xAB)
+        {
+            printf("  OK: 8-bit value serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: 8-bit value serialization failed.\n");
+        }
+    }
+
+    printf("Testing 8-bit with null pointer...\n");
+    {
+        out_size = 1;
+        err = ssz_serialize_uint8(NULL, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: 8-bit null pointer rejected.\n");
+        }
+        else
+        {
+            printf("  FAIL: 8-bit null pointer was not rejected.\n");
+        }
+    }
+
+    printf("Testing 8-bit with out_size=0...\n");
+    {
+        uint8_t val8 = 0xFF;
+        out_size = 0;
+        err = ssz_serialize_uint8(&val8, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: 8-bit zero out_size rejected.\n");
+        }
+        else
+        {
+            printf("  FAIL: 8-bit zero out_size was not rejected.\n");
+        }
+    }
+
+    printf("Testing valid 16-bit serialization...\n");
+    {
+        uint16_t val16 = 0xCCDD;
+        out_size = sizeof(buffer);
+        memset(buffer, 0, sizeof(buffer));
+        err = ssz_serialize_uint16(&val16, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 2 && buffer[0] == 0xDD && buffer[1] == 0xCC)
+        {
+            printf("  OK: 16-bit value serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: 16-bit value serialization failed.\n");
+        }
+    }
+
+    printf("Testing 16-bit with insufficient buffer...\n");
+    {
+        uint16_t val16 = 0x1234;
+        out_size = 1;
+        memset(buffer, 0, sizeof(buffer));
+        err = ssz_serialize_uint16(&val16, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: 16-bit insufficient buffer rejected.\n");
+        }
+        else
+        {
+            printf("  FAIL: 16-bit insufficient buffer was not rejected.\n");
+        }
+    }
+
     printf("Testing valid 32-bit serialization...\n");
     {
         uint64_t val32 = 0xAABBCCDDULL;
         out_size = sizeof(buffer);
-        err = ssz_serialize_uintN(&val32, 32, buffer, &out_size);
-        if (err == SSZ_SUCCESS && out_size == 4 && 
+        memset(buffer, 0, sizeof(buffer));
+        err = ssz_serialize_uint32(&val32, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 4 &&
             buffer[0] == 0xDD && buffer[1] == 0xCC && buffer[2] == 0xBB && buffer[3] == 0xAA)
         {
             printf("  OK: 32-bit value serialized correctly.\n");
@@ -32,12 +108,27 @@ static void test_serialize_uintN(void)
         }
     }
 
+    printf("Testing 32-bit with out_buf=NULL...\n");
+    {
+        uint32_t val32 = 0xDEADBEEF;
+        out_size = 4;
+        err = ssz_serialize_uint32(&val32, NULL, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: 32-bit null buffer rejected.\n");
+        }
+        else
+        {
+            printf("  FAIL: 32-bit null buffer was not rejected.\n");
+        }
+    }
+
     printf("Testing valid 64-bit serialization...\n");
     {
         uint64_t val64 = 0x1122334455667788ULL;
         out_size = sizeof(buffer);
         memset(buffer, 0, sizeof(buffer));
-        err = ssz_serialize_uintN(&val64, 64, buffer, &out_size);
+        err = ssz_serialize_uint64(&val64, buffer, &out_size);
         if (err == SSZ_SUCCESS && out_size == 8 &&
             buffer[0] == 0x88 && buffer[1] == 0x77 && buffer[2] == 0x66 && buffer[3] == 0x55 &&
             buffer[4] == 0x44 && buffer[5] == 0x33 && buffer[6] == 0x22 && buffer[7] == 0x11)
@@ -47,6 +138,22 @@ static void test_serialize_uintN(void)
         else
         {
             printf("  FAIL: 64-bit value serialization failed.\n");
+        }
+    }
+
+    printf("Testing 64-bit with out_size=7...\n");
+    {
+        uint64_t val64 = 0xFFFFFFFFFFFFFFFFULL;
+        out_size = 7;
+        memset(buffer, 0, sizeof(buffer));
+        err = ssz_serialize_uint64(&val64, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: 64-bit insufficient out_size rejected.\n");
+        }
+        else
+        {
+            printf("  FAIL: 64-bit out_size=7 was not rejected.\n");
         }
     }
 
@@ -60,7 +167,7 @@ static void test_serialize_uintN(void)
         };
         out_size = sizeof(buffer);
         memset(buffer, 0, sizeof(buffer));
-        err = ssz_serialize_uintN(val128, 128, buffer, &out_size);
+        err = ssz_serialize_uint128(val128, buffer, &out_size);
         if (err == SSZ_SUCCESS && out_size == 16 && memcmp(buffer, val128, 16) == 0)
         {
             printf("  OK: 128-bit value serialized correctly.\n");
@@ -68,6 +175,27 @@ static void test_serialize_uintN(void)
         else
         {
             printf("  FAIL: 128-bit value serialization failed.\n");
+        }
+    }
+
+    printf("Testing 128-bit with out_size=8...\n");
+    {
+        uint8_t val128[16] = {
+            0x00, 0x01, 0x02, 0x03,
+            0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0A, 0x0B,
+            0x0C, 0x0D, 0x0E, 0x0F
+        };
+        out_size = 8;
+        memset(buffer, 0, sizeof(buffer));
+        err = ssz_serialize_uint128(val128, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: 128-bit out_size=8 rejected.\n");
+        }
+        else
+        {
+            printf("  FAIL: 128-bit out_size=8 was not rejected.\n");
         }
     }
 
@@ -85,7 +213,7 @@ static void test_serialize_uintN(void)
         };
         out_size = sizeof(buffer);
         memset(buffer, 0, sizeof(buffer));
-        err = ssz_serialize_uintN(val256, 256, buffer, &out_size);
+        err = ssz_serialize_uint256(val256, buffer, &out_size);
         if (err == SSZ_SUCCESS && out_size == 32 && memcmp(buffer, val256, 32) == 0)
         {
             printf("  OK: 256-bit value serialized correctly.\n");
@@ -96,58 +224,27 @@ static void test_serialize_uintN(void)
         }
     }
 
-    printf("Testing invalid bit_size...\n");
+    printf("Testing 256-bit with out_buf=NULL...\n");
     {
-        uint64_t dummy = 0x12345678;
-        out_size = sizeof(buffer);
-        memset(buffer, 0, sizeof(buffer));
-        err = ssz_serialize_uintN(&dummy, 999, buffer, &out_size);
+        uint8_t val256[32] = {
+            0x00, 0x01, 0x02, 0x03,
+            0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0A, 0x0B,
+            0x0C, 0x0D, 0x0E, 0x0F,
+            0x10, 0x11, 0x12, 0x13,
+            0x14, 0x15, 0x16, 0x17,
+            0x18, 0x19, 0x1A, 0x1B,
+            0x1C, 0x1D, 0x1E, 0x1F
+        };
+        out_size = 32;
+        err = ssz_serialize_uint256(val256, NULL, &out_size);
         if (err == SSZ_ERROR_SERIALIZATION)
         {
-            printf("  OK: Rejected invalid bit_size.\n");
+            printf("  OK: 256-bit null buffer rejected.\n");
         }
         else
         {
-            printf("  FAIL: Did not reject invalid bit_size.\n");
-        }
-    }
-
-    printf("Testing null pointers...\n");
-    {
-        out_size = sizeof(buffer);
-        err = ssz_serialize_uintN(NULL, 32, buffer, &out_size);
-        if (err == SSZ_ERROR_SERIALIZATION)
-        {
-            printf("  OK: Rejected null value pointer.\n");
-        }
-        else
-        {
-            printf("  FAIL: Did not reject null value pointer.\n");
-        }
-        err = ssz_serialize_uintN((void*)&out_size, 32, NULL, &out_size);
-        if (err == SSZ_ERROR_SERIALIZATION)
-        {
-            printf("  OK: Rejected null output buffer.\n");
-        }
-        else
-        {
-            printf("  FAIL: Did not reject null output buffer.\n");
-        }
-    }
-
-    printf("Testing insufficient buffer space...\n");
-    {
-        uint64_t val64 = 0xFFFFFFFFFFFFFFFFULL;
-        uint8_t small_buffer[2];
-        size_t small_out_size = sizeof(small_buffer);
-        err = ssz_serialize_uintN(&val64, 64, small_buffer, &small_out_size);
-        if (err == SSZ_ERROR_SERIALIZATION)
-        {
-            printf("  OK: Rejected when out_size is too small.\n");
-        }
-        else
-        {
-            printf("  FAIL: Did not reject insufficient out_size.\n");
+            printf("  FAIL: 256-bit null buffer was not rejected.\n");
         }
     }
 }
@@ -508,7 +605,7 @@ static void test_serialize_vector(void)
         uint8_t dummy_data[1];
         size_t dummy_element_sizes[1];
         out_size = sizeof(buffer);
-        err = ssz_serialize_vector(dummy_data, 0, dummy_element_sizes, false, buffer, &out_size);
+        err = ssz_serialize_vector(dummy_data, 0, dummy_element_sizes, buffer, &out_size);
         if (err == SSZ_ERROR_SERIALIZATION)
         {
             printf("  OK: Rejected zero-element vector.\n");
@@ -529,7 +626,7 @@ static void test_serialize_vector(void)
         size_t element_sizes[3] = {4, 4, 4};
         out_size = sizeof(buffer);
         memset(buffer, 0, sizeof(buffer));
-        err = ssz_serialize_vector(elements, 3, element_sizes, false, buffer, &out_size);
+        err = ssz_serialize_vector(elements, 3, element_sizes, buffer, &out_size);
         if (err == SSZ_SUCCESS && out_size == 12 && memcmp(buffer, elements, 12) == 0)
         {
             printf("  OK: Fixed-size vector of 3 elements serialized correctly.\n");
@@ -537,39 +634,6 @@ static void test_serialize_vector(void)
         else
         {
             printf("  FAIL: Fixed-size vector serialization failed.\n");
-        }
-    }
-
-    printf("Testing variable-size vector with 3 elements of sizes 2,4,3...\n");
-    {
-        uint8_t elements[9] = {
-            0xAA, 0xBB,
-            0x01, 0x02, 0x03, 0x04,
-            0x99, 0x88, 0x77
-        };
-        size_t element_sizes[3] = {2, 4, 3};
-        out_size = sizeof(buffer);
-        memset(buffer, 0, sizeof(buffer));
-        err = ssz_serialize_vector(elements, 3, element_sizes, true, buffer, &out_size);
-        if (err == SSZ_SUCCESS && out_size == 21)
-        {
-            if (buffer[0] == 0x0C && buffer[1] == 0x00 && buffer[2] == 0x00 && buffer[3] == 0x00 &&
-                buffer[4] == 0x0E && buffer[5] == 0x00 && buffer[6] == 0x00 && buffer[7] == 0x00 &&
-                buffer[8] == 0x12 && buffer[9] == 0x00 && buffer[10] == 0x00 && buffer[11] == 0x00 &&
-                buffer[12] == 0xAA && buffer[13] == 0xBB &&
-                buffer[14] == 0x01 && buffer[15] == 0x02 && buffer[16] == 0x03 && buffer[17] == 0x04 &&
-                buffer[18] == 0x99 && buffer[19] == 0x88 && buffer[20] == 0x77)
-            {
-                printf("  OK: Variable-size vector of 3 elements serialized correctly.\n");
-            }
-            else
-            {
-                printf("  FAIL: Variable-size vector serialized data mismatch.\n");
-            }
-        }
-        else
-        {
-            printf("  FAIL: Variable-size vector call did not succeed as expected.\n");
         }
     }
 }
@@ -588,7 +652,7 @@ static void test_serialize_list(void)
         uint8_t dummy_data[1];
         size_t dummy_element_sizes[1];
         out_size = sizeof(buffer);
-        err = ssz_serialize_list(dummy_data, 0, dummy_element_sizes, false, buffer, &out_size);
+        err = ssz_serialize_list(dummy_data, 0, dummy_element_sizes, buffer, &out_size);
         if (err == SSZ_SUCCESS && out_size == 0)
         {
             printf("  OK: Zero-element list accepted, out_size=0.\n");
@@ -596,27 +660,6 @@ static void test_serialize_list(void)
         else
         {
             printf("  FAIL: Zero-element list did not behave as expected.\n");
-        }
-    }
-
-    printf("Testing fixed-size list of 3 elements each 4 bytes...\n");
-    {
-        uint8_t elements[12] = {
-            0xDD, 0xCC, 0xBB, 0xAA, 
-            0x44, 0x33, 0x22, 0x11, 
-            0xEE, 0xCD, 0xAB, 0x99
-        };
-        size_t element_sizes[3] = {4, 4, 4};
-        out_size = sizeof(buffer);
-        memset(buffer, 0, sizeof(buffer));
-        err = ssz_serialize_list(elements, 3, element_sizes, false, buffer, &out_size);
-        if (err == SSZ_SUCCESS && out_size == 12 && memcmp(buffer, elements, 12) == 0)
-        {
-            printf("  OK: Fixed-size list with 3 elements serialized correctly.\n");
-        }
-        else
-        {
-            printf("  FAIL: Fixed-size list serialization mismatch.\n");
         }
     }
 
@@ -630,7 +673,7 @@ static void test_serialize_list(void)
         size_t element_sizes[3] = {2, 4, 3};
         out_size = sizeof(buffer);
         memset(buffer, 0, sizeof(buffer));
-        err = ssz_serialize_list(elements, 3, element_sizes, true, buffer, &out_size);
+        err = ssz_serialize_list(elements, 3, element_sizes, buffer, &out_size);
         if (err == SSZ_SUCCESS && out_size == 21)
         {
             if (buffer[0] == 0x0C && buffer[1] == 0x00 && buffer[2] == 0x00 && buffer[3] == 0x00 &&

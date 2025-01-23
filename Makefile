@@ -12,9 +12,6 @@ TEST_DIR = tests
 LIB_DIR = lib
 BENCH_DIR = bench
 
-CRITERION_CFLAGS ?= -I/opt/homebrew/opt/criterion/include
-CRITERION_LDFLAGS ?= -L/opt/homebrew/opt/criterion/lib -lcriterion
-
 LIB_SOURCES = ssz_deserialize.c ssz_serialize.c ssz_utils.c ssz_merkle.c
 LIB_OBJECTS = $(patsubst %.c, $(OBJ_DIR)/%.o, $(LIB_SOURCES))
 
@@ -23,12 +20,9 @@ STATIC_LIB = $(LIB_DIR)/libssz.a
 TEST_SOURCES = test_ssz_serialize.c test_ssz_deserialize.c
 TEST_BINARIES = $(patsubst %.c, $(BIN_DIR)/%, $(TEST_SOURCES))
 
-CRITERION_TEST_SOURCES = test_ssz_serialize_criterion.c test_ssz_deserialize_criterion.c
-CRITERION_TEST_BINARIES = $(patsubst %.c, $(BIN_DIR)/criterion_%, $(CRITERION_TEST_SOURCES))
-
 BENCH_SOURCES := $(wildcard $(BENCH_DIR)/bench_ssz_*.c)
 
-BENCH_COMMON_SOURCES = $(BENCH_DIR)/benchmark.c
+BENCH_COMMON_SOURCES = $(BENCH_DIR)/bench.c
 BENCH_COMMON_OBJECTS = $(patsubst $(BENCH_DIR)/%.c, $(OBJ_DIR)/bench/%.o, $(BENCH_COMMON_SOURCES))
 
 BENCH_EXTRA_SOURCES = yaml_parser.c
@@ -55,22 +49,11 @@ $(BIN_DIR)/%: $(TEST_DIR)/%.c $(STATIC_LIB)
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< -o $@ $(LDFLAGS) $(SSZ_LDFLAGS)
 
-$(BIN_DIR)/criterion_%: $(TEST_DIR)/%.c $(STATIC_LIB)
-	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $(CRITERION_CFLAGS) $< -o $@ $(LDFLAGS) $(SSZ_LDFLAGS) $(CRITERION_LDFLAGS)
-
 test: all
 	@echo "Running test_ssz_serialize..."
 	@./$(BIN_DIR)/test_ssz_serialize
 	@echo "Running test_ssz_deserialize..."
 	@./$(BIN_DIR)/test_ssz_deserialize
-
-criterion-tests: all $(CRITERION_TEST_BINARIES)
-	@echo "Running Criterion tests..."
-	@for testbin in $(CRITERION_TEST_BINARIES); do \
-		echo "Running $$testbin..."; \
-		./$$testbin; \
-	done
 
 clean:
 	@echo "Removing object files from $(OBJ_DIR)"
@@ -120,4 +103,4 @@ bench: all
 $(SUB_BENCHES):
 	@:
 
-.PHONY: all test clean run-tests criterion-tests bench $(SUB_BENCHES)
+.PHONY: all test clean run-tests bench $(SUB_BENCHES)

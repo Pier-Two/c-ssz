@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "benchmark.h"
+#include "bench.h"
 #include "ssz_serialize.h"
 
 typedef struct
@@ -35,12 +35,52 @@ typedef struct
     size_t element_count;
 } ssz_list_test_t;
 
-static void test_uintN_serialize(void *user_data)
+static void test_uint8_serialize(void *user_data)
 {
     ssz_uintN_test_t *test_data = (ssz_uintN_test_t *)user_data;
     uint8_t out_buf[32];
     size_t out_size = sizeof(out_buf);
-    ssz_serialize_uintN(test_data->value, test_data->bit_size, out_buf, &out_size);
+    ssz_serialize_uint8(test_data->value, out_buf, &out_size);
+}
+
+static void test_uint16_serialize(void *user_data)
+{
+    ssz_uintN_test_t *test_data = (ssz_uintN_test_t *)user_data;
+    uint8_t out_buf[32];
+    size_t out_size = sizeof(out_buf);
+    ssz_serialize_uint16(test_data->value, out_buf, &out_size);
+}
+
+static void test_uint32_serialize(void *user_data)
+{
+    ssz_uintN_test_t *test_data = (ssz_uintN_test_t *)user_data;
+    uint8_t out_buf[32];
+    size_t out_size = sizeof(out_buf);
+    ssz_serialize_uint32(test_data->value, out_buf, &out_size);
+}
+
+static void test_uint64_serialize(void *user_data)
+{
+    ssz_uintN_test_t *test_data = (ssz_uintN_test_t *)user_data;
+    uint8_t out_buf[32];
+    size_t out_size = sizeof(out_buf);
+    ssz_serialize_uint64(test_data->value, out_buf, &out_size);
+}
+
+static void test_uint128_serialize(void *user_data)
+{
+    ssz_uintN_test_t *test_data = (ssz_uintN_test_t *)user_data;
+    uint8_t out_buf[32];
+    size_t out_size = sizeof(out_buf);
+    ssz_serialize_uint128(test_data->value, out_buf, &out_size);
+}
+
+static void test_uint256_serialize(void *user_data)
+{
+    ssz_uintN_test_t *test_data = (ssz_uintN_test_t *)user_data;
+    uint8_t out_buf[32];
+    size_t out_size = sizeof(out_buf);
+    ssz_serialize_uint256(test_data->value, out_buf, &out_size);
 }
 
 static void test_boolean_serialize(void *user_data)
@@ -77,7 +117,7 @@ static void test_vector_serialize(void *user_data)
     {
         element_sizes[i] = 8;
     }
-    ssz_serialize_vector(test_data->items, test_data->element_count, element_sizes, false, out_buf, &out_size);
+    ssz_serialize_vector(test_data->items, test_data->element_count, element_sizes, out_buf, &out_size);
 }
 
 static void test_list_serialize(void *user_data)
@@ -90,30 +130,78 @@ static void test_list_serialize(void *user_data)
     {
         element_sizes[i] = 8;
     }
-    ssz_serialize_list(test_data->items, test_data->element_count, element_sizes, false, out_buf, &out_size);
+    ssz_serialize_list(test_data->items, test_data->element_count, element_sizes, out_buf, &out_size);
 }
 
 static void run_uintN_benchmarks(void)
 {
-    ssz_uintN_test_t tests[] = {
-        {8, {0}},
-        {16, {0}},
-        {32, {0}},
-        {64, {0}},
-        {128, {0}},
-        {256, {0}}};
-    for (int i = 0; i < (int)(sizeof(tests) / sizeof(tests[0])); i++)
+    ssz_uintN_test_t test_data;
+
+    test_data.bit_size = 8;
+    memset(test_data.value, 0xFF, 1);
     {
-        size_t byte_size = tests[i].bit_size / 8;
-        memset(tests[i].value, 0xFF, byte_size);
         bench_ssz_stats_t stats = bench_ssz_run_benchmark(
-            test_uintN_serialize,
-            &tests[i],
+            test_uint8_serialize,
+            &test_data,
             100000,
             1000000);
-        char label[64];
-        snprintf(label, sizeof(label), "Benchmark ssz_serialize_uint%zu", tests[i].bit_size);
-        bench_ssz_print_stats(label, &stats);
+        bench_ssz_print_stats("Benchmark ssz_serialize_uint8", &stats);
+    }
+
+    test_data.bit_size = 16;
+    memset(test_data.value, 0xFF, 2);
+    {
+        bench_ssz_stats_t stats = bench_ssz_run_benchmark(
+            test_uint16_serialize,
+            &test_data,
+            100000,
+            1000000);
+        bench_ssz_print_stats("Benchmark ssz_serialize_uint16", &stats);
+    }
+
+    test_data.bit_size = 32;
+    memset(test_data.value, 0xFF, 4);
+    {
+        bench_ssz_stats_t stats = bench_ssz_run_benchmark(
+            test_uint32_serialize,
+            &test_data,
+            100000,
+            1000000);
+        bench_ssz_print_stats("Benchmark ssz_serialize_uint32", &stats);
+    }
+
+    // Benchmark ssz_serialize_uint64
+    test_data.bit_size = 64;
+    memset(test_data.value, 0xFF, 8);
+    {
+        bench_ssz_stats_t stats = bench_ssz_run_benchmark(
+            test_uint64_serialize,
+            &test_data,
+            100000,
+            1000000);
+        bench_ssz_print_stats("Benchmark ssz_serialize_uint64", &stats);
+    }
+
+    test_data.bit_size = 128;
+    memset(test_data.value, 0xFF, 16);
+    {
+        bench_ssz_stats_t stats = bench_ssz_run_benchmark(
+            test_uint128_serialize,
+            &test_data,
+            100000,
+            1000000);
+        bench_ssz_print_stats("Benchmark ssz_serialize_uint128", &stats);
+    }
+
+    test_data.bit_size = 256;
+    memset(test_data.value, 0xFF, 32);
+    {
+        bench_ssz_stats_t stats = bench_ssz_run_benchmark(
+            test_uint256_serialize,
+            &test_data,
+            100000,
+            1000000);
+        bench_ssz_print_stats("Benchmark ssz_serialize_uint256", &stats);
     }
 }
 
@@ -127,6 +215,7 @@ static void run_boolean_benchmarks(void)
             &booleans[i],
             100000,
             1000000);
+
         char label[64];
         snprintf(label, sizeof(label), "Benchmark ssz_serialize_boolean %s", booleans[i] ? "true" : "false");
         bench_ssz_print_stats(label, &stats);
@@ -141,11 +230,13 @@ static void run_bitvector_benchmarks(void)
     {
         test_data.bits[i] = true;
     }
+
     bench_ssz_stats_t stats = bench_ssz_run_benchmark(
         test_bitvector_serialize,
         &test_data,
         100,
         100);
+
     bench_ssz_print_stats("Benchmark ssz_serialize_bitvector 262144 bits", &stats);
 }
 
@@ -157,11 +248,13 @@ static void run_bitlist_benchmarks(void)
     {
         test_data.bits[i] = true;
     }
+
     bench_ssz_stats_t stats = bench_ssz_run_benchmark(
         test_bitlist_serialize,
         &test_data,
         10,
         10);
+
     bench_ssz_print_stats("Benchmark ssz_serialize_bitlist 524288 bits", &stats);
 }
 
@@ -173,11 +266,13 @@ static void run_vector_benchmarks(void)
     {
         test_data.items[i] = 0xFFFFFFFFFFFFFFFFULL;
     }
+
     bench_ssz_stats_t stats = bench_ssz_run_benchmark(
         test_vector_serialize,
         &test_data,
         5000,
         10000);
+
     bench_ssz_print_stats("Benchmark ssz_serialize_vector 16384 uint64s", &stats);
 }
 
@@ -189,11 +284,13 @@ static void run_list_benchmarks(void)
     {
         test_data.items[i] = 0xFFFFFFFFFFFFFFFFULL;
     }
+
     bench_ssz_stats_t stats = bench_ssz_run_benchmark(
         test_list_serialize,
         &test_data,
         5000,
         10000);
+
     bench_ssz_print_stats("Benchmark ssz_serialize_list 8192 uint64s", &stats);
 }
 

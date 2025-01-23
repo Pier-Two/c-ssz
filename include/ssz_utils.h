@@ -32,15 +32,6 @@ bool is_power_of_two(uint64_t value);
 bool check_max_offset(size_t offset);
 
 /**
- * Writes a 4-byte little-endian offset into the output buffer.
- * The 32-bit offset is split into four bytes and written in little-endian order.
- * 
- * @param offset The 32-bit offset to write.
- * @param out Pointer to the output buffer.
- */
-void write_offset_le(uint32_t offset, uint8_t *out);
-
-/**
  * Reads a 4-byte little-endian offset from the source buffer at the specified index.
  * 
  * @param src Pointer to the source buffer.

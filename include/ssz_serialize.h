@@ -7,22 +7,64 @@
 #include "ssz_types.h"
 
 /**
- * Serializes an unsigned integer of a specified bit size into a buffer.
- * Supports bit sizes of 8, 16, 32, 64, 128, and 256. The serialized value
- * is written in little-endian format.
+ * Serializes an 8-bit unsigned integer into a single byte.
  * 
- * @param value Pointer to the integer value to serialize.
- * @param bit_size The size of the integer in bits.
+ * @param value Pointer to the 8-bit unsigned integer to serialize.
  * @param out_buf Pointer to the output buffer to write the serialized data.
  * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_serialize_uintN(
-    const void *value,
-    size_t bit_size,
-    uint8_t *out_buf,
-    size_t *out_size
-);
+ssz_error_t ssz_serialize_uint8(const void *value, uint8_t *out_buf, size_t *out_size);
+
+/**
+ * Serializes a 16-bit unsigned integer into two bytes.
+ * 
+ * @param value Pointer to the 16-bit unsigned integer to serialize.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_uint16(const void *value, uint8_t *out_buf, size_t *out_size);
+
+/**
+ * Serializes a 32-bit unsigned integer into four bytes.
+ * 
+ * @param value Pointer to the 32-bit unsigned integer to serialize.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_uint32(const void *value, uint8_t *out_buf, size_t *out_size);
+
+/**
+ * Serializes a 64-bit unsigned integer into eight bytes.
+ * 
+ * @param value Pointer to the 64-bit unsigned integer to serialize.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_uint64(const void *value, uint8_t *out_buf, size_t *out_size);
+
+/**
+ * Serializes a 128-bit unsigned integer into sixteen bytes.
+ * 
+ * @param value Pointer to the 128-bit unsigned integer to serialize.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_uint128(const void *value, uint8_t *out_buf, size_t *out_size);
+
+/**
+ * Serializes a 256-bit unsigned integer into thirty-two bytes.
+ * 
+ * @param value Pointer to the 256-bit unsigned integer to serialize.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_uint256(const void *value, uint8_t *out_buf, size_t *out_size);
 
 /**
  * Serializes a boolean value into a single byte.
@@ -89,12 +131,11 @@ ssz_error_t ssz_serialize_union(
 
 /**
  * Serializes a vector of elements into a buffer. A vector is a fixed-length
- * collection of elements, which may be either fixed-size or variable-size.
+ * collection of elements.
  * 
  * @param elements Pointer to the input elements.
  * @param element_count The number of elements in the vector.
  * @param element_sizes Array of sizes for each element.
- * @param is_variable_size Indicates whether the elements are variable-size.
  * @param out_buf Pointer to the output buffer to write the serialized data.
  * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
  * @return SSZ_SUCCESS on success, or an error code on failure.
@@ -103,19 +144,17 @@ ssz_error_t ssz_serialize_vector(
     const void *elements,
     size_t element_count,
     const size_t *element_sizes,
-    bool is_variable_size,
     uint8_t *out_buf,
     size_t *out_size
 );
 
 /**
  * Serializes a list of elements into a buffer. A list is a variable-length
- * collection of elements, which may be either fixed-size or variable-size.
+ * collection of elements.
  * 
  * @param elements Pointer to the input elements.
  * @param element_count The number of elements in the list.
  * @param element_sizes Array of sizes for each element.
- * @param is_variable_size Indicates whether the elements are variable-size.
  * @param out_buf Pointer to the output buffer to write the serialized data.
  * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
  * @return SSZ_SUCCESS on success, or an error code on failure.
@@ -124,7 +163,6 @@ ssz_error_t ssz_serialize_list(
     const void *elements,
     size_t element_count,
     const size_t *element_sizes,
-    bool is_variable_size,
     uint8_t *out_buf,
     size_t *out_size
 );

@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include "benchmark.h"
+#include "bench.h"
 #include "ssz_serialize.h"
 #include "ssz_deserialize.h"
 #include "ssz_constants.h"
@@ -95,58 +95,6 @@ static ssz_error_t db_append(DynamicBuffer *db, const uint8_t *bytes, size_t len
     return SSZ_SUCCESS;
 }
 
-static ssz_error_t ssz_serialize_uint_db(uint64_t value, size_t byte_count, DynamicBuffer *db)
-{
-    uint8_t tmp[8];
-    memset(tmp, 0, sizeof(tmp));
-    for (int i = 0; i < (int)byte_count; i++)
-    {
-        tmp[i] = (uint8_t)((value >> (8 * i)) & 0xff);
-    }
-    return db_append(db, tmp, byte_count);
-}
-
-static inline ssz_error_t ssz_serialize_uint64_db(const uint64_t *value, DynamicBuffer *db)
-{
-    return ssz_serialize_uint_db(*value, 8, db);
-}
-
-static inline ssz_error_t ssz_serialize_uint32_db(uint32_t value, DynamicBuffer *db)
-{
-    return ssz_serialize_uint_db(value, 4, db);
-}
-
-static ssz_error_t ssz_serialize_bytes_db(const uint8_t *src, size_t len, DynamicBuffer *db)
-{
-    return db_append(db, src, len);
-}
-
-static ssz_error_t ssz_serialize_bits_generic_db(const bool *bits, size_t bit_count, DynamicBuffer *db)
-{
-    size_t byte_count = (bit_count + 7) / 8;
-    uint8_t *tmp = malloc(byte_count);
-    if (!tmp)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-    memset(tmp, 0, byte_count);
-    for (size_t i = 0; i < bit_count; i++)
-    {
-        if (bits[i])
-        {
-            tmp[i / 8] |= (1 << (i % 8));
-        }
-    }
-    ssz_error_t err = db_append(db, tmp, byte_count);
-    free(tmp);
-    return err;
-}
-
-static ssz_error_t ssz_serialize_bitlist_db(const bool *bits, size_t bit_count, DynamicBuffer *db)
-{
-    return ssz_serialize_bits_generic_db(bits, bit_count, db);
-}
-
 static void print_hex(const uint8_t *data, size_t length)
 {
     for (size_t i = 0; i < length; i++)
@@ -200,28 +148,98 @@ static void print_attestation(const Attestation *f)
 static ssz_error_t ssz_serialize_attestation_data_db(const AttestationData *ad, DynamicBuffer *db)
 {
     ssz_error_t err;
-    err = ssz_serialize_uint64_db(&ad->slot, db);
-    if (err != SSZ_SUCCESS)
-        return err;
-    err = ssz_serialize_uint64_db(&ad->index, db);
-    if (err != SSZ_SUCCESS)
-        return err;
-    err = ssz_serialize_bytes_db(ad->beacon_block_root, 32, db);
-    if (err != SSZ_SUCCESS)
-        return err;
-    err = ssz_serialize_uint64_db(&ad->source.epoch, db);
-    if (err != SSZ_SUCCESS)
-        return err;
-    err = ssz_serialize_bytes_db(ad->source.root, 32, db);
-    if (err != SSZ_SUCCESS)
-        return err;
-    err = ssz_serialize_uint64_db(&ad->target.epoch, db);
-    if (err != SSZ_SUCCESS)
-        return err;
-    err = ssz_serialize_bytes_db(ad->target.root, 32, db);
-    if (err != SSZ_SUCCESS)
-        return err;
+    uint8_t tmp[64];
+    size_t tmp_size = sizeof(tmp);
+    err = ssz_serialize_uint64(&ad->slot, tmp, &tmp_size);
+    if (err != SSZ_SUCCESS) return err;
+    err = db_append(db, tmp, tmp_size);
+    if (err != SSZ_SUCCESS) return err;
+    tmp_size = sizeof(tmp);
+    err = ssz_serialize_uint64(&ad->index, tmp, &tmp_size);
+    if (err != SSZ_SUCCESS) return err;
+    err = db_append(db, tmp, tmp_size);
+    if (err != SSZ_SUCCESS) return err;
+    {
+        uint8_t vec_buf[64];
+        size_t vec_size = sizeof(vec_buf);
+        size_t element_count = 32;
+        size_t sizes[32];
+        for (size_t i = 0; i < element_count; i++)
+        {
+            sizes[i] = 1;
+        }
+        err = ssz_serialize_vector(ad->beacon_block_root, element_count, sizes, vec_buf, &vec_size);
+        if (err != SSZ_SUCCESS) return err;
+        err = db_append(db, vec_buf, vec_size);
+        if (err != SSZ_SUCCESS) return err;
+    }
+    tmp_size = sizeof(tmp);
+    err = ssz_serialize_uint64(&ad->source.epoch, tmp, &tmp_size);
+    if (err != SSZ_SUCCESS) return err;
+    err = db_append(db, tmp, tmp_size);
+    if (err != SSZ_SUCCESS) return err;
+    {
+        uint8_t vec_buf[64];
+        size_t vec_size = sizeof(vec_buf);
+        size_t element_count = 32;
+        size_t sizes[32];
+        for (size_t i = 0; i < element_count; i++)
+        {
+            sizes[i] = 1;
+        }
+        err = ssz_serialize_vector(ad->source.root, element_count, sizes, vec_buf, &vec_size);
+        if (err != SSZ_SUCCESS) return err;
+        err = db_append(db, vec_buf, vec_size);
+        if (err != SSZ_SUCCESS) return err;
+    }
+    tmp_size = sizeof(tmp);
+    err = ssz_serialize_uint64(&ad->target.epoch, tmp, &tmp_size);
+    if (err != SSZ_SUCCESS) return err;
+    err = db_append(db, tmp, tmp_size);
+    if (err != SSZ_SUCCESS) return err;
+    {
+        uint8_t vec_buf[64];
+        size_t vec_size = sizeof(vec_buf);
+        size_t element_count = 32;
+        size_t sizes[32];
+        for (size_t i = 0; i < element_count; i++)
+        {
+            sizes[i] = 1;
+        }
+        err = ssz_serialize_vector(ad->target.root, element_count, sizes, vec_buf, &vec_size);
+        if (err != SSZ_SUCCESS) return err;
+        err = db_append(db, vec_buf, vec_size);
+        if (err != SSZ_SUCCESS) return err;
+    }
     return SSZ_SUCCESS;
+}
+
+static ssz_error_t ssz_serialize_signature(const uint8_t *signature, DynamicBuffer *db)
+{
+    ssz_error_t err;
+    uint8_t vec_buf[128];
+    size_t vec_size = sizeof(vec_buf);
+    size_t element_count = 96;
+    size_t sizes[96];
+    for (size_t i = 0; i < element_count; i++)
+    {
+        sizes[i] = 1;
+    }
+    err = ssz_serialize_vector(signature, element_count, sizes, vec_buf, &vec_size);
+    if (err != SSZ_SUCCESS) return err;
+    err = db_append(db, vec_buf, vec_size);
+    if (err != SSZ_SUCCESS) return err;
+    return SSZ_SUCCESS;
+}
+
+static ssz_error_t ssz_serialize_aggregation_bits(const AggregationBits *bits, DynamicBuffer *db)
+{
+    ssz_error_t err;
+    uint8_t temp[256];
+    size_t temp_size = sizeof(temp);
+    err = ssz_serialize_bitlist(bits->data, bits->length, temp, &temp_size);
+    if (err != SSZ_SUCCESS) return err;
+    return db_append(db, temp, temp_size);
 }
 
 static ssz_error_t serialize_attestation(const Attestation *attestation_data, uint8_t *out_buffer, size_t out_buffer_size, size_t *out_actual_size)
@@ -234,24 +252,25 @@ static ssz_error_t serialize_attestation(const Attestation *attestation_data, ui
     db_init(&db_final);
     ssz_error_t err = SSZ_SUCCESS;
     err = ssz_serialize_attestation_data_db(&attestation_data->data, &db_fixed);
-    if (err != SSZ_SUCCESS)
-        goto fin;
-    err = ssz_serialize_bytes_db(attestation_data->signature, 96, &db_fixed);
-    if (err != SSZ_SUCCESS)
-        goto fin;
-    err = ssz_serialize_bitlist_db(attestation_data->aggregation_bits.data, attestation_data->aggregation_bits.length, &db_var);
-    if (err != SSZ_SUCCESS)
-        goto fin;
+    if (err != SSZ_SUCCESS) goto fin;
+    err = ssz_serialize_signature(attestation_data->signature, &db_fixed);
+    if (err != SSZ_SUCCESS) goto fin;
+    err = ssz_serialize_aggregation_bits(&attestation_data->aggregation_bits, &db_var);
+    if (err != SSZ_SUCCESS) goto fin;
     uint32_t offset_agg_bits = 4 + (uint32_t)db_fixed.size;
-    err = ssz_serialize_uint32_db(offset_agg_bits, &db_final);
-    if (err != SSZ_SUCCESS)
-        goto fin;
+    {
+        uint8_t tmp[4];
+        size_t tmp_size = sizeof(tmp);
+        uint32_t val = offset_agg_bits;
+        err = ssz_serialize_uint32(&val, tmp, &tmp_size);
+        if (err != SSZ_SUCCESS) goto fin;
+        err = db_append(&db_final, tmp, tmp_size);
+        if (err != SSZ_SUCCESS) goto fin;
+    }
     err = db_append(&db_final, db_fixed.data, db_fixed.size);
-    if (err != SSZ_SUCCESS)
-        goto fin;
+    if (err != SSZ_SUCCESS) goto fin;
     err = db_append(&db_final, db_var.data, db_var.size);
-    if (err != SSZ_SUCCESS)
-        goto fin;
+    if (err != SSZ_SUCCESS) goto fin;
     if (db_final.size > out_buffer_size)
     {
         err = SSZ_ERROR_SERIALIZATION;
@@ -325,7 +344,6 @@ static ssz_error_t deserialize_attestation(const uint8_t *buffer, size_t buffer_
         }
         out_attestation->aggregation_bits.length = actual_bits;
     }
-
     return SSZ_SUCCESS;
 }
 
@@ -474,6 +492,7 @@ static void attestation_bench_test_func_deserialize(void *user_data)
     }
     else
     {
+        //print_hex(g_serialized, g_serialized_size);
         if (tmp.aggregation_bits.data)
         {
             free(tmp.aggregation_bits.data);
@@ -486,7 +505,7 @@ int main(void)
 {
     init_attestation_data_from_yaml();
     unsigned long warmup_iterations = 0;
-    unsigned long measured_iterations = 10;
+    unsigned long measured_iterations = 100000;
     bench_ssz_stats_t stats_serialize = bench_ssz_run_benchmark(
         attestation_bench_test_func_serialize,
         NULL,
@@ -497,7 +516,6 @@ int main(void)
         NULL,
         warmup_iterations,
         measured_iterations);
-    
     print_attestation(&g_original);
     bench_ssz_print_stats("SSZ Attestation serialization", &stats_serialize);
     bench_ssz_print_stats("SSZ Attestation deserialization", &stats_deserialize);

@@ -396,7 +396,7 @@ static void test_deserialize_vector(void)
 
         uint8_t serialized[64] = {0};
         size_t out_size = sizeof(serialized);
-        ssz_error_t serr = ssz_serialize_vector(elements, 3, field_sizes, false, serialized, &out_size);
+        ssz_error_t serr = ssz_serialize_vector(elements, 3, field_sizes, serialized, &out_size);
         if (serr != SSZ_SUCCESS)
         {
             printf("    Failure: serialization of fixed-size vector.\n");
@@ -404,38 +404,11 @@ static void test_deserialize_vector(void)
         else
         {
             uint8_t recovered[12] = {0};
-            ssz_error_t derr = ssz_deserialize_vector(serialized, out_size, 3, field_sizes, false, recovered);
+            ssz_error_t derr = ssz_deserialize_vector(serialized, out_size, 3, field_sizes, false,recovered);
             if (derr == SSZ_SUCCESS && memcmp(elements, recovered, 12) == 0)
                 printf("    Success: fixed-size vector round-trip.\n");
             else
                 printf("    Failure: fixed-size vector mismatch.\n");
-        }
-    }
-
-    {
-        printf("  Checking variable-size vector with different element sizes...\n");
-        uint8_t elements[9] = {
-            0xAA, 0xBB,            // 2 bytes
-            0x11, 0x22, 0x33,      // 3 bytes
-            0x99, 0x88, 0x77, 0x66 // 4 bytes
-        };
-        size_t field_sizes[3] = {2, 3, 4};
-
-        uint8_t serialized[64] = {0};
-        size_t out_size = sizeof(serialized);
-        ssz_error_t serr = ssz_serialize_vector(elements, 3, field_sizes, true, serialized, &out_size);
-        if (serr != SSZ_SUCCESS)
-        {
-            printf("    Failure: serialization of variable-size vector.\n");
-        }
-        else
-        {
-            uint8_t recovered[9] = {0};
-            ssz_error_t derr = ssz_deserialize_vector(serialized, out_size, 3, field_sizes, true, recovered);
-            if (derr == SSZ_SUCCESS && memcmp(elements, recovered, 9) == 0)
-                printf("    Success: variable-size vector round-trip.\n");
-            else
-                printf("    Failure: variable-size vector mismatch.\n");
         }
     }
 
@@ -456,32 +429,6 @@ static void test_deserialize_list(void)
     printf("\nRunning tests for ssz_deserialize_list...\n");
 
     {
-        printf("  Checking fixed-size list up to 3 elements, actually 2 used...\n");
-        uint8_t elements[8] = {
-            0xDE, 0xAD, 0xBE, 0xEF,
-            0x11, 0x22, 0x33, 0x44};
-        size_t field_sizes[3] = {4, 4, 4};
-        uint8_t serialized[64] = {0};
-        size_t out_size = sizeof(serialized);
-
-        ssz_error_t serr = ssz_serialize_list(elements, 2, field_sizes, false, serialized, &out_size);
-        if (serr != SSZ_SUCCESS)
-        {
-            printf("    Failure: could not serialize partial fixed-size list.\n");
-        }
-        else
-        {
-            uint8_t recovered[12] = {0};
-            size_t actual_count = 0;
-            ssz_error_t derr = ssz_deserialize_list(serialized, out_size, 3, field_sizes, false, recovered, &actual_count);
-            if (derr == SSZ_SUCCESS && actual_count == 2 && memcmp(recovered, elements, 8) == 0)
-                printf("    Success: fixed-size list partial parse.\n");
-            else
-                printf("    Failure: fixed-size list mismatch.\n");
-        }
-    }
-
-    {
         printf("  Checking variable-size list up to 3 elements, actually 2 used...\n");
         uint8_t elements[5] = {
             0xAA, 0xBB,
@@ -490,7 +437,7 @@ static void test_deserialize_list(void)
         uint8_t serialized[64] = {0};
         size_t out_size = sizeof(serialized);
 
-        ssz_error_t serr = ssz_serialize_list(elements, 2, field_sizes, true, serialized, &out_size);
+        ssz_error_t serr = ssz_serialize_list(elements, 2, field_sizes, serialized, &out_size);
         if (serr != SSZ_SUCCESS)
         {
             printf("    Failure: could not serialize partial variable-size list.\n");
