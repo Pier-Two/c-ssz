@@ -17,7 +17,7 @@
  */
 ssz_error_t ssz_serialize_uint8(const void *value, uint8_t *out_buf, size_t *out_size)
 {
-    if (!value || !out_buf || !out_size || *out_size < 1)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 1)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -36,19 +36,17 @@ ssz_error_t ssz_serialize_uint8(const void *value, uint8_t *out_buf, size_t *out
  */
 ssz_error_t ssz_serialize_uint16(const void *value, uint8_t *out_buf, size_t *out_size)
 {
-    if (!value || !out_buf || !out_size || *out_size < 2)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 2)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
-    uint16_t val = *(const uint16_t *)value;
-#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    val = __builtin_bswap16(val);
-#endif
-    memcpy(out_buf, &val, 2);
+    uint16_t val;
+    memcpy(&val, value, sizeof(val));
+    out_buf[0] = (uint8_t)(val);
+    out_buf[1] = (uint8_t)(val >> 8);
     *out_size = 2;
     return SSZ_SUCCESS;
 }
-
 /**
  * Serializes a 32-bit unsigned integer into four bytes.
  *
@@ -59,15 +57,16 @@ ssz_error_t ssz_serialize_uint16(const void *value, uint8_t *out_buf, size_t *ou
  */
 ssz_error_t ssz_serialize_uint32(const void *value, uint8_t *out_buf, size_t *out_size)
 {
-    if (!value || !out_buf || !out_size || *out_size < 4)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 4)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
-    uint32_t val = *(const uint32_t *)value;
-#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    val = __builtin_bswap32(val);
-#endif
-    memcpy(out_buf, &val, 4);
+    uint32_t val;
+    memcpy(&val, value, sizeof(val));
+    out_buf[0] = (uint8_t)(val);
+    out_buf[1] = (uint8_t)(val >> 8);
+    out_buf[2] = (uint8_t)(val >> 16);
+    out_buf[3] = (uint8_t)(val >> 24);
     *out_size = 4;
     return SSZ_SUCCESS;
 }
@@ -82,15 +81,19 @@ ssz_error_t ssz_serialize_uint32(const void *value, uint8_t *out_buf, size_t *ou
  */
 ssz_error_t ssz_serialize_uint64(const void *value, uint8_t *out_buf, size_t *out_size)
 {
-    if (!value || !out_buf || !out_size || *out_size < 8)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 8)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
     uint64_t val = *(const uint64_t *)value;
-#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    val = __builtin_bswap64(val);
-#endif
-    memcpy(out_buf, &val, 8);
+    out_buf[0] = (uint8_t)(val);
+    out_buf[1] = (uint8_t)(val >> 8);
+    out_buf[2] = (uint8_t)(val >> 16);
+    out_buf[3] = (uint8_t)(val >> 24);
+    out_buf[4] = (uint8_t)(val >> 32);
+    out_buf[5] = (uint8_t)(val >> 40);
+    out_buf[6] = (uint8_t)(val >> 48);
+    out_buf[7] = (uint8_t)(val >> 56);
     *out_size = 8;
     return SSZ_SUCCESS;
 }
@@ -108,18 +111,24 @@ ssz_error_t ssz_serialize_uint128(
     uint8_t *restrict out_buf,
     size_t *restrict out_size)
 {
-    if (!value || !out_buf || !out_size || *out_size < 16)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 16)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
-#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    const uint64_t *src = (const uint64_t *)value;
-    uint64_t *dst = (uint64_t *)out_buf;
-    dst[0] = __builtin_bswap64(src[1]);
-    dst[1] = __builtin_bswap64(src[0]);
-#else
-    memcpy(out_buf, value, 16);
-#endif
+    static const uint32_t test_value = 1;
+    const uint8_t *endian_check = (const uint8_t *)&test_value;
+    if (endian_check[0] == 0x01)
+    {
+        memcpy(out_buf, value, 16);
+    }
+    else
+    {
+        const uint8_t *src = (const uint8_t *)value;
+        for (size_t i = 0; i < 16; i++)
+        {
+            out_buf[i] = src[15 - i];
+        }
+    }
     *out_size = 16;
     return SSZ_SUCCESS;
 }
@@ -133,33 +142,28 @@ ssz_error_t ssz_serialize_uint128(
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_serialize_uint256(
-    const void *value,
-    uint8_t *out_buf,
-    size_t *out_size)
+    const void *restrict value,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
 {
-    if (!value || !out_buf || !out_size || *out_size < 32)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 32)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
-#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    uint64_t chunk0, chunk1, chunk2, chunk3;
-    memcpy(&chunk0, (const uint8_t *)value + 0, sizeof(uint64_t));
-    memcpy(&chunk1, (const uint8_t *)value + 8, sizeof(uint64_t));
-    memcpy(&chunk2, (const uint8_t *)value + 16, sizeof(uint64_t));
-    memcpy(&chunk3, (const uint8_t *)value + 24, sizeof(uint64_t));
-
-    chunk0 = __builtin_bswap64(chunk0);
-    chunk1 = __builtin_bswap64(chunk1);
-    chunk2 = __builtin_bswap64(chunk2);
-    chunk3 = __builtin_bswap64(chunk3);
-
-    memcpy(out_buf + 0, &chunk3, sizeof(uint64_t));
-    memcpy(out_buf + 8, &chunk2, sizeof(uint64_t));
-    memcpy(out_buf + 16, &chunk1, sizeof(uint64_t));
-    memcpy(out_buf + 24, &chunk0, sizeof(uint64_t));
-#else
-    memcpy(out_buf, value, 32);
-#endif
+    static const uint32_t test_value = 1;
+    const uint8_t endian_check = *(const uint8_t *)&test_value;
+    if (endian_check == 0x01)
+    {
+        memcpy(out_buf, value, 32);
+    }
+    else
+    {
+        const uint8_t *src = (const uint8_t *)value;
+        for (size_t i = 0; i < 32; i++)
+        {
+            out_buf[i] = src[31 - i];
+        }
+    }
     *out_size = 32;
     return SSZ_SUCCESS;
 }
@@ -174,7 +178,7 @@ ssz_error_t ssz_serialize_uint256(
  */
 ssz_error_t ssz_serialize_boolean(bool value, uint8_t *out_buf, size_t *out_size)
 {
-    if (!out_buf || !out_size || *out_size < 1)
+    if (out_buf == NULL || out_size == NULL || *out_size < 1)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -195,11 +199,7 @@ ssz_error_t ssz_serialize_boolean(bool value, uint8_t *out_buf, size_t *out_size
  */
 ssz_error_t ssz_serialize_bitvector(const bool *restrict bits, size_t num_bits, uint8_t *restrict out_buf, size_t *restrict out_size)
 {
-    if (!bits || !out_buf || !out_size)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-    if (num_bits == 0)
+    if (bits == NULL || out_buf == NULL || out_size == NULL || num_bits == 0)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -245,30 +245,46 @@ ssz_error_t ssz_serialize_bitvector(const bool *restrict bits, size_t num_bits, 
  */
 ssz_error_t ssz_serialize_bitlist(const bool *bits, size_t num_bits, uint8_t *out_buf, size_t *out_size)
 {
-    if (!bits || !out_buf || !out_size)
+    if (bits == NULL || out_buf == NULL || out_size == NULL)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
     const size_t total_bits = num_bits + 1;
     const size_t byte_count = (total_bits + 7) / 8;
-    const size_t delimiter_bit = num_bits;
     if (*out_size < byte_count)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
+    const size_t delimiter_byte = num_bits / 8;
+    const size_t delimiter_bit = num_bits % 8;
+    const bool *bit_ptr = bits;
     for (size_t j = 0; j < byte_count; j++)
     {
         uint8_t byte = 0;
-        for (size_t k = 0; k < 8; k++)
+        const size_t start = j * 8;
+        if (start + 8 <= num_bits)
         {
-            const size_t i = j * 8 + k;
-            if (i >= num_bits)
-                break;
-            byte |= ((uint8_t)bits[i]) << k;
+            byte |= (uint8_t)(*bit_ptr++) << 0;
+            byte |= (uint8_t)(*bit_ptr++) << 1;
+            byte |= (uint8_t)(*bit_ptr++) << 2;
+            byte |= (uint8_t)(*bit_ptr++) << 3;
+            byte |= (uint8_t)(*bit_ptr++) << 4;
+            byte |= (uint8_t)(*bit_ptr++) << 5;
+            byte |= (uint8_t)(*bit_ptr++) << 6;
+            byte |= (uint8_t)(*bit_ptr++) << 7;
         }
-        if (delimiter_bit >= j * 8 && delimiter_bit <= j * 8 + 7)
+        else
         {
-            byte |= (1 << (delimiter_bit - j * 8));
+            for (size_t k = 0; k < 8; k++)
+            {
+                if (start + k >= num_bits)
+                    break;
+                byte |= (uint8_t)(*bit_ptr++) << k;
+            }
+        }
+        if (j == delimiter_byte)
+        {
+            byte |= (1 << delimiter_bit);
         }
         out_buf[j] = byte;
     }
@@ -288,11 +304,7 @@ ssz_error_t ssz_serialize_bitlist(const bool *bits, size_t num_bits, uint8_t *ou
  */
 ssz_error_t ssz_serialize_union(const ssz_union_t *u, uint8_t *out_buf, size_t *out_size)
 {
-    if (!u || !out_buf || !out_size || *out_size < 1)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-    if (u->selector > 127)
+    if (!u || !out_buf || !out_size || *out_size < 1 || u->selector > 127)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -339,11 +351,7 @@ ssz_error_t ssz_serialize_vector(
     uint8_t *restrict out_buf,
     size_t *restrict out_size)
 {
-    if (!elements || !element_sizes || !out_buf || !out_size)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-    if (element_count == 0)
+    if (elements == NULL || element_sizes == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -353,19 +361,24 @@ ssz_error_t ssz_serialize_vector(
     {
         return SSZ_ERROR_SERIALIZATION;
     }
-#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    for (size_t i = 0; i < element_count; i++)
+    static const uint32_t test_value = 1;
+    const uint8_t endian_check = *(const uint8_t *)&test_value;
+    if (endian_check == 0x01)
     {
-        const uint8_t *src = (const uint8_t *)elements + i * element_size;
-        uint8_t *dst = out_buf + i * element_size;
-        for (size_t j = 0; j < element_size; j++)
+        memcpy(out_buf, elements, total_bytes);
+    }
+    else
+    {
+        for (size_t i = 0; i < element_count; i++)
         {
-            dst[j] = src[element_size - 1 - j];
+            const uint8_t *src = (const uint8_t *)elements + i * element_size;
+            uint8_t *dst = out_buf + i * element_size;
+            for (size_t j = 0; j < element_size; j++)
+            {
+                dst[j] = src[element_size - 1 - j];
+            }
         }
     }
-#else
-    memcpy(out_buf, elements, total_bytes);
-#endif
     *out_size = total_bytes;
     return SSZ_SUCCESS;
 }
@@ -385,9 +398,9 @@ ssz_error_t ssz_serialize_list(
     size_t element_count,
     const size_t *element_sizes,
     uint8_t *out_buf,
-    size_t *out_size)
+    size_t *restrict out_size)
 {
-    if (!out_buf || !out_size)
+    if (out_buf == NULL || out_size == NULL)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -396,7 +409,7 @@ ssz_error_t ssz_serialize_list(
         *out_size = 0;
         return SSZ_SUCCESS;
     }
-    if (!elements || !element_sizes)
+    if (elements == NULL || element_sizes == NULL)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -419,19 +432,25 @@ ssz_error_t ssz_serialize_list(
     uint8_t *variable_ptr = out_buf + fixed_region_size;
     const uint8_t *src = (const uint8_t *)elements;
     size_t variable_offset = 0;
+    static const uint32_t test_value = 1;
+    const uint8_t endian_check = *(const uint8_t *)&test_value;
     for (size_t i = 0; i < element_count; i++)
     {
         size_t elem_size = element_sizes[i];
         uint32_t val = (uint32_t)(fixed_region_size + variable_offset);
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-        *((uint32_t *)(offset_ptr + i * BYTES_PER_LENGTH_OFFSET)) = val;
-#else
-        val = ((val & 0xFF) << 24) |
-              ((val & 0xFF00) << 8) |
-              ((val & 0xFF0000) >> 8) |
-              ((val & 0xFF000000) >> 24);
-        *((uint32_t *)(offset_ptr + i * BYTES_PER_LENGTH_OFFSET)) = val;
-#endif
+
+        if (endian_check == 0x01)
+        {
+            *((uint32_t *)(offset_ptr + i * BYTES_PER_LENGTH_OFFSET)) = val;
+        }
+        else
+        {
+            val = ((val & 0x000000FFU) << 24) |
+                  ((val & 0x0000FF00U) << 8) |
+                  ((val & 0x00FF0000U) >> 8) |
+                  ((val & 0xFF000000U) >> 24);
+            *((uint32_t *)(offset_ptr + i * BYTES_PER_LENGTH_OFFSET)) = val;
+        }
         memcpy(variable_ptr, src, elem_size);
         src += elem_size;
         variable_ptr += elem_size;
