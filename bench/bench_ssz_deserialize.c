@@ -206,8 +206,8 @@ static void run_bitlist_deserialize_benchmarks(void) {
     bench_ssz_stats_t stats = bench_ssz_run_benchmark(
         test_bitlist_deserialize,
         &test_data,
-        10,
-        10
+        100,
+        100
     );
     bench_ssz_print_stats("Benchmark ssz_deserialize_bitlist 524288 bits", &stats);
 }

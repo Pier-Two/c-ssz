@@ -36,14 +36,12 @@ ssz_error_t ssz_deserialize_uint8(const uint8_t *buffer, size_t buffer_size, voi
  */
 ssz_error_t ssz_deserialize_uint16(const uint8_t *buffer, size_t buffer_size, void *out_value)
 {
-    if (buffer == NULL || out_value == NULL || buffer_size < 2)
+    if (buffer_size < 2 || buffer == NULL || out_value == NULL)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
-    uint16_t val = 0;
-    val |= (uint16_t)buffer[0];
-    val |= (uint16_t)buffer[1] << 8;
-    *(uint16_t *)out_value = val;
+    uint16_t val = (uint16_t)buffer[0] | ((uint16_t)buffer[1] << 8);
+    memcpy(out_value, &val, sizeof(val));
     return SSZ_SUCCESS;
 }
 
@@ -219,17 +217,39 @@ ssz_error_t ssz_deserialize_bitvector(
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
-    size_t needed = (num_bits + 7) / 8;
+
+    const size_t needed = (num_bits + 7) / 8;
     if (needed != buffer_size)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
-    memset(out_bits, 0, num_bits * sizeof(bool));
-    for (size_t i = 0; i < num_bits; i++)
+
+    const size_t full_bytes = num_bits / 8;
+    const size_t remainder_bits = num_bits % 8;
+    bool *out_ptr = out_bits;
+
+    for (size_t i = 0; i < full_bytes; ++i)
     {
-        bool set = (buffer[i / 8] & (1 << (i % 8))) != 0;
-        out_bits[i] = set;
+        const uint8_t byte = buffer[i];
+        *out_ptr++ = (byte & 0x01) != 0;
+        *out_ptr++ = (byte & 0x02) != 0;
+        *out_ptr++ = (byte & 0x04) != 0;
+        *out_ptr++ = (byte & 0x08) != 0;
+        *out_ptr++ = (byte & 0x10) != 0;
+        *out_ptr++ = (byte & 0x20) != 0;
+        *out_ptr++ = (byte & 0x40) != 0;
+        *out_ptr++ = (byte & 0x80) != 0;
     }
+
+    if (remainder_bits > 0)
+    {
+        const uint8_t byte = buffer[full_bytes];
+        for (size_t bit = 0; bit < remainder_bits; ++bit)
+        {
+            *out_ptr++ = (byte & (1 << bit)) != 0;
+        }
+    }
+
     return SSZ_SUCCESS;
 }
 
@@ -255,78 +275,83 @@ ssz_error_t ssz_deserialize_bitlist(
     bool *out_bits,
     size_t *out_actual_bits)
 {
-    if (buffer == NULL || out_bits == NULL || out_actual_bits == NULL)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-    if (buffer_size == 0)
+    if (buffer == NULL || out_bits == NULL || out_actual_bits == NULL || buffer_size == 0)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
 
-    size_t max_bytes = (max_bits + 1 + 7) / 8;
+    const size_t max_bytes = (max_bits + 8) / 8;
     if (buffer_size > max_bytes)
     {
-        for (size_t i = max_bytes; i < buffer_size; i++)
+        if (!is_all_zero(buffer + max_bytes, buffer_size - max_bytes))
         {
-            if (buffer[i] != 0)
-            {
-                return SSZ_ERROR_DESERIALIZATION;
-            }
+            return SSZ_ERROR_DESERIALIZATION;
         }
-
         buffer_size = max_bytes;
     }
 
     ssize_t boundary = -1;
-    for (ssize_t byte_i = (ssize_t)buffer_size - 1; byte_i >= 0 && boundary < 0; byte_i--)
+    for (ssize_t byte_i = (ssize_t)buffer_size - 1; byte_i >= 0; byte_i--)
     {
-        uint8_t val = buffer[byte_i];
+        const uint8_t val = buffer[byte_i];
         if (val != 0)
         {
-            for (int bit_i = 7; bit_i >= 0; bit_i--)
-            {
-                if (val & (1 << bit_i))
-                {
-                    boundary = (byte_i * 8) + bit_i;
-                    break;
-                }
-            }
+            const int bit = highest_bit_table[val];
+            boundary = (byte_i * 8) + bit;
+            break;
         }
     }
 
-    if (boundary < 0)
+    if (boundary < 0 || (size_t)boundary > max_bits)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
 
-    if ((size_t)boundary > max_bits)
+    const size_t boundary_byte = (boundary / 8) + 1;
+    if (boundary_byte < buffer_size)
     {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    uint8_t boundary_mask = (uint8_t)((1 << ((boundary % 8) + 1)) - 1);
-    uint8_t masked_val = buffer[boundary / 8] & ~boundary_mask;
-    if (masked_val != 0)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-    for (size_t i = (boundary / 8) + 1; i < buffer_size; i++)
-    {
-        if (buffer[i] != 0)
+        if (!is_all_zero(buffer + boundary_byte, buffer_size - boundary_byte))
         {
             return SSZ_ERROR_DESERIALIZATION;
         }
     }
 
-    size_t data_bits = (size_t)boundary;
+    const uint8_t boundary_mask = (uint8_t)((1U << ((boundary % 8) + 1)) - 1);
+    if ((buffer[boundary / 8] & ~boundary_mask) != 0)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+
+    const size_t data_bits = (size_t)boundary;
     *out_actual_bits = data_bits;
 
-    memset(out_bits, 0, max_bits * sizeof(bool));
-    for (size_t i = 0; i < data_bits; i++)
+    if (data_bits < max_bits)
     {
-        bool is_set = (buffer[i / 8] & (1 << (i % 8))) != 0;
-        out_bits[i] = is_set;
+        memset(out_bits + data_bits, 0, (max_bits - data_bits) * sizeof(bool));
+    }
+
+    const size_t full_bytes = data_bits / 8;
+    const size_t rem_bits = data_bits % 8;
+    size_t i = 0;
+    for (; i < full_bytes; i++)
+    {
+        const uint8_t val = buffer[i];
+        out_bits[i * 8 + 0] = val & 0x01;
+        out_bits[i * 8 + 1] = val & 0x02;
+        out_bits[i * 8 + 2] = val & 0x04;
+        out_bits[i * 8 + 3] = val & 0x08;
+        out_bits[i * 8 + 4] = val & 0x10;
+        out_bits[i * 8 + 5] = val & 0x20;
+        out_bits[i * 8 + 6] = val & 0x40;
+        out_bits[i * 8 + 7] = val & 0x80;
+    }
+    if (rem_bits > 0)
+    {
+        const uint8_t val = buffer[full_bytes];
+        for (size_t bit = 0; bit < rem_bits; bit++)
+        {
+            out_bits[i * 8 + bit] = val & (1 << bit);
+        }
     }
 
     return SSZ_SUCCESS;
@@ -398,18 +423,12 @@ ssz_error_t ssz_deserialize_vector(
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
-
-    size_t needed = 0;
-    for (size_t i = 0; i < element_count; i++)
-    {
-        needed += field_sizes[i];
-    }
-
+    const size_t element_size = field_sizes[0];
+    const size_t needed = element_count * element_size;
     if (needed != buffer_size)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
-
     memcpy(out_elements, buffer, needed);
     return SSZ_SUCCESS;
 }
@@ -438,64 +457,60 @@ ssz_error_t ssz_deserialize_list(
     void *out_elements,
     size_t *out_actual_count)
 {
-    if (buffer == NULL || field_sizes == NULL || out_elements == NULL || out_actual_count == NULL)
-    {
+    if (!buffer || !field_sizes || !out_elements || !out_actual_count)
         return SSZ_ERROR_DESERIALIZATION;
-    }
+
     *out_actual_count = 0;
     if (element_count == 0)
-    {
         return SSZ_SUCCESS;
-    }
-    size_t max_possible = buffer_size / BYTES_PER_LENGTH_OFFSET;
+
+    const size_t max_possible = buffer_size / BYTES_PER_LENGTH_OFFSET;
     if (max_possible < element_count)
-    {
         element_count = max_possible;
-    }
-    uint32_t *offsets = (uint32_t *)malloc(element_count * sizeof(uint32_t));
-    if (offsets == NULL)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-    size_t valid_offsets = 0;
-    for (size_t i = 0; i < element_count; i++)
-    {
-        size_t idx = i * BYTES_PER_LENGTH_OFFSET;
-        uint32_t off = 0;
-        if (!read_offset_le(buffer, buffer_size, idx, &off) ||
-            !check_max_offset(off) ||
-            off > buffer_size)
-        {
-            break;
-        }
-        offsets[i] = off;
-        if (i > 0 && offsets[i] <= offsets[i - 1])
-        {
-            free(offsets);
-            return SSZ_ERROR_DESERIALIZATION;
-        }
-        valid_offsets++;
-    }
+    if (element_count == 0)
+        return SSZ_SUCCESS;
+
+    const uint8_t *offset_ptr = buffer;
+    uint32_t prev_offset = 0;
     uint8_t *write_ptr = (uint8_t *)out_elements;
     size_t total_parsed = 0;
-    for (size_t i = 0; i < valid_offsets; i++)
+
+    for (size_t i = 0; i < element_count; ++i, offset_ptr += BYTES_PER_LENGTH_OFFSET)
     {
-        uint32_t start_off = offsets[i];
-        uint32_t end_off = (i + 1 < valid_offsets) ? offsets[i + 1] : (uint32_t)buffer_size;
-        if (end_off < start_off || end_off > buffer_size)
-        {
+        if (buffer_size < (size_t)((offset_ptr - buffer) + BYTES_PER_LENGTH_OFFSET))
             break;
-        }
-        size_t slice_len = end_off - start_off;
-        if (slice_len != field_sizes[i])
-        {
+
+        const uint32_t current_offset = *(const uint32_t *)offset_ptr;
+        if (current_offset > buffer_size)
             break;
+
+        if (i > 0)
+        {
+            if (current_offset <= prev_offset)
+                return SSZ_ERROR_DESERIALIZATION;
+
+            const size_t slice_len = current_offset - prev_offset;
+            if (slice_len != field_sizes[i - 1])
+                break;
+
+            memcpy(write_ptr, buffer + prev_offset, slice_len);
+            write_ptr += slice_len;
+            ++total_parsed;
         }
-        memcpy(write_ptr, &buffer[start_off], slice_len);
-        write_ptr += slice_len;
-        total_parsed++;
+
+        prev_offset = current_offset;
     }
-    free(offsets);
+
+    if (total_parsed < element_count)
+    {
+        const size_t slice_len = buffer_size - prev_offset;
+        if (slice_len == field_sizes[total_parsed])
+        {
+            memcpy(write_ptr, buffer + prev_offset, slice_len);
+            ++total_parsed;
+        }
+    }
+
     *out_actual_count = total_parsed;
-    return SSZ_SUCCESS;
+    return (total_parsed > 0) ? SSZ_SUCCESS : SSZ_ERROR_DESERIALIZATION;
 }

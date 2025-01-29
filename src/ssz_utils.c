@@ -1,15 +1,74 @@
 #include <stddef.h>
 #include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include "ssz_utils.h"
 #include "ssz_constants.h"
 
 /**
+ * Provides a lookup table to find the highest set bit for each byte value (0-255).
+ * Indices 0 through 255 map to the highest set bit in the corresponding byte, or -1 if zero.
+ */
+const int8_t highest_bit_table[256] =
+{
+    -1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7
+};
+
+/**
+ * Checks if the given memory region is filled with zeros.
+ * @param ptr Pointer to the memory region.
+ * @param len The length of the memory region in bytes.
+ * @return true if all bytes are zero, otherwise false.
+ */
+bool is_all_zero(const uint8_t *ptr, size_t len)
+{
+    size_t i = 0;
+    while (len >= 8)
+    {
+        if (*(const uint64_t *)(ptr + i))
+            return false;
+        i += 8;
+        len -= 8;
+    }
+    if (len >= 4)
+    {
+        if (*(const uint32_t *)(ptr + i))
+            return false;
+        i += 4;
+        len -= 4;
+    }
+    if (len >= 2)
+    {
+        if (*(const uint16_t *)(ptr + i))
+            return false;
+        i += 2;
+        len -= 2;
+    }
+    if (len >= 1)
+    {
+        if (*(ptr + i))
+            return false;
+    }
+    return true;
+}
+
+/**
  * Determines whether a given value is a power of two.
- * 
- * A value is considered a power of two if it satisfies the condition
- * (x & (x - 1)) == 0, provided x is not zero. Zero is explicitly
- * defined as not a power of two.
- * 
  * @param value The input value to check.
  * @return true if the value is a power of two, false otherwise.
  */
@@ -24,14 +83,8 @@ bool is_power_of_two(uint64_t value)
 
 /**
  * Computes the next power of two for the given value.
- * 
- * If the input value is already a power of two, the same value is returned.
- * If the input value is zero, the result is defined as 1. Otherwise, the
- * function calculates the next power of two by repeatedly shifting until
- * the highest set bit in the input value is surpassed.
- * 
  * @param value The input value.
- * @return The next power of two.
+ * @return The next power of two for value, or value itself if already a power of two.
  */
 uint64_t next_pow_of_two(uint64_t value)
 {
@@ -53,46 +106,11 @@ uint64_t next_pow_of_two(uint64_t value)
 
 /**
  * Validates whether the provided offset is within the maximum allowed SSZ offset range.
- * 
- * The maximum offset is determined by the constant BYTES_PER_LENGTH_OFFSET, which
- * typically represents 4 bytes in SSZ. The maximum offset is computed as
- * (1 << (BYTES_PER_LENGTH_OFFSET * BITS_PER_BYTE)). The function returns true
- * if the offset is less than the maximum allowed value, and false otherwise.
- * 
  * @param offset The offset to validate.
- * @return true if the offset is within the allowed range, false otherwise.
+ * @return true if offset is within the allowed range, false otherwise.
  */
 bool check_max_offset(size_t offset)
 {
     size_t max_offset = ((size_t)1 << (BYTES_PER_LENGTH_OFFSET * BITS_PER_BYTE));
     return (offset < max_offset);
-}
-
-/**
- * Reads a 4-byte little-endian offset from the source buffer at the specified index.
- * 
- * The function reads four bytes starting at the given offset index in the source
- * buffer and combines them into a 32-bit value in little-endian order. If the
- * source buffer is too small or if the pointers are invalid, the function returns
- * false. On success, the 32-bit offset value is stored in out_offset.
- * 
- * @param src Pointer to the source buffer.
- * @param src_size The size of the source buffer in bytes.
- * @param offset_index The index in the buffer to read the offset from.
- * @param out_offset Pointer to store the read 32-bit offset.
- * @return true on success, false on failure.
- */
-bool read_offset_le(const uint8_t *src, size_t src_size, size_t offset_index, uint32_t *out_offset)
-{
-    if (!src || !out_offset || (offset_index + 3 >= src_size))
-    {
-        return false;
-    }
-    uint32_t val =
-        (uint32_t)src[offset_index]       |
-        ((uint32_t)src[offset_index + 1] << 8)  |
-        ((uint32_t)src[offset_index + 2] << 16) |
-        ((uint32_t)src[offset_index + 3] << 24);
-    *out_offset = val;
-    return true;
 }
