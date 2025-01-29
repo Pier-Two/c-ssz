@@ -46,13 +46,40 @@ typedef struct {
 
 static void test_uintN_deserialize(void* user_data) {
     ssz_uintN_deserialize_test_t* test_data = (ssz_uintN_deserialize_test_t*)user_data;
-    uint64_t out_value = 0;
-    ssz_deserialize_uintN(
-        test_data->buffer,
-        test_data->buffer_size,
-        test_data->bit_size,
-        &out_value
-    );
+    switch (test_data->bit_size) {
+        case 8: {
+            uint8_t out_value = 0;
+            ssz_deserialize_uint8(test_data->buffer, test_data->buffer_size, &out_value);
+            break;
+        }
+        case 16: {
+            uint16_t out_value = 0;
+            ssz_deserialize_uint16(test_data->buffer, test_data->buffer_size, &out_value);
+            break;
+        }
+        case 32: {
+            uint32_t out_value = 0;
+            ssz_deserialize_uint32(test_data->buffer, test_data->buffer_size, &out_value);
+            break;
+        }
+        case 64: {
+            uint64_t out_value = 0;
+            ssz_deserialize_uint64(test_data->buffer, test_data->buffer_size, &out_value);
+            break;
+        }
+        case 128: {
+            uint8_t out_value[16] = {0};
+            ssz_deserialize_uint128(test_data->buffer, test_data->buffer_size, out_value);
+            break;
+        }
+        case 256: {
+            uint8_t out_value[32] = {0};
+            ssz_deserialize_uint256(test_data->buffer, test_data->buffer_size, out_value);
+            break;
+        }
+        default:
+            break;
+    }
 }
 
 static void test_boolean_deserialize(void* user_data) {
@@ -97,7 +124,6 @@ static void test_vector_deserialize(void* user_data) {
         test_data->buffer_size,
         test_data->element_count,
         test_data->field_sizes,
-        test_data->is_variable_size,
         out_elements
     );
 }
@@ -111,7 +137,6 @@ static void test_list_deserialize(void* user_data) {
         test_data->buffer_size,
         test_data->max_element_count,
         test_data->field_sizes,
-        test_data->is_variable_size,
         out_elements,
         &out_actual_count
     );
@@ -122,7 +147,9 @@ static void run_uintN_deserialize_benchmarks(void) {
         {8,   {0}, 1},
         {16,  {0}, 2},
         {32,  {0}, 4},
-        {64,  {0}, 8}
+        {64,  {0}, 8},
+        {128, {0}, 16},
+        {256, {0}, 32}
     };
     for (int i = 0; i < (int)(sizeof(tests) / sizeof(tests[0])); i++) {
         memset(tests[i].buffer, 0xFF, tests[i].buffer_size);

@@ -304,7 +304,7 @@ ssz_error_t ssz_serialize_bitlist(const bool *bits, size_t num_bits, uint8_t *ou
  */
 ssz_error_t ssz_serialize_union(const ssz_union_t *u, uint8_t *out_buf, size_t *out_size)
 {
-    if (!u || !out_buf || !out_size || *out_size < 1 || u->selector > 127)
+    if (u == NULL || out_buf == NULL || out_size == NULL || *out_size < 1 || u->selector > 127)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
