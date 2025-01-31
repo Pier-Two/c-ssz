@@ -146,7 +146,7 @@ static ssz_error_t ssz_serialize_attestation_data_db(const AttestationData *ad, 
         for (size_t i = 0; i < element_count; i++) {
             sizes[i] = 1;
         }
-        err = ssz_serialize_vector(ad->beacon_block_root, element_count, sizes, vec_buf, &vec_size);
+        err = ssz_serialize_vector_uint8(ad->beacon_block_root, element_count, vec_buf, &vec_size);
         if (err != SSZ_SUCCESS) return err;
         err = db_append(db, vec_buf, vec_size);
         if (err != SSZ_SUCCESS) return err;
@@ -164,7 +164,7 @@ static ssz_error_t ssz_serialize_attestation_data_db(const AttestationData *ad, 
         for (size_t i = 0; i < element_count; i++) {
             sizes[i] = 1;
         }
-        err = ssz_serialize_vector(ad->source.root, element_count, sizes, vec_buf, &vec_size);
+        err = ssz_serialize_vector_uint8(ad->source.root, element_count, vec_buf, &vec_size);
         if (err != SSZ_SUCCESS) return err;
         err = db_append(db, vec_buf, vec_size);
         if (err != SSZ_SUCCESS) return err;
@@ -182,7 +182,7 @@ static ssz_error_t ssz_serialize_attestation_data_db(const AttestationData *ad, 
         for (size_t i = 0; i < element_count; i++) {
             sizes[i] = 1;
         }
-        err = ssz_serialize_vector(ad->target.root, element_count, sizes, vec_buf, &vec_size);
+        err = ssz_serialize_vector_uint8(ad->target.root, element_count, vec_buf, &vec_size);
         if (err != SSZ_SUCCESS) return err;
         err = db_append(db, vec_buf, vec_size);
         if (err != SSZ_SUCCESS) return err;
@@ -199,7 +199,7 @@ static ssz_error_t ssz_serialize_signature(const uint8_t *signature, DynamicBuff
     for (size_t i = 0; i < element_count; i++) {
         sizes[i] = 1;
     }
-    err = ssz_serialize_vector(signature, element_count, sizes, vec_buf, &vec_size);
+    err = ssz_serialize_vector_uint8(signature, element_count, vec_buf, &vec_size);
     if (err != SSZ_SUCCESS) return err;
     err = db_append(db, vec_buf, vec_size);
     if (err != SSZ_SUCCESS) return err;
