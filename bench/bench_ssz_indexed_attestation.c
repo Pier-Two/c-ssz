@@ -302,7 +302,7 @@ static ssz_error_t deserialize_attestation(const uint8_t *buffer, size_t buffer_
         out_attestation->attesting_indices.data = malloc(max_count * sizeof(uint64_t));
         if (!out_attestation->attesting_indices.data) return SSZ_ERROR_DESERIALIZATION;
         size_t actual_count = 0;
-        ssz_error_t err2 = ssz_deserialize_list(buffer + list_offset, buffer_size - list_offset, max_count, field_sizes, out_attestation->attesting_indices.data, &actual_count);
+        ssz_error_t err2 = ssz_deserialize_list_uint64(buffer + list_offset, buffer_size - list_offset, max_count, out_attestation->attesting_indices.data, &actual_count);
         if (err2 != SSZ_SUCCESS) {
             free(out_attestation->attesting_indices.data);
             out_attestation->attesting_indices.data = NULL;

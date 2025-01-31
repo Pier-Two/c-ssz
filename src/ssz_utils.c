@@ -31,6 +31,7 @@ const int8_t highest_bit_table[256] =
 
 /**
  * Checks if the given memory region is filled with zeros.
+ * 
  * @param ptr Pointer to the memory region.
  * @param len The length of the memory region in bytes.
  * @return true if all bytes are zero, otherwise false.
@@ -69,6 +70,7 @@ bool is_all_zero(const uint8_t *ptr, size_t len)
 
 /**
  * Determines whether a given value is a power of two.
+ * 
  * @param value The input value to check.
  * @return true if the value is a power of two, false otherwise.
  */
@@ -83,6 +85,7 @@ bool is_power_of_two(uint64_t value)
 
 /**
  * Computes the next power of two for the given value.
+ * 
  * @param value The input value.
  * @return The next power of two for value, or value itself if already a power of two.
  */
@@ -106,6 +109,7 @@ uint64_t next_pow_of_two(uint64_t value)
 
 /**
  * Validates whether the provided offset is within the maximum allowed SSZ offset range.
+ * 
  * @param offset The offset to validate.
  * @return true if offset is within the allowed range, false otherwise.
  */
