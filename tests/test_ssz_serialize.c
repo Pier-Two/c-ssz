@@ -347,9 +347,8 @@ static void test_serialize_bitvector(void)
 
     printf("Testing zero-bit bitvector (invalid by spec)...\n");
     {
-        bool empty_bits[1]; 
+        bool empty_bits[1];
         out_size = sizeof(buffer);
-        // Attempt a zero-length bitvector
         err = ssz_serialize_bitvector(empty_bits, 0, buffer, &out_size);
         if (err == SSZ_ERROR_SERIALIZATION)
         {
@@ -387,9 +386,9 @@ static void test_serialize_bitvector(void)
     printf("Testing insufficient out_size...\n");
     {
         bool bits[16];
-        memset(bits, true, sizeof(bits));  // arbitrary data
+        memset(bits, true, sizeof(bits));
         uint8_t small_buf[1];
-        size_t small_sz = sizeof(small_buf); // 1 byte
+        size_t small_sz = sizeof(small_buf);
         ssz_error_t err = ssz_serialize_bitvector(bits, 16, small_buf, &small_sz);
         if (err == SSZ_ERROR_SERIALIZATION)
         {
@@ -424,7 +423,7 @@ static void test_serialize_bitlist(void)
         out_size = sizeof(buffer);
         err = ssz_serialize_bitlist(bits, 10, buffer, &out_size);
 
-        if (err == SSZ_SUCCESS && out_size == 2 && 
+        if (err == SSZ_SUCCESS && out_size == 2 &&
             buffer[0] == 0xEA && buffer[1] == 0x06)
         {
             printf("  OK: 10-bit bitlist serialized correctly (boundary bit included).\n");
@@ -439,7 +438,7 @@ static void test_serialize_bitlist(void)
     {
         out_size = sizeof(buffer);
         memset(buffer, 0, sizeof(buffer));
-        bool empty_bits[1]; // not used, but we pass pointer
+        bool empty_bits[1];
         err = ssz_serialize_bitlist(empty_bits, 0, buffer, &out_size);
         if (err == SSZ_SUCCESS && out_size == 1 && buffer[0] == 0x01)
         {
@@ -480,7 +479,7 @@ static void test_serialize_bitlist(void)
 static ssz_error_t dummy_subserialize(const void* data, uint8_t* out_buf, size_t* out_size)
 {
     if (!data || !out_buf || !out_size) return SSZ_ERROR_SERIALIZATION;
-    const char* str = (const char*) data; 
+    const char* str = (const char*) data;
     size_t len = strlen(str);
     if (*out_size < len) return SSZ_ERROR_SERIALIZATION;
     memcpy(out_buf, str, len);
@@ -575,7 +574,7 @@ static void test_serialize_union(void)
     printf("Testing union with invalid selector > 127...\n");
     {
         ssz_union_t un;
-        un.selector = 200; 
+        un.selector = 200;
         un.data = NULL;
         un.serialize_fn = NULL;
         out_size = sizeof(buffer);
@@ -591,108 +590,696 @@ static void test_serialize_union(void)
     }
 }
 
-static void test_serialize_vector(void)
+static void test_serialize_vector_uint8(void)
 {
-    printf("\n--- Testing ssz_serialize_vector ---\n");
-
+    printf("\n--- Testing ssz_serialize_vector_uint8 ---\n");
     uint8_t buffer[64];
     memset(buffer, 0, sizeof(buffer));
     ssz_error_t err;
     size_t out_size;
 
-    printf("Testing zero-element vector => should fail...\n");
+    printf("Testing zero-element with ssz_serialize_vector_uint8 => should fail...\n");
     {
-        uint8_t dummy_data[1];
-        size_t dummy_element_sizes[1];
+        uint8_t empty[1] = {0xAA};
         out_size = sizeof(buffer);
-        err = ssz_serialize_vector(dummy_data, 0, dummy_element_sizes, buffer, &out_size);
+        err = ssz_serialize_vector_uint8(empty, 0, buffer, &out_size);
         if (err == SSZ_ERROR_SERIALIZATION)
         {
-            printf("  OK: Rejected zero-element vector.\n");
+            printf("  OK: Zero-element vector of uint8 was rejected.\n");
         }
         else
         {
-            printf("  FAIL: Did not reject zero-element vector.\n");
+            printf("  FAIL: Zero-element vector of uint8 was not rejected.\n");
         }
     }
 
-    printf("Testing fixed-size vector with 3 elements each 4 bytes...\n");
+    printf("Testing a small ssz_serialize_vector_uint8 => should pass...\n");
     {
-        uint8_t elements[12] = {
-            0xDD, 0xCC, 0xBB, 0xAA, 
-            0x44, 0x33, 0x22, 0x11, 
-            0xEE, 0xCD, 0xAB, 0x99
-        };
-        size_t element_sizes[3] = {4, 4, 4};
+        uint8_t data[5] = {0x11, 0x22, 0x33, 0x44, 0x55};
         out_size = sizeof(buffer);
         memset(buffer, 0, sizeof(buffer));
-        err = ssz_serialize_vector(elements, 3, element_sizes, buffer, &out_size);
-        if (err == SSZ_SUCCESS && out_size == 12 && memcmp(buffer, elements, 12) == 0)
+        err = ssz_serialize_vector_uint8(data, 5, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 5 && memcmp(buffer, data, 5) == 0)
         {
-            printf("  OK: Fixed-size vector of 3 elements serialized correctly.\n");
+            printf("  OK: Vector of 5 uint8 elements serialized correctly.\n");
         }
         else
         {
-            printf("  FAIL: Fixed-size vector serialization failed.\n");
+            printf("  FAIL: Vector of 5 uint8 elements serialization failed.\n");
         }
     }
 }
 
-static void test_serialize_list(void)
+static void test_serialize_vector_uint16(void)
 {
-    printf("\n--- Testing ssz_serialize_list ---\n");
-
+    printf("\n--- Testing ssz_serialize_vector_uint16 ---\n");
     uint8_t buffer[64];
     memset(buffer, 0, sizeof(buffer));
     ssz_error_t err;
     size_t out_size;
 
-    printf("Testing zero-element list => valid, should produce 0 bytes...\n");
+    printf("Testing zero-element with ssz_serialize_vector_uint16 => should fail...\n");
     {
-        uint8_t dummy_data[1];
-        size_t dummy_element_sizes[1];
+        uint16_t empty[1] = {0xABCD};
         out_size = sizeof(buffer);
-        err = ssz_serialize_list(dummy_data, 0, dummy_element_sizes, buffer, &out_size);
-        if (err == SSZ_SUCCESS && out_size == 0)
+        err = ssz_serialize_vector_uint16(empty, 0, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
         {
-            printf("  OK: Zero-element list accepted, out_size=0.\n");
+            printf("  OK: Zero-element vector of uint16 was rejected.\n");
         }
         else
         {
-            printf("  FAIL: Zero-element list did not behave as expected.\n");
+            printf("  FAIL: Zero-element vector of uint16 was not rejected.\n");
         }
     }
 
-    printf("Testing variable-size list of 3 elements with sizes 2,4,3...\n");
+    printf("Testing a small ssz_serialize_vector_uint16 => should pass...\n");
     {
-        uint8_t elements[9] = {
-            0xAA, 0xBB,
-            0x01, 0x02, 0x03, 0x04,
-            0x99, 0x88, 0x77
-        };
-        size_t element_sizes[3] = {2, 4, 3};
+        uint16_t data[2] = {0x1234, 0xABCD};
         out_size = sizeof(buffer);
         memset(buffer, 0, sizeof(buffer));
-        err = ssz_serialize_list(elements, 3, element_sizes, buffer, &out_size);
-        if (err == SSZ_SUCCESS && out_size == 21)
+        err = ssz_serialize_vector_uint16(data, 2, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 4 &&
+            buffer[0] == 0x34 && buffer[1] == 0x12 &&
+            buffer[2] == 0xCD && buffer[3] == 0xAB)
         {
-            if (buffer[0] == 0x0C && buffer[1] == 0x00 && buffer[2] == 0x00 && buffer[3] == 0x00 &&
-                buffer[4] == 0x0E && buffer[5] == 0x00 && buffer[6] == 0x00 && buffer[7] == 0x00 &&
-                buffer[8] == 0x12 && buffer[9] == 0x00 && buffer[10] == 0x00 && buffer[11] == 0x00 &&
-                buffer[12] == 0xAA && buffer[13] == 0xBB &&
-                buffer[14] == 0x01 && buffer[15] == 0x02 && buffer[16] == 0x03 && buffer[17] == 0x04 &&
-                buffer[18] == 0x99 && buffer[19] == 0x88 && buffer[20] == 0x77)
-            {
-                printf("  OK: Variable-size list of 3 elements serialized correctly.\n");
-            }
-            else
-            {
-                printf("  FAIL: Variable-size list data mismatch.\n");
-            }
+            printf("  OK: Vector of 2 uint16 elements serialized correctly.\n");
         }
         else
         {
-            printf("  FAIL: Variable-size list call did not succeed as expected.\n");
+            printf("  FAIL: Vector of 2 uint16 elements serialization failed.\n");
+        }
+    }
+}
+
+static void test_serialize_vector_uint32(void)
+{
+    printf("\n--- Testing ssz_serialize_vector_uint32 ---\n");
+    uint8_t buffer[64];
+    memset(buffer, 0, sizeof(buffer));
+    ssz_error_t err;
+    size_t out_size;
+
+    printf("Testing zero-element with ssz_serialize_vector_uint32 => should fail...\n");
+    {
+        uint32_t empty[1] = {0xABCD1234};
+        out_size = sizeof(buffer);
+        err = ssz_serialize_vector_uint32(empty, 0, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: Zero-element vector of uint32 was rejected.\n");
+        }
+        else
+        {
+            printf("  FAIL: Zero-element vector of uint32 was not rejected.\n");
+        }
+    }
+
+    printf("Testing a small ssz_serialize_vector_uint32 => should pass...\n");
+    {
+        uint32_t data[2] = {0x11223344, 0xAABBCCDD};
+        out_size = sizeof(buffer);
+        memset(buffer, 0, sizeof(buffer));
+        err = ssz_serialize_vector_uint32(data, 2, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 8 &&
+            buffer[0] == 0x44 && buffer[1] == 0x33 &&
+            buffer[2] == 0x22 && buffer[3] == 0x11 &&
+            buffer[4] == 0xDD && buffer[5] == 0xCC &&
+            buffer[6] == 0xBB && buffer[7] == 0xAA)
+        {
+            printf("  OK: Vector of 2 uint32 elements serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: Vector of 2 uint32 elements serialization failed.\n");
+        }
+    }
+}
+
+static void test_serialize_vector_uint64(void)
+{
+    printf("\n--- Testing ssz_serialize_vector_uint64 ---\n");
+    uint8_t buffer[64];
+    memset(buffer, 0, sizeof(buffer));
+    ssz_error_t err;
+    size_t out_size;
+
+    printf("Testing zero-element with ssz_serialize_vector_uint64 => should fail...\n");
+    {
+        uint64_t empty[1] = {0xDEADDEADDEADDEADULL};
+        out_size = sizeof(buffer);
+        err = ssz_serialize_vector_uint64(empty, 0, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: Zero-element vector of uint64 was rejected.\n");
+        }
+        else
+        {
+            printf("  FAIL: Zero-element vector of uint64 was not rejected.\n");
+        }
+    }
+
+    printf("Testing a small ssz_serialize_vector_uint64 => should pass...\n");
+    {
+        uint64_t data[2] = {0x1122334455667788ULL, 0xAABBCCDDEEFF0011ULL};
+        out_size = sizeof(buffer);
+        memset(buffer, 0, sizeof(buffer));
+        err = ssz_serialize_vector_uint64(data, 2, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 16 &&
+            buffer[0] == 0x88 && buffer[1] == 0x77 && buffer[2] == 0x66 &&
+            buffer[3] == 0x55 && buffer[4] == 0x44 && buffer[5] == 0x33 &&
+            buffer[6] == 0x22 && buffer[7] == 0x11 &&
+            buffer[8] == 0x11 && buffer[9] == 0x00 &&
+            buffer[10] == 0xFF && buffer[11] == 0xEE &&
+            buffer[12] == 0xDD && buffer[13] == 0xCC &&
+            buffer[14] == 0xBB && buffer[15] == 0xAA)
+        {
+            printf("  OK: Vector of 2 uint64 elements serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: Vector of 2 uint64 elements serialization failed.\n");
+        }
+    }
+}
+
+static void test_serialize_vector_uint128(void)
+{
+    printf("\n--- Testing ssz_serialize_vector_uint128 ---\n");
+    uint8_t buffer[64];
+    memset(buffer, 0, sizeof(buffer));
+    ssz_error_t err;
+    size_t out_size;
+
+    printf("Testing zero-element with ssz_serialize_vector_uint128 => should fail...\n");
+    {
+        uint8_t empty[16];
+        memset(empty, 0x12, sizeof(empty));
+        out_size = sizeof(buffer);
+        err = ssz_serialize_vector_uint128(empty, 0, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: Zero-element vector of uint128 was rejected.\n");
+        }
+        else
+        {
+            printf("  FAIL: Zero-element vector of uint128 was not rejected.\n");
+        }
+    }
+
+    printf("Testing a small ssz_serialize_vector_uint128 => should pass...\n");
+    {
+        uint8_t data[32] = {
+            0x01, 0x02, 0x03, 0x04,
+            0x05, 0x06, 0x07, 0x08,
+            0x09, 0x0A, 0x0B, 0x0C,
+            0x0D, 0x0E, 0x0F, 0x10,
+            0xAA, 0xBB, 0xCC, 0xDD,
+            0xEE, 0xFF, 0x11, 0x22,
+            0x33, 0x44, 0x55, 0x66,
+            0x77, 0x88, 0x99, 0x00
+        };
+        out_size = sizeof(buffer);
+        memset(buffer, 0, sizeof(buffer));
+        err = ssz_serialize_vector_uint128(data, 2, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 32 && memcmp(buffer, data, 32) == 0)
+        {
+            printf("  OK: Vector of 2 uint128 elements serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: Vector of 2 uint128 elements serialization failed.\n");
+        }
+    }
+}
+
+static void test_serialize_vector_uint256(void)
+{
+    printf("\n--- Testing ssz_serialize_vector_uint256 ---\n");
+    uint8_t buffer[64];
+    memset(buffer, 0, sizeof(buffer));
+    ssz_error_t err;
+    size_t out_size;
+
+    printf("Testing zero-element with ssz_serialize_vector_uint256 => should fail...\n");
+    {
+        uint8_t empty[32];
+        memset(empty, 0x55, sizeof(empty));
+        out_size = sizeof(buffer);
+        err = ssz_serialize_vector_uint256(empty, 0, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: Zero-element vector of uint256 was rejected.\n");
+        }
+        else
+        {
+            printf("  FAIL: Zero-element vector of uint256 was not rejected.\n");
+        }
+    }
+
+    printf("Testing a small ssz_serialize_vector_uint256 => should pass...\n");
+    {
+        uint8_t data[64] = {
+            0x11, 0x22, 0x33, 0x44,
+            0x55, 0x66, 0x77, 0x88,
+            0x99, 0xAA, 0xBB, 0xCC,
+            0xDD, 0xEE, 0xFF, 0x00,
+            0x12, 0x13, 0x14, 0x15,
+            0x16, 0x17, 0x18, 0x19,
+            0x1A, 0x1B, 0x1C, 0x1D,
+            0x1E, 0x1F, 0x20, 0x21,
+            0xAA, 0xBB, 0xCC, 0xDD,
+            0xEE, 0xFF, 0x00, 0x11,
+            0x22, 0x33, 0x44, 0x55,
+            0x66, 0x77, 0x88, 0x99,
+            0x9A, 0x9B, 0x9C, 0x9D,
+            0x9E, 0x9F, 0xA0, 0xA1,
+            0xA2, 0xA3, 0xA4, 0xA5,
+            0xA6, 0xA7, 0xA8, 0xA9
+        };
+        out_size = sizeof(buffer);
+        memset(buffer, 0, sizeof(buffer));
+        err = ssz_serialize_vector_uint256(data, 2, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 64 && memcmp(buffer, data, 64) == 0)
+        {
+            printf("  OK: Vector of 2 uint256 elements serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: Vector of 2 uint256 elements serialization failed.\n");
+        }
+    }
+}
+
+static void test_serialize_vector_bool(void)
+{
+    printf("\n--- Testing ssz_serialize_vector_bool ---\n");
+    uint8_t buffer[64];
+    memset(buffer, 0, sizeof(buffer));
+    ssz_error_t err;
+    size_t out_size;
+
+    printf("Testing zero-element with ssz_serialize_vector_bool => should fail...\n");
+    {
+        bool empty_bool[1] = {true};
+        out_size = sizeof(buffer);
+        err = ssz_serialize_vector_bool(empty_bool, 0, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: Zero-element vector of bool was rejected.\n");
+        }
+        else
+        {
+            printf("  FAIL: Zero-element vector of bool was not rejected.\n");
+        }
+    }
+
+    printf("Testing a small ssz_serialize_vector_bool => should pass...\n");
+    {
+        bool data[5] = {false, true, false, true, true};
+        out_size = sizeof(buffer);
+        memset(buffer, 0x99, sizeof(buffer));
+        err = ssz_serialize_vector_bool(data, 5, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 5 &&
+            buffer[0] == 0x00 && buffer[1] == 0x01 &&
+            buffer[2] == 0x00 && buffer[3] == 0x01 &&
+            buffer[4] == 0x01)
+        {
+            printf("  OK: Vector of 5 bool elements serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: Vector of 5 bool elements serialization failed.\n");
+        }
+    }
+}
+
+static void test_serialize_list_uint8(void)
+{
+    printf("\n--- Testing ssz_serialize_list_uint8 ---\n");
+    uint8_t buffer[64];
+    ssz_error_t err;
+    size_t out_size;
+
+    printf("Testing zero-element list of uint8 => should produce out_size=0...\n");
+    {
+        uint8_t elements[1] = {0x12};
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint8(elements, 0, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 0)
+        {
+            printf("  OK: Zero-element list of uint8 produced out_size=0.\n");
+        }
+        else
+        {
+            printf("  FAIL: Zero-element list of uint8 did not behave as expected.\n");
+        }
+    }
+
+    printf("Testing a small list of 3 elements => should pass...\n");
+    {
+        uint8_t data[3] = {0x01, 0x02, 0x03};
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint8(data, 3, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 3 &&
+            buffer[0] == 0x01 && buffer[1] == 0x02 && buffer[2] == 0x03)
+        {
+            printf("  OK: List of 3 uint8 elements serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: List of 3 uint8 elements serialization failed.\n");
+        }
+    }
+
+    printf("Testing insufficient out_buf size => should fail...\n");
+    {
+        uint8_t data[2] = {0x55, 0x66};
+        out_size = 1;
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint8(data, 2, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: Rejected insufficient buffer.\n");
+        }
+        else
+        {
+            printf("  FAIL: Did not reject insufficient buffer.\n");
+        }
+    }
+
+    printf("Testing null out_buf => should fail...\n");
+    {
+        uint8_t data[2] = {0x55, 0x66};
+        out_size = 2;
+        err = ssz_serialize_list_uint8(data, 2, NULL, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: Rejected null output buffer.\n");
+        }
+        else
+        {
+            printf("  FAIL: Did not reject null output buffer.\n");
+        }
+    }
+
+    printf("Testing null elements pointer => should fail...\n");
+    {
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint8(NULL, 2, buffer, &out_size);
+        if (err == SSZ_ERROR_SERIALIZATION)
+        {
+            printf("  OK: Rejected null elements pointer.\n");
+        }
+        else
+        {
+            printf("  FAIL: Did not reject null elements pointer.\n");
+        }
+    }
+}
+
+static void test_serialize_list_uint16(void)
+{
+    printf("\n--- Testing ssz_serialize_list_uint16 ---\n");
+    uint8_t buffer[64];
+    ssz_error_t err;
+    size_t out_size;
+
+    printf("Testing zero-element list of uint16 => should produce out_size=0...\n");
+    {
+        uint16_t elements[1] = {0xABCD};
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint16(elements, 0, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 0)
+        {
+            printf("  OK: Zero-element list of uint16 produced out_size=0.\n");
+        }
+        else
+        {
+            printf("  FAIL: Zero-element list of uint16 did not behave as expected.\n");
+        }
+    }
+
+    printf("Testing a small list of 2 elements => should pass...\n");
+    {
+        uint16_t data[2] = {0x1234, 0xABCD};
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint16(data, 2, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 4 &&
+            buffer[0] == 0x34 && buffer[1] == 0x12 &&
+            buffer[2] == 0xCD && buffer[3] == 0xAB)
+        {
+            printf("  OK: List of 2 uint16 elements serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: List of 2 uint16 elements serialization failed.\n");
+        }
+    }
+}
+
+static void test_serialize_list_uint32(void)
+{
+    printf("\n--- Testing ssz_serialize_list_uint32 ---\n");
+    uint8_t buffer[64];
+    ssz_error_t err;
+    size_t out_size;
+
+    printf("Testing zero-element list of uint32 => should produce out_size=0...\n");
+    {
+        uint32_t elements[1] = {0xDEADBEEF};
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint32(elements, 0, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 0)
+        {
+            printf("  OK: Zero-element list of uint32 produced out_size=0.\n");
+        }
+        else
+        {
+            printf("  FAIL: Zero-element list of uint32 did not behave as expected.\n");
+        }
+    }
+
+    printf("Testing a small list of 2 elements => should pass...\n");
+    {
+        uint32_t data[2] = {0x11223344, 0xAABBCCDD};
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint32(data, 2, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 8 &&
+            buffer[0] == 0x44 && buffer[1] == 0x33 &&
+            buffer[2] == 0x22 && buffer[3] == 0x11 &&
+            buffer[4] == 0xDD && buffer[5] == 0xCC &&
+            buffer[6] == 0xBB && buffer[7] == 0xAA)
+        {
+            printf("  OK: List of 2 uint32 elements serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: List of 2 uint32 elements serialization failed.\n");
+        }
+    }
+}
+
+static void test_serialize_list_uint64(void)
+{
+    printf("\n--- Testing ssz_serialize_list_uint64 ---\n");
+    uint8_t buffer[64];
+    ssz_error_t err;
+    size_t out_size;
+
+    printf("Testing zero-element list of uint64 => should produce out_size=0...\n");
+    {
+        uint64_t elements[1] = {0x0011223344556677ULL};
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint64(elements, 0, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 0)
+        {
+            printf("  OK: Zero-element list of uint64 produced out_size=0.\n");
+        }
+        else
+        {
+            printf("  FAIL: Zero-element list of uint64 did not behave as expected.\n");
+        }
+    }
+
+    printf("Testing a small list of 2 elements => should pass...\n");
+    {
+        uint64_t data[2] = {0x1122334455667788ULL, 0xAABBCCDDEEFF0011ULL};
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint64(data, 2, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 16 &&
+            buffer[0] == 0x88 && buffer[1] == 0x77 && buffer[2] == 0x66 &&
+            buffer[3] == 0x55 && buffer[4] == 0x44 && buffer[5] == 0x33 &&
+            buffer[6] == 0x22 && buffer[7] == 0x11 &&
+            buffer[8] == 0x11 && buffer[9] == 0x00 &&
+            buffer[10] == 0xFF && buffer[11] == 0xEE &&
+            buffer[12] == 0xDD && buffer[13] == 0xCC &&
+            buffer[14] == 0xBB && buffer[15] == 0xAA)
+        {
+            printf("  OK: List of 2 uint64 elements serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: List of 2 uint64 elements serialization failed.\n");
+        }
+    }
+}
+
+static void test_serialize_list_uint128(void)
+{
+    printf("\n--- Testing ssz_serialize_list_uint128 ---\n");
+    uint8_t buffer[128];
+    ssz_error_t err;
+    size_t out_size;
+
+    printf("Testing zero-element list of uint128 => should produce out_size=0...\n");
+    {
+        uint8_t elements[16];
+        memset(elements, 0x12, sizeof(elements));
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint128(elements, 0, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 0)
+        {
+            printf("  OK: Zero-element list of uint128 produced out_size=0.\n");
+        }
+        else
+        {
+            printf("  FAIL: Zero-element list of uint128 did not behave as expected.\n");
+        }
+    }
+
+    printf("Testing a small list of 2 elements => should pass...\n");
+    {
+        uint8_t data[32] = {
+            0x01, 0x02, 0x03, 0x04,
+            0x05, 0x06, 0x07, 0x08,
+            0x09, 0x0A, 0x0B, 0x0C,
+            0x0D, 0x0E, 0x0F, 0x10,
+            0xFF, 0xEE, 0xDD, 0xCC,
+            0xBB, 0xAA, 0x99, 0x88,
+            0x77, 0x66, 0x55, 0x44,
+            0x33, 0x22, 0x11, 0x00
+        };
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint128(data, 2, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 32 && memcmp(buffer, data, 32) == 0)
+        {
+            printf("  OK: List of 2 uint128 elements serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: List of 2 uint128 elements serialization failed.\n");
+        }
+    }
+}
+
+static void test_serialize_list_uint256(void)
+{
+    printf("\n--- Testing ssz_serialize_list_uint256 ---\n");
+    uint8_t buffer[128];
+    ssz_error_t err;
+    size_t out_size;
+
+    printf("Testing zero-element list of uint256 => should produce out_size=0...\n");
+    {
+        uint8_t elements[32];
+        memset(elements, 0x55, sizeof(elements));
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint256(elements, 0, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 0)
+        {
+            printf("  OK: Zero-element list of uint256 produced out_size=0.\n");
+        }
+        else
+        {
+            printf("  FAIL: Zero-element list of uint256 did not behave as expected.\n");
+        }
+    }
+
+    printf("Testing a small list of 2 elements => should pass...\n");
+    {
+        uint8_t data[64] = {
+            0x11, 0x22, 0x33, 0x44,
+            0x55, 0x66, 0x77, 0x88,
+            0x11, 0x11, 0x11, 0x11,
+            0x22, 0x22, 0x22, 0x22,
+            0xAA, 0xBB, 0xCC, 0xDD,
+            0xEE, 0xFF, 0x11, 0x22,
+            0x33, 0x44, 0x55, 0x66,
+            0x77, 0x88, 0x99, 0x00,
+            0x10, 0x10, 0x20, 0x20,
+            0x30, 0x30, 0x40, 0x40,
+            0x50, 0x50, 0x60, 0x60,
+            0x70, 0x70, 0x80, 0x80,
+            0x90, 0x90, 0xA0, 0xA0,
+            0xB0, 0xB0, 0xC0, 0xC0,
+            0xD0, 0xD0, 0xE0, 0xE0,
+            0xF0, 0xF0, 0x99, 0x99
+        };
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_uint256(data, 2, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 64 && memcmp(buffer, data, 64) == 0)
+        {
+            printf("  OK: List of 2 uint256 elements serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: List of 2 uint256 elements serialization failed.\n");
+        }
+    }
+}
+
+static void test_serialize_list_bool(void)
+{
+    printf("\n--- Testing ssz_serialize_list_bool ---\n");
+    uint8_t buffer[32];
+    ssz_error_t err;
+    size_t out_size;
+
+    printf("Testing zero-element list of bool => should produce out_size=0...\n");
+    {
+        bool elements[1] = {true};
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_bool(elements, 0, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 0)
+        {
+            printf("  OK: Zero-element list of bool produced out_size=0.\n");
+        }
+        else
+        {
+            printf("  FAIL: Zero-element list of bool did not behave as expected.\n");
+        }
+    }
+
+    printf("Testing a small list of 4 booleans => should pass...\n");
+    {
+        bool data[4] = {true, false, true, true};
+        out_size = sizeof(buffer);
+        memset(buffer, 0xAA, sizeof(buffer));
+        err = ssz_serialize_list_bool(data, 4, buffer, &out_size);
+        if (err == SSZ_SUCCESS && out_size == 4 &&
+            buffer[0] == 0x01 && buffer[1] == 0x00 &&
+            buffer[2] == 0x01 && buffer[3] == 0x01)
+        {
+            printf("  OK: List of 4 bool elements serialized correctly.\n");
+        }
+        else
+        {
+            printf("  FAIL: List of 4 bool elements serialization failed.\n");
         }
     }
 }
@@ -704,7 +1291,20 @@ int main(void)
     test_serialize_bitvector();
     test_serialize_bitlist();
     test_serialize_union();
-    test_serialize_vector();
-    test_serialize_list();
+    test_serialize_vector_uint8();
+    test_serialize_vector_uint16();
+    test_serialize_vector_uint32();
+    test_serialize_vector_uint64();
+    test_serialize_vector_uint128();
+    test_serialize_vector_uint256();
+    test_serialize_vector_bool();
+    test_serialize_list_uint8();
+    test_serialize_list_uint16();
+    test_serialize_list_uint32();
+    test_serialize_list_uint64();
+    test_serialize_list_uint128();
+    test_serialize_list_uint256();
+    test_serialize_list_bool();
+
     return 0;
 }

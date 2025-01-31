@@ -160,9 +160,6 @@ ssz_error_t ssz_deserialize_uint256(const uint8_t *buffer, size_t buffer_size, v
 /**
  * Deserializes a boolean value (0x00 => false, 0x01 => true).
  *
- * This function reads a single byte from the buffer and interprets it as a boolean value.
- * Any value other than 0x00 or 0x01 is considered invalid.
- *
  * @param buffer      The input buffer containing the serialized data.
  * @param buffer_size The size of the input buffer.
  * @param out_value   Pointer to store the deserialized boolean value.
@@ -195,10 +192,6 @@ ssz_error_t ssz_deserialize_boolean(
 
 /**
  * Deserializes a bitvector of exactly num_bits length.
- *
- * This function reads a fixed-length bitvector from the buffer. The number of bits
- * is specified by num_bits, and the function ensures that the buffer size matches
- * the required number of bytes.
  *
  * @param buffer      The input buffer containing the serialized data.
  * @param buffer_size The size of the input buffer.
@@ -360,10 +353,6 @@ ssz_error_t ssz_deserialize_bitlist(
 /**
  * Deserializes a union by reading the first byte as a selector.
  *
- * This function interprets the first byte of the buffer as a selector value. If the selector
- * is 0, the union's data is set to NULL. Otherwise, the function uses the provided
- * deserialize_fn to parse the union's data.
- *
  * @param buffer      The input buffer containing the serialized data.
  * @param buffer_size The size of the input buffer.
  * @param out_union   Pointer to store the deserialized union.
@@ -400,32 +389,27 @@ ssz_error_t ssz_deserialize_union(
 }
 
 /**
- * Deserializes a fixed-size vector of elements.
- *
- * This function deserializes a fixed-sized vector of elements from the buffer.
+ * Deserializes a vector of 8-bit unsigned integers.
  *
  * @param buffer        The input buffer containing the serialized data.
  * @param buffer_size   The size of the input buffer.
  * @param element_count The number of elements in the vector.
- * @param field_sizes   Array of sizes for each field.
- * @param out_elements  Pointer to store the deserialized vector elements.
+ * @param out_elements  Pointer to store the deserialized elements.
  *
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
-ssz_error_t ssz_deserialize_vector(
+ssz_error_t ssz_deserialize_vector_uint8(
     const uint8_t *buffer,
     size_t buffer_size,
     size_t element_count,
-    const size_t *field_sizes,
-    void *out_elements)
+    uint8_t *out_elements)
 {
-    if (buffer == NULL || field_sizes == NULL || out_elements == NULL || element_count == 0)
+    if (buffer == NULL || out_elements == NULL || element_count == 0)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
-    const size_t element_size = field_sizes[0];
-    const size_t needed = element_count * element_size;
-    if (needed != buffer_size)
+    size_t needed = element_count * sizeof(uint8_t);
+    if (buffer_size != needed)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
@@ -434,83 +418,472 @@ ssz_error_t ssz_deserialize_vector(
 }
 
 /**
- * Deserializes a list of elements.
+ * Deserializes a vector of 16-bit unsigned integers.
  *
- * This function deserializes a variable-sized list of elements from the buffer.
- * It reads and validates offsets, then copies the slices into the output elements.
- * The function also tracks the actual number of successfully deserialized elements.
- *
- * @param buffer            The input buffer containing the serialized data.
- * @param buffer_size       The size of the input buffer.
- * @param element_count     The number of elements in the list.
- * @param field_sizes       Array of sizes for each field.
- * @param out_elements      Pointer to store the deserialized list elements.
- * @param out_actual_count  Pointer to store the actual number of elements deserialized.
+ * @param buffer        The input buffer containing the serialized data.
+ * @param buffer_size   The size of the input buffer.
+ * @param element_count The number of elements in the vector.
+ * @param out_elements  Pointer to store the deserialized elements.
  *
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
-ssz_error_t ssz_deserialize_list(
+ssz_error_t ssz_deserialize_vector_uint16(
     const uint8_t *buffer,
     size_t buffer_size,
     size_t element_count,
-    const size_t *field_sizes,
+    uint16_t *out_elements)
+{
+    if (buffer == NULL || out_elements == NULL || element_count == 0)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+    size_t needed = element_count * 2;
+    if (buffer_size != needed)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+    for (size_t i = 0; i < element_count; i++)
+    {
+        ssz_error_t ret = ssz_deserialize_uint16(buffer + (i * 2), 2, &out_elements[i]);
+        if (ret != SSZ_SUCCESS)
+        {
+            return ret;
+        }
+    }
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Deserializes a vector of 32-bit unsigned integers.
+ *
+ * @param buffer        The input buffer containing the serialized data.
+ * @param buffer_size   The size of the input buffer.
+ * @param element_count The number of elements in the vector.
+ * @param out_elements  Pointer to store the deserialized elements.
+ *
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
+ */
+ssz_error_t ssz_deserialize_vector_uint32(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t element_count,
+    uint32_t *out_elements)
+{
+    if (buffer == NULL || out_elements == NULL || element_count == 0)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+    size_t needed = element_count * 4;
+    if (buffer_size != needed)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+    for (size_t i = 0; i < element_count; i++)
+    {
+        ssz_error_t ret = ssz_deserialize_uint32(buffer + (i * 4), 4, &out_elements[i]);
+        if (ret != SSZ_SUCCESS)
+        {
+            return ret;
+        }
+    }
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Deserializes a vector of 64-bit unsigned integers.
+ *
+ * @param buffer        The input buffer containing the serialized data.
+ * @param buffer_size   The size of the input buffer.
+ * @param element_count The number of elements in the vector.
+ * @param out_elements  Pointer to store the deserialized elements.
+ *
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
+ */
+ssz_error_t ssz_deserialize_vector_uint64(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t element_count,
+    uint64_t *out_elements)
+{
+    if (buffer == NULL || out_elements == NULL || element_count == 0)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+    size_t needed = element_count * 8;
+    if (buffer_size != needed)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+    for (size_t i = 0; i < element_count; i++)
+    {
+        ssz_error_t ret = ssz_deserialize_uint64(buffer + (i * 8), 8, &out_elements[i]);
+        if (ret != SSZ_SUCCESS)
+        {
+            return ret;
+        }
+    }
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Deserializes a vector of 128-bit unsigned integers.
+ *
+ * @param buffer        The input buffer containing the serialized data.
+ * @param buffer_size   The size of the input buffer.
+ * @param element_count The number of elements in the vector.
+ * @param out_elements  Pointer to store the deserialized elements.
+ *
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
+ */
+ssz_error_t ssz_deserialize_vector_uint128(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t element_count,
+    void *out_elements)
+{
+    if (buffer == NULL || out_elements == NULL || element_count == 0)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+    size_t needed = element_count * 16;
+    if (buffer_size != needed)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+    for (size_t i = 0; i < element_count; i++)
+    {
+        uint8_t *element_ptr = (uint8_t *)out_elements + (i * 16);
+        ssz_error_t ret = ssz_deserialize_uint128(buffer + (i * 16), 16, element_ptr);
+        if (ret != SSZ_SUCCESS)
+        {
+            return ret;
+        }
+    }
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Deserializes a vector of 256-bit unsigned integers.
+ *
+ * @param buffer        The input buffer containing the serialized data.
+ * @param buffer_size   The size of the input buffer.
+ * @param element_count The number of elements in the vector.
+ * @param out_elements  Pointer to store the deserialized elements.
+ *
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
+ */
+ssz_error_t ssz_deserialize_vector_uint256(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t element_count,
+    void *out_elements)
+{
+    if (buffer == NULL || out_elements == NULL || element_count == 0)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+    size_t needed = element_count * 32;
+    if (buffer_size != needed)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+    for (size_t i = 0; i < element_count; i++)
+    {
+        uint8_t *element_ptr = (uint8_t *)out_elements + (i * 32);
+        ssz_error_t ret = ssz_deserialize_uint256(buffer + (i * 32), 32, element_ptr);
+        if (ret != SSZ_SUCCESS)
+        {
+            return ret;
+        }
+    }
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Deserializes a vector of boolean values.
+ *
+ * @param buffer        The input buffer containing the serialized data.
+ * @param buffer_size   The size of the input buffer.
+ * @param element_count The number of elements in the vector.
+ * @param out_elements  Pointer to store the deserialized elements.
+ *
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
+ */
+ssz_error_t ssz_deserialize_vector_bool(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t element_count,
+    bool *out_elements)
+{
+    if (buffer == NULL || out_elements == NULL || element_count == 0)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+    if (buffer_size != element_count)
+    {
+        return SSZ_ERROR_DESERIALIZATION;
+    }
+    for (size_t i = 0; i < element_count; i++)
+    {
+        if (buffer[i] == 0x00)
+        {
+            out_elements[i] = false;
+        }
+        else if (buffer[i] == 0x01)
+        {
+            out_elements[i] = true;
+        }
+        else
+        {
+            return SSZ_ERROR_DESERIALIZATION;
+        }
+    }
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Deserializes a list of 8-bit unsigned integers.
+ *
+ * @param buffer          The input buffer containing the serialized data.
+ * @param buffer_size     The size of the input buffer.
+ * @param max_length      The maximum number of elements allowed in the list.
+ * @param out_elements    Pointer to store the deserialized elements.
+ * @param out_actual_count Pointer to store the actual number of deserialized elements.
+ *
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
+ */
+ssz_error_t ssz_deserialize_list_uint8(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    uint8_t *out_elements,
+    size_t *out_actual_count)
+{
+    if (!buffer || !out_elements || !out_actual_count)
+        return SSZ_ERROR_DESERIALIZATION;
+    size_t element_count = buffer_size;
+    if (element_count > max_length)
+        return SSZ_ERROR_DESERIALIZATION;
+    memcpy(out_elements, buffer, element_count);
+    *out_actual_count = element_count;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Deserializes a list of 16-bit unsigned integers.
+ *
+ * @param buffer          The input buffer containing the serialized data.
+ * @param buffer_size     The size of the input buffer.
+ * @param max_length      The maximum number of elements allowed in the list.
+ * @param out_elements    Pointer to store the deserialized elements.
+ * @param out_actual_count Pointer to store the actual number of deserialized elements.
+ *
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
+ */
+ssz_error_t ssz_deserialize_list_uint16(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    uint16_t *out_elements,
+    size_t *out_actual_count)
+{
+    if (!buffer || !out_elements || !out_actual_count)
+        return SSZ_ERROR_DESERIALIZATION;
+    if (buffer_size % 2 != 0)
+        return SSZ_ERROR_DESERIALIZATION;
+    size_t element_count = buffer_size / 2;
+    if (element_count > max_length)
+        return SSZ_ERROR_DESERIALIZATION;
+    for (size_t i = 0; i < element_count; i++)
+    {
+        ssz_error_t ret = ssz_deserialize_uint16(buffer + (i * 2), 2, &out_elements[i]);
+        if (ret != SSZ_SUCCESS)
+            return ret;
+    }
+    *out_actual_count = element_count;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Deserializes a list of 32-bit unsigned integers.
+ *
+ * @param buffer          The input buffer containing the serialized data.
+ * @param buffer_size     The size of the input buffer.
+ * @param max_length      The maximum number of elements allowed in the list.
+ * @param out_elements    Pointer to store the deserialized elements.
+ * @param out_actual_count Pointer to store the actual number of deserialized elements.
+ *
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
+ */
+ssz_error_t ssz_deserialize_list_uint32(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    uint32_t *out_elements,
+    size_t *out_actual_count)
+{
+    if (!buffer || !out_elements || !out_actual_count)
+        return SSZ_ERROR_DESERIALIZATION;
+    if (buffer_size % 4 != 0)
+        return SSZ_ERROR_DESERIALIZATION;
+    size_t element_count = buffer_size / 4;
+    if (element_count > max_length)
+        return SSZ_ERROR_DESERIALIZATION;
+    for (size_t i = 0; i < element_count; i++)
+    {
+        ssz_error_t ret = ssz_deserialize_uint32(buffer + (i * 4), 4, &out_elements[i]);
+        if (ret != SSZ_SUCCESS)
+            return ret;
+    }
+    *out_actual_count = element_count;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Deserializes a list of 64-bit unsigned integers.
+ *
+ * @param buffer          The input buffer containing the serialized data.
+ * @param buffer_size     The size of the input buffer.
+ * @param max_length      The maximum number of elements allowed in the list.
+ * @param out_elements    Pointer to store the deserialized elements.
+ * @param out_actual_count Pointer to store the actual number of deserialized elements.
+ *
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
+ */
+ssz_error_t ssz_deserialize_list_uint64(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    uint64_t *out_elements,
+    size_t *out_actual_count)
+{
+    if (!buffer || !out_elements || !out_actual_count)
+        return SSZ_ERROR_DESERIALIZATION;
+    if (buffer_size % 8 != 0)
+        return SSZ_ERROR_DESERIALIZATION;
+    size_t element_count = buffer_size / 8;
+    if (element_count > max_length)
+        return SSZ_ERROR_DESERIALIZATION;
+    for (size_t i = 0; i < element_count; i++)
+    {
+        ssz_error_t ret = ssz_deserialize_uint64(buffer + (i * 8), 8, &out_elements[i]);
+        if (ret != SSZ_SUCCESS)
+            return ret;
+    }
+    *out_actual_count = element_count;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Deserializes a list of 128-bit unsigned integers.
+ *
+ * @param buffer          The input buffer containing the serialized data.
+ * @param buffer_size     The size of the input buffer.
+ * @param max_length      The maximum number of elements allowed in the list.
+ * @param out_elements    Pointer to store the deserialized elements.
+ * @param out_actual_count Pointer to store the actual number of deserialized elements.
+ *
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
+ */
+ssz_error_t ssz_deserialize_list_uint128(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
     void *out_elements,
     size_t *out_actual_count)
 {
-    if (!buffer || !field_sizes || !out_elements || !out_actual_count)
+    if (!buffer || !out_elements || !out_actual_count)
         return SSZ_ERROR_DESERIALIZATION;
-
-    *out_actual_count = 0;
-    if (element_count == 0)
-        return SSZ_SUCCESS;
-
-    const size_t max_possible = buffer_size / BYTES_PER_LENGTH_OFFSET;
-    if (max_possible < element_count)
-        element_count = max_possible;
-    if (element_count == 0)
-        return SSZ_SUCCESS;
-
-    const uint8_t *offset_ptr = buffer;
-    uint32_t prev_offset = 0;
-    uint8_t *write_ptr = (uint8_t *)out_elements;
-    size_t total_parsed = 0;
-
-    for (size_t i = 0; i < element_count; ++i, offset_ptr += BYTES_PER_LENGTH_OFFSET)
+    if (buffer_size % 16 != 0)
+        return SSZ_ERROR_DESERIALIZATION;
+    size_t element_count = buffer_size / 16;
+    if (element_count > max_length)
+        return SSZ_ERROR_DESERIALIZATION;
+    for (size_t i = 0; i < element_count; i++)
     {
-        if (buffer_size < (size_t)((offset_ptr - buffer) + BYTES_PER_LENGTH_OFFSET))
-            break;
-
-        const uint32_t current_offset = *(const uint32_t *)offset_ptr;
-        if (current_offset > buffer_size)
-            break;
-
-        if (i > 0)
-        {
-            if (current_offset <= prev_offset)
-                return SSZ_ERROR_DESERIALIZATION;
-
-            const size_t slice_len = current_offset - prev_offset;
-            if (slice_len != field_sizes[i - 1])
-                break;
-
-            memcpy(write_ptr, buffer + prev_offset, slice_len);
-            write_ptr += slice_len;
-            ++total_parsed;
-        }
-
-        prev_offset = current_offset;
+        uint8_t *element_ptr = (uint8_t *)out_elements + (i * 16);
+        ssz_error_t ret = ssz_deserialize_uint128(buffer + (i * 16), 16, element_ptr);
+        if (ret != SSZ_SUCCESS)
+            return ret;
     }
+    *out_actual_count = element_count;
+    return SSZ_SUCCESS;
+}
 
-    if (total_parsed < element_count)
+/**
+ * Deserializes a list of 256-bit unsigned integers.
+ *
+ * @param buffer          The input buffer containing the serialized data.
+ * @param buffer_size     The size of the input buffer.
+ * @param max_length      The maximum number of elements allowed in the list.
+ * @param out_elements    Pointer to store the deserialized elements.
+ * @param out_actual_count Pointer to store the actual number of deserialized elements.
+ *
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
+ */
+ssz_error_t ssz_deserialize_list_uint256(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    void *out_elements,
+    size_t *out_actual_count)
+{
+    if (!buffer || !out_elements || !out_actual_count)
+        return SSZ_ERROR_DESERIALIZATION;
+    if (buffer_size % 32 != 0)
+        return SSZ_ERROR_DESERIALIZATION;
+    size_t element_count = buffer_size / 32;
+    if (element_count > max_length)
+        return SSZ_ERROR_DESERIALIZATION;
+    for (size_t i = 0; i < element_count; i++)
     {
-        const size_t slice_len = buffer_size - prev_offset;
-        if (slice_len == field_sizes[total_parsed])
+        uint8_t *element_ptr = (uint8_t *)out_elements + (i * 32);
+        ssz_error_t ret = ssz_deserialize_uint256(buffer + (i * 32), 32, element_ptr);
+        if (ret != SSZ_SUCCESS)
+            return ret;
+    }
+    *out_actual_count = element_count;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Deserializes a list of boolean values.
+ *
+ * @param buffer          The input buffer containing the serialized data.
+ * @param buffer_size     The size of the input buffer.
+ * @param max_length      The maximum number of elements allowed in the list.
+ * @param out_elements    Pointer to store the deserialized elements.
+ * @param out_actual_count Pointer to store the actual number of deserialized elements.
+ *
+ * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
+ */
+ssz_error_t ssz_deserialize_list_bool(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    bool *out_elements,
+    size_t *out_actual_count)
+{
+    if (!buffer || !out_elements || !out_actual_count)
+        return SSZ_ERROR_DESERIALIZATION;
+    size_t element_count = buffer_size;
+    if (element_count > max_length)
+        return SSZ_ERROR_DESERIALIZATION;
+    for (size_t i = 0; i < element_count; i++)
+    {
+        if (buffer[i] == 0x00)
         {
-            memcpy(write_ptr, buffer + prev_offset, slice_len);
-            ++total_parsed;
+            out_elements[i] = false;
+        }
+        else if (buffer[i] == 0x01)
+        {
+            out_elements[i] = true;
+        }
+        else
+        {
+            return SSZ_ERROR_DESERIALIZATION;
         }
     }
-
-    *out_actual_count = total_parsed;
-    return (total_parsed > 0) ? SSZ_SUCCESS : SSZ_ERROR_DESERIALIZATION;
+    *out_actual_count = element_count;
+    return SSZ_SUCCESS;
 }

@@ -47,6 +47,7 @@ ssz_error_t ssz_serialize_uint16(const void *value, uint8_t *out_buf, size_t *ou
     *out_size = 2;
     return SSZ_SUCCESS;
 }
+
 /**
  * Serializes a 32-bit unsigned integer into four bytes.
  *
@@ -335,28 +336,54 @@ ssz_error_t ssz_serialize_union(const ssz_union_t *u, uint8_t *out_buf, size_t *
 }
 
 /**
- * Serializes a vector, which is a fixed-length collection of elements.
+ * Serializes a vector of uint8 elements into consecutive bytes.
  *
- * @param elements Pointer to the input elements.
+ * @param elements Pointer to the elements.
  * @param element_count The number of elements in the vector.
- * @param element_sizes Array of sizes for each element.
  * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @param out_size Pointer to the size of the output buffer.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_serialize_vector(
-    const void *restrict elements,
+ssz_error_t ssz_serialize_vector_uint8(
+    const uint8_t *restrict elements,
     size_t element_count,
-    const size_t *restrict element_sizes,
     uint8_t *restrict out_buf,
     size_t *restrict out_size)
 {
-    if (elements == NULL || element_sizes == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
+    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
-    const size_t element_size = element_sizes[0];
-    const size_t total_bytes = element_count * element_size;
+    size_t total_bytes = element_count;
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    memcpy(out_buf, elements, total_bytes);
+    *out_size = total_bytes;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Serializes a vector of uint16 elements into consecutive bytes.
+ *
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the vector.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_vector_uint16(
+    const uint16_t *restrict elements,
+    size_t element_count,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
+{
+    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    size_t total_bytes = element_count * sizeof(uint16_t);
     if (*out_size < total_bytes || !check_max_offset(total_bytes))
     {
         return SSZ_ERROR_SERIALIZATION;
@@ -371,11 +398,150 @@ ssz_error_t ssz_serialize_vector(
     {
         for (size_t i = 0; i < element_count; i++)
         {
-            const uint8_t *src = (const uint8_t *)elements + i * element_size;
-            uint8_t *dst = out_buf + i * element_size;
-            for (size_t j = 0; j < element_size; j++)
+            uint16_t val = elements[i];
+            out_buf[2 * i] = (uint8_t)(val);
+            out_buf[2 * i + 1] = (uint8_t)(val >> 8);
+        }
+    }
+    *out_size = total_bytes;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Serializes a vector of uint32 elements into consecutive bytes.
+ *
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the vector.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_vector_uint32(
+    const uint32_t *restrict elements,
+    size_t element_count,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
+{
+    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    size_t total_bytes = element_count * sizeof(uint32_t);
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    static const uint32_t test_value = 1;
+    const uint8_t endian_check = *(const uint8_t *)&test_value;
+    if (endian_check == 0x01)
+    {
+        memcpy(out_buf, elements, total_bytes);
+    }
+    else
+    {
+        for (size_t i = 0; i < element_count; i++)
+        {
+            uint32_t val = elements[i];
+            size_t base = i * 4;
+            out_buf[base + 0] = (uint8_t)(val);
+            out_buf[base + 1] = (uint8_t)(val >> 8);
+            out_buf[base + 2] = (uint8_t)(val >> 16);
+            out_buf[base + 3] = (uint8_t)(val >> 24);
+        }
+    }
+    *out_size = total_bytes;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Serializes a vector of uint64 elements into consecutive bytes.
+ *
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the vector.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_vector_uint64(
+    const uint64_t *restrict elements,
+    size_t element_count,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
+{
+    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    size_t total_bytes = element_count * sizeof(uint64_t);
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    static const uint32_t test_value = 1;
+    const uint8_t endian_check = *(const uint8_t *)&test_value;
+    if (endian_check == 0x01)
+    {
+        memcpy(out_buf, elements, total_bytes);
+    }
+    else
+    {
+        for (size_t i = 0; i < element_count; i++)
+        {
+            uint64_t val = elements[i];
+            size_t base = i * 8;
+            out_buf[base + 0] = (uint8_t)(val);
+            out_buf[base + 1] = (uint8_t)(val >> 8);
+            out_buf[base + 2] = (uint8_t)(val >> 16);
+            out_buf[base + 3] = (uint8_t)(val >> 24);
+            out_buf[base + 4] = (uint8_t)(val >> 32);
+            out_buf[base + 5] = (uint8_t)(val >> 40);
+            out_buf[base + 6] = (uint8_t)(val >> 48);
+            out_buf[base + 7] = (uint8_t)(val >> 56);
+        }
+    }
+    *out_size = total_bytes;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Serializes a vector of uint128 elements into consecutive bytes.
+ *
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the vector.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_vector_uint128(
+    const void *restrict elements,
+    size_t element_count,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
+{
+    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    size_t total_bytes = element_count * 16;
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    static const uint32_t test_value = 1;
+    const uint8_t endian_check = *(const uint8_t *)&test_value;
+    if (endian_check == 0x01)
+    {
+        memcpy(out_buf, elements, total_bytes);
+    }
+    else
+    {
+        for (size_t i = 0; i < element_count; i++)
+        {
+            const uint8_t *src = (const uint8_t *)elements + (i * 16);
+            uint8_t *dst = out_buf + (i * 16);
+            for (size_t j = 0; j < 16; j++)
             {
-                dst[j] = src[element_size - 1 - j];
+                dst[j] = src[15 - j];
             }
         }
     }
@@ -384,23 +550,99 @@ ssz_error_t ssz_serialize_vector(
 }
 
 /**
- * Serializes a list, which is a variable-length collection of elements.
+ * Serializes a vector of uint256 elements into consecutive bytes.
  *
- * @param elements Pointer to the input elements.
- * @param element_count The number of elements in the list.
- * @param element_sizes Array of sizes for each element.
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the vector.
  * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_vector_uint256(
+    const void *restrict elements,
+    size_t element_count,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
+{
+    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    size_t total_bytes = element_count * 32;
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    static const uint32_t test_value = 1;
+    const uint8_t endian_check = *(const uint8_t *)&test_value;
+    if (endian_check == 0x01)
+    {
+        memcpy(out_buf, elements, total_bytes);
+    }
+    else
+    {
+        for (size_t i = 0; i < element_count; i++)
+        {
+            const uint8_t *src = (const uint8_t *)elements + (i * 32);
+            uint8_t *dst = out_buf + (i * 32);
+            for (size_t j = 0; j < 32; j++)
+            {
+                dst[j] = src[31 - j];
+            }
+        }
+    }
+    *out_size = total_bytes;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Serializes a vector of bool elements into consecutive bytes.
+ *
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the vector.
+ * @param out_buf The output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_vector_bool(
+    const bool *restrict elements,
+    size_t element_count,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
+{
+    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    size_t total_bytes = element_count;
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    for (size_t i = 0; i < element_count; i++)
+    {
+        out_buf[i] = (uint8_t)(elements[i]);
+    }
+    *out_size = total_bytes;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Serializes a list of uint8 elements into consecutive bytes.
+ *
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the list.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
  * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_serialize_list(
-    const void *elements,
+ssz_error_t ssz_serialize_list_uint8(
+    const uint8_t *restrict elements,
     size_t element_count,
-    const size_t *element_sizes,
-    uint8_t *out_buf,
+    uint8_t *restrict out_buf,
     size_t *restrict out_size)
 {
-    if (out_buf == NULL || out_size == NULL)
+    if (elements == NULL || out_buf == NULL || out_size == NULL)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -409,53 +651,305 @@ ssz_error_t ssz_serialize_list(
         *out_size = 0;
         return SSZ_SUCCESS;
     }
-    if (elements == NULL || element_sizes == NULL)
+    size_t total_bytes = element_count;
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
     {
         return SSZ_ERROR_SERIALIZATION;
     }
-    size_t fixed_region_size = element_count * BYTES_PER_LENGTH_OFFSET;
-    size_t total_variable_size = 0;
-    for (size_t i = 0; i < element_count; i++)
-    {
-        total_variable_size += element_sizes[i];
-    }
-    size_t total_used = fixed_region_size + total_variable_size;
-    if (total_used > *out_size)
+    memcpy(out_buf, elements, total_bytes);
+    *out_size = total_bytes;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Serializes a list of uint16 elements into consecutive bytes.
+ *
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the list.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_list_uint16(
+    const uint16_t *restrict elements,
+    size_t element_count,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
+{
+    if (elements == NULL || out_buf == NULL || out_size == NULL)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
-    if (!check_max_offset((uint32_t)total_used))
+    if (element_count == 0)
+    {
+        *out_size = 0;
+        return SSZ_SUCCESS;
+    }
+    size_t total_bytes = element_count * sizeof(uint16_t);
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
     {
         return SSZ_ERROR_SERIALIZATION;
     }
-    uint8_t *offset_ptr = out_buf;
-    uint8_t *variable_ptr = out_buf + fixed_region_size;
-    const uint8_t *src = (const uint8_t *)elements;
-    size_t variable_offset = 0;
     static const uint32_t test_value = 1;
     const uint8_t endian_check = *(const uint8_t *)&test_value;
+    if (endian_check == 0x01)
+    {
+        memcpy(out_buf, elements, total_bytes);
+    }
+    else
+    {
+        for (size_t i = 0; i < element_count; i++)
+        {
+            uint16_t val = elements[i];
+            out_buf[2 * i] = (uint8_t)(val);
+            out_buf[2 * i + 1] = (uint8_t)(val >> 8);
+        }
+    }
+    *out_size = total_bytes;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Serializes a list of uint32 elements into consecutive bytes.
+ *
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the list.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_list_uint32(
+    const uint32_t *restrict elements,
+    size_t element_count,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
+{
+    if (elements == NULL || out_buf == NULL || out_size == NULL)
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    if (element_count == 0)
+    {
+        *out_size = 0;
+        return SSZ_SUCCESS;
+    }
+    size_t total_bytes = element_count * sizeof(uint32_t);
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    static const uint32_t test_value = 1;
+    const uint8_t endian_check = *(const uint8_t *)&test_value;
+    if (endian_check == 0x01)
+    {
+        memcpy(out_buf, elements, total_bytes);
+    }
+    else
+    {
+        for (size_t i = 0; i < element_count; i++)
+        {
+            uint32_t val = elements[i];
+            size_t base = i * 4;
+            out_buf[base + 0] = (uint8_t)(val);
+            out_buf[base + 1] = (uint8_t)(val >> 8);
+            out_buf[base + 2] = (uint8_t)(val >> 16);
+            out_buf[base + 3] = (uint8_t)(val >> 24);
+        }
+    }
+    *out_size = total_bytes;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Serializes a list of uint64 elements into consecutive bytes.
+ *
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the list.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_list_uint64(
+    const uint64_t *restrict elements,
+    size_t element_count,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
+{
+    if (elements == NULL || out_buf == NULL || out_size == NULL)
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    if (element_count == 0)
+    {
+        *out_size = 0;
+        return SSZ_SUCCESS;
+    }
+    size_t total_bytes = element_count * sizeof(uint64_t);
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    static const uint32_t test_value = 1;
+    const uint8_t endian_check = *(const uint8_t *)&test_value;
+    if (endian_check == 0x01)
+    {
+        memcpy(out_buf, elements, total_bytes);
+    }
+    else
+    {
+        for (size_t i = 0; i < element_count; i++)
+        {
+            uint64_t val = elements[i];
+            size_t base = i * 8;
+            out_buf[base + 0] = (uint8_t)(val);
+            out_buf[base + 1] = (uint8_t)(val >> 8);
+            out_buf[base + 2] = (uint8_t)(val >> 16);
+            out_buf[base + 3] = (uint8_t)(val >> 24);
+            out_buf[base + 4] = (uint8_t)(val >> 32);
+            out_buf[base + 5] = (uint8_t)(val >> 40);
+            out_buf[base + 6] = (uint8_t)(val >> 48);
+            out_buf[base + 7] = (uint8_t)(val >> 56);
+        }
+    }
+    *out_size = total_bytes;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Serializes a list of uint128 elements into consecutive bytes.
+ *
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the list.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_list_uint128(
+    const void *restrict elements,
+    size_t element_count,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
+{
+    if (elements == NULL || out_buf == NULL || out_size == NULL)
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    if (element_count == 0)
+    {
+        *out_size = 0;
+        return SSZ_SUCCESS;
+    }
+    size_t total_bytes = element_count * 16;
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    static const uint32_t test_value = 1;
+    const uint8_t endian_check = *(const uint8_t *)&test_value;
+    if (endian_check == 0x01)
+    {
+        memcpy(out_buf, elements, total_bytes);
+    }
+    else
+    {
+        for (size_t i = 0; i < element_count; i++)
+        {
+            const uint8_t *src = (const uint8_t *)elements + (i * 16);
+            uint8_t *dst = out_buf + (i * 16);
+            for (size_t j = 0; j < 16; j++)
+            {
+                dst[j] = src[15 - j];
+            }
+        }
+    }
+    *out_size = total_bytes;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Serializes a list of uint256 elements into consecutive bytes.
+ *
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the list.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_list_uint256(
+    const void *restrict elements,
+    size_t element_count,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
+{
+    if (elements == NULL || out_buf == NULL || out_size == NULL)
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    if (element_count == 0)
+    {
+        *out_size = 0;
+        return SSZ_SUCCESS;
+    }
+    size_t total_bytes = element_count * 32;
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    static const uint32_t test_value = 1;
+    const uint8_t endian_check = *(const uint8_t *)&test_value;
+    if (endian_check == 0x01)
+    {
+        memcpy(out_buf, elements, total_bytes);
+    }
+    else
+    {
+        for (size_t i = 0; i < element_count; i++)
+        {
+            const uint8_t *src = (const uint8_t *)elements + (i * 32);
+            uint8_t *dst = out_buf + (i * 32);
+            for (size_t j = 0; j < 32; j++)
+            {
+                dst[j] = src[31 - j];
+            }
+        }
+    }
+    *out_size = total_bytes;
+    return SSZ_SUCCESS;
+}
+
+/**
+ * Serializes a list of bool elements into consecutive bytes.
+ *
+ * @param elements Pointer to the elements.
+ * @param element_count The number of elements in the list.
+ * @param out_buf Pointer to the output buffer to write the serialized data.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @return SSZ_SUCCESS on success, or an error code on failure.
+ */
+ssz_error_t ssz_serialize_list_bool(
+    const bool *restrict elements,
+    size_t element_count,
+    uint8_t *restrict out_buf,
+    size_t *restrict out_size)
+{
+    if (elements == NULL || out_buf == NULL || out_size == NULL)
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    if (element_count == 0)
+    {
+        *out_size = 0;
+        return SSZ_SUCCESS;
+    }
+    size_t total_bytes = element_count;
+    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    {
+        return SSZ_ERROR_SERIALIZATION;
+    }
     for (size_t i = 0; i < element_count; i++)
     {
-        size_t elem_size = element_sizes[i];
-        uint32_t val = (uint32_t)(fixed_region_size + variable_offset);
-
-        if (endian_check == 0x01)
-        {
-            *((uint32_t *)(offset_ptr + i * BYTES_PER_LENGTH_OFFSET)) = val;
-        }
-        else
-        {
-            val = ((val & 0x000000FFU) << 24) |
-                  ((val & 0x0000FF00U) << 8) |
-                  ((val & 0x00FF0000U) >> 8) |
-                  ((val & 0xFF000000U) >> 24);
-            *((uint32_t *)(offset_ptr + i * BYTES_PER_LENGTH_OFFSET)) = val;
-        }
-        memcpy(variable_ptr, src, elem_size);
-        src += elem_size;
-        variable_ptr += elem_size;
-        variable_offset += elem_size;
+        out_buf[i] = (uint8_t)(elements[i]);
     }
-    *out_size = total_used;
+    *out_size = total_bytes;
     return SSZ_SUCCESS;
 }
