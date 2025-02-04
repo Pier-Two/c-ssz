@@ -1,7 +1,10 @@
 CC ?= gcc
 CFLAGS = -Wall -Wextra -O3 -g
 INCLUDE_FLAGS = -Iinclude
-LDFLAGS =
+OPENSSL_CFLAGS = -I/opt/homebrew/Cellar/openssl@3/3.4.0/include
+OPENSSL_LIBS = -L/opt/homebrew/Cellar/openssl@3/3.4.0/lib -lssl -lcrypto
+CFLAGS += $(OPENSSL_CFLAGS)
+override LDFLAGS := $(OPENSSL_LIBS)
 AR = ar
 ARFLAGS = rcs
 
@@ -12,7 +15,7 @@ TEST_DIR = tests
 LIB_DIR = lib
 BENCH_DIR = bench
 
-LIB_SOURCES = ssz_deserialize.c ssz_serialize.c ssz_utils.c ssz_merkle.c
+LIB_SOURCES = ssz_deserialize.c ssz_serialize.c ssz_utils.c ssz_merkle.c 
 LIB_OBJECTS = $(patsubst %.c, $(OBJ_DIR)/%.o, $(LIB_SOURCES))
 
 STATIC_LIB = $(LIB_DIR)/libssz.a

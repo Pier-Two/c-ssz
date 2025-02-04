@@ -426,7 +426,6 @@ static void attestation_bench_test_func_deserialize(void *user_data) {
         printf("Failed to deserialize\n");
     } else {
         if (tmp.aggregation_bits.data) {
-            //print_hex(g_serialized, g_serialized_size);
             free(tmp.aggregation_bits.data);
             tmp.aggregation_bits.data = NULL;
         }

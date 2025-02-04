@@ -1,13 +1,16 @@
 #include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
+#include <string.h>
+#include <openssl/sha.h>
 #include "bench.h"
 #include "ssz_serialize.h"
 #include "ssz_deserialize.h"
 #include "ssz_constants.h"
 #include "yaml_parser.h"
+#include "ssz_merkle.h"
+#include "ssz_utils.h"
 
 #define YAML_FILE_PATH "./bench/data/indexed_attestation.yaml"
 #define MAX_VALIDATORS_PER_COMMITTEE 2048
@@ -207,7 +210,7 @@ static ssz_error_t ssz_serialize_attestation_indices(const AttestingIndices *ind
     size_t element_count = indices->length;
     size_t element_sizes[MAX_VALIDATORS_PER_COMMITTEE];
     for (size_t i = 0; i < element_count; i++) {
-        element_sizes[i] = 8; 
+        element_sizes[i] = 8;
     }
     uint8_t tmp[256];
     size_t tmp_size = sizeof(tmp);
@@ -426,7 +429,6 @@ static void attestation_bench_test_func_serialize(void *user_data) {
         printf("Failed to serialize\n");
     } else {
         g_serialized_size = actual_size;
-        print_hex(g_serialized, g_serialized_size);
     }
 }
 
@@ -443,6 +445,146 @@ static void attestation_bench_test_func_deserialize(void *user_data) {
             tmp.attesting_indices.data = NULL;
         }
     }
+}
+
+static ssz_error_t hash_tree_root_uint64(uint64_t value, uint8_t *out_root) {
+    uint8_t buf[8];
+    for (int i = 0; i < 8; i++) {
+        buf[i] = (uint8_t)((value >> (8 * i)) & 0xFF);
+    }
+    uint8_t packed[BYTES_PER_CHUNK];
+    size_t chunk_count;
+    ssz_error_t err = ssz_pack(buf, 1, 8, packed, &chunk_count);
+    if (err != SSZ_SUCCESS) return err;
+    return ssz_merkleize(packed, chunk_count, 0, out_root);
+}
+
+static ssz_error_t hash_tree_root_bytes(const uint8_t *bytes, size_t length, uint8_t *out_root) {
+    size_t chunk_count;
+    size_t alloc_size = ((length + BYTES_PER_CHUNK - 1) / BYTES_PER_CHUNK) * BYTES_PER_CHUNK;
+    uint8_t *packed = malloc(alloc_size);
+    if (!packed) return SSZ_ERROR_SERIALIZATION;
+    ssz_error_t err = ssz_pack(bytes, 1, length, packed, &chunk_count);
+    if (err != SSZ_SUCCESS) { free(packed); return err; }
+    err = ssz_merkleize(packed, chunk_count, 0, out_root);
+    free(packed);
+    return err;
+}
+
+static ssz_error_t hash_tree_root_checkpoint(const Checkpoint *cp, uint8_t *out_root) {
+    uint8_t root_epoch[32], root_root[32];
+    ssz_error_t err = hash_tree_root_uint64(cp->epoch, root_epoch);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_bytes(cp->root, 32, root_root);
+    if (err != SSZ_SUCCESS) return err;
+    uint8_t nodes[2][32];
+    memcpy(nodes[0], root_epoch, 32);
+    memcpy(nodes[1], root_root, 32);
+    return ssz_merkleize((uint8_t*)nodes, 2, 0, out_root);
+}
+
+static ssz_error_t hash_tree_root_attestation_data(const AttestationData *data, uint8_t *out_root) {
+    uint8_t root_slot[32], root_index[32], root_beacon[32], root_source[32], root_target[32];
+    ssz_error_t err = hash_tree_root_uint64(data->slot, root_slot);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_uint64(data->index, root_index);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_bytes(data->beacon_block_root, 32, root_beacon);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_checkpoint(&data->source, root_source);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_checkpoint(&data->target, root_target);
+    if (err != SSZ_SUCCESS) return err;
+    uint8_t nodes[5][32];
+    memcpy(nodes[0], root_slot, 32);
+    memcpy(nodes[1], root_index, 32);
+    memcpy(nodes[2], root_beacon, 32);
+    memcpy(nodes[3], root_source, 32);
+    memcpy(nodes[4], root_target, 32);
+    return ssz_merkleize((uint8_t*)nodes, 5, 0, out_root);
+}
+
+static ssz_error_t hash_tree_root_attesting_indices(const AttestingIndices *indices, uint8_t *out_root) {
+    size_t total_bytes = indices->length * 8;
+    size_t chunk_count;
+    size_t alloc_size = ((total_bytes + BYTES_PER_CHUNK - 1) / BYTES_PER_CHUNK) * BYTES_PER_CHUNK;
+    uint8_t *packed = malloc(alloc_size);
+    if (!packed) return SSZ_ERROR_SERIALIZATION;
+    ssz_error_t err = ssz_pack((uint8_t*)indices->data, 8, indices->length, packed, &chunk_count);
+    if (err != SSZ_SUCCESS) { free(packed); return err; }
+    size_t limit = (MAX_VALIDATORS_PER_COMMITTEE * 8 + BYTES_PER_CHUNK - 1) / BYTES_PER_CHUNK;
+    uint8_t merkleized[32];
+    err = ssz_merkleize(packed, chunk_count, limit, merkleized);
+    free(packed);
+    if (err != SSZ_SUCCESS) return err;
+    return ssz_mix_in_length(merkleized, indices->length, out_root);
+}
+
+static ssz_error_t hash_tree_root_signature(const uint8_t *signature, uint8_t *out_root) {
+    size_t chunk_count;
+    size_t alloc_size = ((96 + BYTES_PER_CHUNK - 1) / BYTES_PER_CHUNK) * BYTES_PER_CHUNK;
+    uint8_t *packed = malloc(alloc_size);
+    if (!packed) return SSZ_ERROR_SERIALIZATION;
+    ssz_error_t err = ssz_pack(signature, 1, 96, packed, &chunk_count);
+    if (err != SSZ_SUCCESS) { free(packed); return err; }
+    err = ssz_merkleize(packed, chunk_count, 0, out_root);
+    free(packed);
+    return err;
+}
+
+static ssz_error_t hash_tree_root_indexed_attestation(const IndexedAttestation *att, uint8_t *out_root) {
+    uint8_t root_attesting[32], root_data[32], root_signature[32];
+    ssz_error_t err = hash_tree_root_attesting_indices(&att->attesting_indices, root_attesting);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_attestation_data(&att->data, root_data);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_signature(att->signature, root_signature);
+    if (err != SSZ_SUCCESS) return err;
+    uint8_t nodes[3][32];
+    memcpy(nodes[0], root_attesting, 32);
+    memcpy(nodes[1], root_data, 32);
+    memcpy(nodes[2], root_signature, 32);
+    return ssz_merkleize((uint8_t*)nodes, 3, 0, out_root);
+}
+
+static void print_indexed_attestation_tree(const IndexedAttestation *att) {
+    uint8_t root_attesting[32], root_data[32], root_signature[32], final_root[32];
+    if (hash_tree_root_attesting_indices(&att->attesting_indices, root_attesting) != SSZ_SUCCESS) {
+        printf("Error computing attesting_indices root\n");
+        return;
+    }
+    if (hash_tree_root_attestation_data(&att->data, root_data) != SSZ_SUCCESS) {
+        printf("Error computing data root\n");
+        return;
+    }
+    if (hash_tree_root_signature(att->signature, root_signature) != SSZ_SUCCESS) {
+        printf("Error computing signature root\n");
+        return;
+    }
+    printf("Leaves:\n");
+    printf("  attesting_indices: 0x"); print_hex(root_attesting, 32);
+    printf("  data: 0x"); print_hex(root_data, 32);
+    printf("  signature: 0x"); print_hex(root_signature, 32);
+    uint8_t nodes[4][32];
+    memcpy(nodes[0], root_attesting, 32);
+    memcpy(nodes[1], root_data, 32);
+    memcpy(nodes[2], root_signature, 32);
+    memset(nodes[3], 0, 32);
+    printf("Level 1:\n");
+    uint8_t parent[2][32];
+    for (int i = 0; i < 2; i++) {
+        uint8_t concat[64];
+        memcpy(concat, nodes[2*i], 32);
+        memcpy(concat+32, nodes[2*i+1], 32);
+        SHA256(concat, 64, parent[i]);
+        printf("  Node %d: 0x", i); print_hex(parent[i], 32);
+    }
+    printf("Level 2 (Merkle Root):\n");
+    uint8_t concat[64];
+    memcpy(concat, parent[0], 32);
+    memcpy(concat+32, parent[1], 32);
+    SHA256(concat, 64, final_root);
+    printf("  Merkle Root: 0x"); print_hex(final_root, 32);
 }
 
 int main(void) {
@@ -462,7 +604,17 @@ int main(void) {
         measured_iterations
     );
     print_attestation(&g_original);
+    uint8_t merkle_root[32];
+    if (hash_tree_root_indexed_attestation(&g_original, merkle_root) == SSZ_SUCCESS) {
+        printf("\nDetailed Merkle Tree:\n");
+        print_indexed_attestation_tree(&g_original);
+    } else {
+        printf("Failed to compute hash tree root\n");
+    }
+    printf("\nSerialized form:\n0x");
+    print_hex(g_serialized, g_serialized_size);
     bench_ssz_print_stats("SSZ Attestation serialization", &stats_serialize);
     bench_ssz_print_stats("SSZ Attestation deserialization", &stats_deserialize);
+
     return 0;
 }
