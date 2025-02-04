@@ -1,13 +1,16 @@
 #include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
+#include <string.h>
+#include <openssl/sha.h>
 #include "bench.h"
 #include "ssz_serialize.h"
 #include "ssz_deserialize.h"
 #include "ssz_constants.h"
 #include "yaml_parser.h"
+#include "ssz_merkle.h"
+#include "ssz_utils.h"
 
 #define YAML_FILE_PATH "./bench/data/attestation.yaml"
 #define MAX_VALIDATORS_PER_COMMITTEE 2048
@@ -56,17 +59,11 @@ static void db_free(DynamicBuffer *db) {
 }
 
 static ssz_error_t db_ensure_capacity(DynamicBuffer *db, size_t needed) {
-    if (db->size + needed <= db->capacity) {
-        return SSZ_SUCCESS;
-    }
+    if (db->size + needed <= db->capacity) return SSZ_SUCCESS;
     size_t new_capacity = db->capacity == 0 ? 128 : db->capacity;
-    while (new_capacity < db->size + needed) {
-        new_capacity *= 2;
-    }
+    while (new_capacity < db->size + needed) new_capacity *= 2;
     uint8_t *temp = realloc(db->data, new_capacity);
-    if (!temp) {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
+    if (!temp) return SSZ_ERROR_DESERIALIZATION;
     db->data = temp;
     db->capacity = new_capacity;
     return SSZ_SUCCESS;
@@ -74,43 +71,28 @@ static ssz_error_t db_ensure_capacity(DynamicBuffer *db, size_t needed) {
 
 static ssz_error_t db_append(DynamicBuffer *db, const uint8_t *bytes, size_t len) {
     ssz_error_t err = db_ensure_capacity(db, len);
-    if (err != SSZ_SUCCESS) {
-        return err;
-    }
+    if (err != SSZ_SUCCESS) return err;
     memcpy(db->data + db->size, bytes, len);
     db->size += len;
     return SSZ_SUCCESS;
 }
 
 static void print_hex(const uint8_t *data, size_t length) {
-    for (size_t i = 0; i < length; i++) {
-        printf("%02x", data[i]);
+    for (size_t i = 0; i < length; i++) printf("%02x", data[i]);
+    printf("\n");
+}
+
+static void print_bits_array(const AggregationBits *agg_bits) {
+    for (size_t i = 0; i < agg_bits->length; i++) {
+        printf("%d", agg_bits->data[i] ? 1 : 0);
     }
     printf("\n");
 }
 
-static void print_bits_as_hex(const AggregationBits *agg_bits) {
-    size_t bit_count = agg_bits->length;
-    size_t byte_count = (bit_count + 7) / 8;
-    uint8_t *tmp = (uint8_t *)malloc(byte_count);
-    if (!tmp) {
-        printf("Error: Could not allocate memory for bits printing.\n");
-        return;
-    }
-    memset(tmp, 0, byte_count);
-    for (size_t i = 0; i < bit_count; i++) {
-        if (agg_bits->data[i]) {
-            tmp[i / 8] |= (1 << (i % 8));
-        }
-    }
-    print_hex(tmp, byte_count);
-    free(tmp);
-}
-
 static void print_attestation(const Attestation *f) {
     printf("Attestation:\n");
-    printf("  aggregation_bits (hex): 0x");
-    print_bits_as_hex(&f->aggregation_bits);
+    printf("  aggregation_bits (binary): ");
+    print_bits_array(&f->aggregation_bits);
     printf("  data.slot: %llu\n", (unsigned long long)f->data.slot);
     printf("  data.index: %llu\n", (unsigned long long)f->data.index);
     printf("  data.beacon_block_root: 0x");
@@ -143,9 +125,7 @@ static ssz_error_t ssz_serialize_attestation_data_db(const AttestationData *ad, 
         size_t vec_size = sizeof(vec_buf);
         size_t element_count = 32;
         size_t sizes[32];
-        for (size_t i = 0; i < element_count; i++) {
-            sizes[i] = 1;
-        }
+        for (size_t i = 0; i < element_count; i++) sizes[i] = 1;
         err = ssz_serialize_vector_uint8(ad->beacon_block_root, element_count, vec_buf, &vec_size);
         if (err != SSZ_SUCCESS) return err;
         err = db_append(db, vec_buf, vec_size);
@@ -161,9 +141,7 @@ static ssz_error_t ssz_serialize_attestation_data_db(const AttestationData *ad, 
         size_t vec_size = sizeof(vec_buf);
         size_t element_count = 32;
         size_t sizes[32];
-        for (size_t i = 0; i < element_count; i++) {
-            sizes[i] = 1;
-        }
+        for (size_t i = 0; i < element_count; i++) sizes[i] = 1;
         err = ssz_serialize_vector_uint8(ad->source.root, element_count, vec_buf, &vec_size);
         if (err != SSZ_SUCCESS) return err;
         err = db_append(db, vec_buf, vec_size);
@@ -179,9 +157,7 @@ static ssz_error_t ssz_serialize_attestation_data_db(const AttestationData *ad, 
         size_t vec_size = sizeof(vec_buf);
         size_t element_count = 32;
         size_t sizes[32];
-        for (size_t i = 0; i < element_count; i++) {
-            sizes[i] = 1;
-        }
+        for (size_t i = 0; i < element_count; i++) sizes[i] = 1;
         err = ssz_serialize_vector_uint8(ad->target.root, element_count, vec_buf, &vec_size);
         if (err != SSZ_SUCCESS) return err;
         err = db_append(db, vec_buf, vec_size);
@@ -196,9 +172,7 @@ static ssz_error_t ssz_serialize_signature(const uint8_t *signature, DynamicBuff
     size_t vec_size = sizeof(vec_buf);
     size_t element_count = 96;
     size_t sizes[96];
-    for (size_t i = 0; i < element_count; i++) {
-        sizes[i] = 1;
-    }
+    for (size_t i = 0; i < element_count; i++) sizes[i] = 1;
     err = ssz_serialize_vector_uint8(signature, element_count, vec_buf, &vec_size);
     if (err != SSZ_SUCCESS) return err;
     err = db_append(db, vec_buf, vec_size);
@@ -313,9 +287,7 @@ static bool read_uint64_field(const char *yaml_path, const char *field_name, uin
     uint8_t *data = read_yaml_field(yaml_path, field_name, &sz);
     if (data && sz == 8) {
         uint64_t val = 0;
-        for (int i = 0; i < 8; i++) {
-            val |= ((uint64_t)data[i]) << (8 * i);
-        }
+        for (int i = 0; i < 8; i++) val |= ((uint64_t)data[i]) << (8 * i);
         *out_val = val;
         free(data);
         return true;
@@ -342,64 +314,49 @@ static void init_attestation_data_from_yaml(void) {
         size_t sz = 0;
         uint8_t *data = read_yaml_field(YAML_FILE_PATH, "aggregation_bits", &sz);
         if (data && sz > 0) {
-            size_t bit_count = sz * 8;
-            g_original.aggregation_bits.length = bit_count;
-            g_original.aggregation_bits.data = malloc(bit_count * sizeof(bool));
-            for (size_t i = 0; i < bit_count; i++) {
-                bool val = (data[i / 8] >> (i % 8)) & 1;
-                g_original.aggregation_bits.data[i] = val;
+            g_original.aggregation_bits.data = malloc(MAX_VALIDATORS_PER_COMMITTEE * sizeof(bool));
+            if (g_original.aggregation_bits.data) {
+                size_t actual_bits = 0;
+                ssz_error_t e = ssz_deserialize_bitlist(data, sz, MAX_VALIDATORS_PER_COMMITTEE, g_original.aggregation_bits.data, &actual_bits);
+                if (e == SSZ_SUCCESS) {
+                    g_original.aggregation_bits.length = actual_bits;
+                }
             }
         }
         free(data);
     }
     {
         uint64_t tmpval;
-        if (read_uint64_field(YAML_FILE_PATH, "data.slot", &tmpval)) {
-            g_original.data.slot = tmpval;
-        }
+        if (read_uint64_field(YAML_FILE_PATH, "data.slot", &tmpval)) g_original.data.slot = tmpval;
     }
     {
         uint64_t tmpval;
-        if (read_uint64_field(YAML_FILE_PATH, "data.index", &tmpval)) {
-            g_original.data.index = tmpval;
-        }
+        if (read_uint64_field(YAML_FILE_PATH, "data.index", &tmpval)) g_original.data.index = tmpval;
     }
     {
         uint8_t buf[32];
-        if (read_32bytes_field(YAML_FILE_PATH, "data.beacon_block_root", buf)) {
-            memcpy(g_original.data.beacon_block_root, buf, 32);
-        }
+        if (read_32bytes_field(YAML_FILE_PATH, "data.beacon_block_root", buf)) memcpy(g_original.data.beacon_block_root, buf, 32);
     }
     {
         uint64_t tmpval;
-        if (read_uint64_field(YAML_FILE_PATH, "data.source.epoch", &tmpval)) {
-            g_original.data.source.epoch = tmpval;
-        }
+        if (read_uint64_field(YAML_FILE_PATH, "data.source.epoch", &tmpval)) g_original.data.source.epoch = tmpval;
     }
     {
         uint8_t buf[32];
-        if (read_32bytes_field(YAML_FILE_PATH, "data.source.root", buf)) {
-            memcpy(g_original.data.source.root, buf, 32);
-        }
+        if (read_32bytes_field(YAML_FILE_PATH, "data.source.root", buf)) memcpy(g_original.data.source.root, buf, 32);
     }
     {
         uint64_t tmpval;
-        if (read_uint64_field(YAML_FILE_PATH, "data.target.epoch", &tmpval)) {
-            g_original.data.target.epoch = tmpval;
-        }
+        if (read_uint64_field(YAML_FILE_PATH, "data.target.epoch", &tmpval)) g_original.data.target.epoch = tmpval;
     }
     {
         uint8_t buf[32];
-        if (read_32bytes_field(YAML_FILE_PATH, "data.target.root", buf)) {
-            memcpy(g_original.data.target.root, buf, 32);
-        }
+        if (read_32bytes_field(YAML_FILE_PATH, "data.target.root", buf)) memcpy(g_original.data.target.root, buf, 32);
     }
     {
         size_t sz = 0;
         uint8_t *d = read_yaml_field(YAML_FILE_PATH, "signature", &sz);
-        if (d && sz == 96) {
-            memcpy(g_original.signature, d, 96);
-        }
+        if (d && sz == 96) memcpy(g_original.signature, d, 96);
         free(d);
     }
 }
@@ -410,9 +367,7 @@ static void attestation_bench_test_func_serialize(void *user_data) {
     g_serialized_size = 0;
     size_t actual_size = 0;
     ssz_error_t err = serialize_attestation(&g_original, g_serialized, sizeof(g_serialized), &actual_size);
-    if (err != SSZ_SUCCESS) {
-        printf("Failed to serialize\n");
-    } else {
+    if (err == SSZ_SUCCESS) {
         g_serialized_size = actual_size;
     }
 }
@@ -422,9 +377,7 @@ static void attestation_bench_test_func_deserialize(void *user_data) {
     Attestation tmp;
     memset(&tmp, 0, sizeof(tmp));
     ssz_error_t err = deserialize_attestation(g_serialized, g_serialized_size, &tmp);
-    if (err != SSZ_SUCCESS) {
-        printf("Failed to deserialize\n");
-    } else {
+    if (err == SSZ_SUCCESS) {
         if (tmp.aggregation_bits.data) {
             free(tmp.aggregation_bits.data);
             tmp.aggregation_bits.data = NULL;
@@ -432,23 +385,175 @@ static void attestation_bench_test_func_deserialize(void *user_data) {
     }
 }
 
+static ssz_error_t hash_tree_root_uint64(uint64_t value, uint8_t *out_root) {
+    uint8_t buf[8];
+    for (int i = 0; i < 8; i++) buf[i] = (uint8_t)((value >> (8 * i)) & 0xFF);
+    uint8_t packed[BYTES_PER_CHUNK];
+    size_t chunk_count;
+    ssz_error_t err = ssz_pack(buf, 1, 8, packed, &chunk_count);
+    if (err != SSZ_SUCCESS) return err;
+    return ssz_merkleize(packed, chunk_count, 0, out_root);
+}
+
+static ssz_error_t hash_tree_root_bytes(const uint8_t *bytes, size_t length, uint8_t *out_root) {
+    size_t chunk_count;
+    size_t alloc_size = ((length + BYTES_PER_CHUNK - 1) / BYTES_PER_CHUNK) * BYTES_PER_CHUNK;
+    uint8_t *packed = malloc(alloc_size);
+    if (!packed) return SSZ_ERROR_SERIALIZATION;
+    ssz_error_t err = ssz_pack(bytes, 1, length, packed, &chunk_count);
+    if (err != SSZ_SUCCESS) {
+        free(packed);
+        return err;
+    }
+    err = ssz_merkleize(packed, chunk_count, 0, out_root);
+    free(packed);
+    return err;
+}
+
+static ssz_error_t hash_tree_root_checkpoint(const Checkpoint *cp, uint8_t *out_root) {
+    uint8_t root_epoch[32], root_root[32];
+    ssz_error_t err = hash_tree_root_uint64(cp->epoch, root_epoch);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_bytes(cp->root, 32, root_root);
+    if (err != SSZ_SUCCESS) return err;
+    uint8_t nodes[2][32];
+    memcpy(nodes[0], root_epoch, 32);
+    memcpy(nodes[1], root_root, 32);
+    return ssz_merkleize((uint8_t*)nodes, 2, 0, out_root);
+}
+
+static ssz_error_t hash_tree_root_attestation_data(const AttestationData *data, uint8_t *out_root) {
+    uint8_t root_slot[32], root_index[32], root_beacon[32], root_source[32], root_target[32];
+    ssz_error_t err = hash_tree_root_uint64(data->slot, root_slot);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_uint64(data->index, root_index);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_bytes(data->beacon_block_root, 32, root_beacon);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_checkpoint(&data->source, root_source);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_checkpoint(&data->target, root_target);
+    if (err != SSZ_SUCCESS) return err;
+    uint8_t nodes[5][32];
+    memcpy(nodes[0], root_slot, 32);
+    memcpy(nodes[1], root_index, 32);
+    memcpy(nodes[2], root_beacon, 32);
+    memcpy(nodes[3], root_source, 32);
+    memcpy(nodes[4], root_target, 32);
+    return ssz_merkleize((uint8_t*)nodes, 5, 0, out_root);
+}
+
+static ssz_error_t hash_tree_root_aggregation_bits(const AggregationBits *bits, uint8_t *out_root) {
+    size_t limit = (MAX_VALIDATORS_PER_COMMITTEE + 255) / 256;  
+    size_t alloc_size = limit * BYTES_PER_CHUNK;
+    uint8_t *packed = malloc(alloc_size);
+    if (!packed) return SSZ_ERROR_SERIALIZATION;
+    memset(packed, 0, alloc_size);  
+    size_t actual_bytes = (bits->length + 7) / 8;
+    ssz_error_t err = ssz_pack_bits(bits->data, bits->length, packed, &actual_bytes);
+    if (err != SSZ_SUCCESS) {
+        free(packed);
+        return err;
+    }
+    err = ssz_merkleize(packed, limit, limit, out_root); 
+    free(packed);
+    if (err != SSZ_SUCCESS) return err;
+    err = ssz_mix_in_length(out_root, bits->length, out_root);
+    if (err != SSZ_SUCCESS) return err;
+    return SSZ_SUCCESS;
+}
+
+static ssz_error_t hash_tree_root_signature(const uint8_t *signature, uint8_t *out_root) {
+    size_t chunk_count;
+    size_t alloc_size = ((96 + BYTES_PER_CHUNK - 1) / BYTES_PER_CHUNK) * BYTES_PER_CHUNK;
+    uint8_t *packed = malloc(alloc_size);
+    if (!packed) return SSZ_ERROR_SERIALIZATION;
+    ssz_error_t err = ssz_pack(signature, 1, 96, packed, &chunk_count);
+    if (err != SSZ_SUCCESS) {
+        free(packed);
+        return err;
+    }
+    err = ssz_merkleize(packed, chunk_count, 0, out_root);
+    free(packed);
+    return err;
+}
+
+static ssz_error_t hash_tree_root_attestation(const Attestation *att, uint8_t *out_root) {
+    uint8_t root_agg[32], root_data[32], root_signature[32];
+    ssz_error_t err = hash_tree_root_aggregation_bits(&att->aggregation_bits, root_agg);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_attestation_data(&att->data, root_data);
+    if (err != SSZ_SUCCESS) return err;
+    err = hash_tree_root_signature(att->signature, root_signature);
+    if (err != SSZ_SUCCESS) return err;
+    uint8_t nodes[3][32];
+    memcpy(nodes[0], root_agg, 32);
+    memcpy(nodes[1], root_data, 32);
+    memcpy(nodes[2], root_signature, 32);
+    return ssz_merkleize((uint8_t*)nodes, 3, 0, out_root);
+}
+
+static void print_attestation_tree(const Attestation *att) {
+    uint8_t root_agg[32], root_data[32], root_signature[32], final_root[32];
+    if (hash_tree_root_aggregation_bits(&att->aggregation_bits, root_agg) != SSZ_SUCCESS) {
+        printf("Error computing aggregation_bits root\n");
+        return;
+    }
+    if (hash_tree_root_attestation_data(&att->data, root_data) != SSZ_SUCCESS) {
+        printf("Error computing data root\n");
+        return;
+    }
+    if (hash_tree_root_signature(att->signature, root_signature) != SSZ_SUCCESS) {
+        printf("Error computing signature root\n");
+        return;
+    }
+    printf("Leaves:\n");
+    printf("  aggregation_bits: 0x");
+    print_hex(root_agg, 32);
+    printf("  data: 0x");
+    print_hex(root_data, 32);
+    printf("  signature: 0x");
+    print_hex(root_signature, 32);
+    uint8_t nodes[4][32];
+    memcpy(nodes[0], root_agg, 32);
+    memcpy(nodes[1], root_data, 32);
+    memcpy(nodes[2], root_signature, 32);
+    memset(nodes[3], 0, 32);
+    printf("Level 1:\n");
+    uint8_t parent[2][32];
+    for (int i = 0; i < 2; i++) {
+        uint8_t concat[64];
+        memcpy(concat, nodes[2 * i], 32);
+        memcpy(concat + 32, nodes[2 * i + 1], 32);
+        SHA256(concat, 64, parent[i]);
+        printf("  Node %d: 0x", i);
+        print_hex(parent[i], 32);
+    }
+    printf("Level 2 (Merkle Root):\n");
+    uint8_t concat[64];
+    memcpy(concat, parent[0], 32);
+    memcpy(concat + 32, parent[1], 32);
+    SHA256(concat, 64, final_root);
+    printf("  Merkle Root: 0x");
+    print_hex(final_root, 32);
+}
+
 int main(void) {
     init_attestation_data_from_yaml();
     unsigned long warmup_iterations = 0;
     unsigned long measured_iterations = 100000;
-    bench_ssz_stats_t stats_serialize = bench_ssz_run_benchmark(
-        attestation_bench_test_func_serialize,
-        NULL,
-        warmup_iterations,
-        measured_iterations
-    );
-    bench_ssz_stats_t stats_deserialize = bench_ssz_run_benchmark(
-        attestation_bench_test_func_deserialize,
-        NULL,
-        warmup_iterations,
-        measured_iterations
-    );
+    bench_ssz_stats_t stats_serialize = bench_ssz_run_benchmark(attestation_bench_test_func_serialize, NULL, warmup_iterations, measured_iterations);
+    bench_ssz_stats_t stats_deserialize = bench_ssz_run_benchmark(attestation_bench_test_func_deserialize, NULL, warmup_iterations, measured_iterations);
     print_attestation(&g_original);
+    uint8_t merkle_root[32];
+    if (hash_tree_root_attestation(&g_original, merkle_root) == SSZ_SUCCESS) {
+        printf("\nDetailed Merkle Tree:\n");
+        print_attestation_tree(&g_original);
+    } else {
+        printf("Failed to compute hash tree root\n");
+    }
+    printf("\nSerialized form:\n0x");
+    print_hex(g_serialized, g_serialized_size);
     bench_ssz_print_stats("SSZ Attestation serialization", &stats_serialize);
     bench_ssz_print_stats("SSZ Attestation deserialization", &stats_deserialize);
     return 0;

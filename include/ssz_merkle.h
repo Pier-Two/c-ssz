@@ -7,14 +7,16 @@
 #include "ssz_types.h"
 
 /**
- * Merkleizes an array of BYTES_PER_CHUNK-sized chunks.
- * Pads the input to the next power of two (or 'limit' if specified), builds the Merkle tree,
- * and writes the resulting 32-byte root to 'out_root'.
- * 
- * @param chunks Pointer to the input chunks.
- * @param chunk_count The number of input chunks.
- * @param limit The maximum number of chunks for padding. If 0, no limit is enforced.
- * @param out_root Pointer to the output buffer for the Merkle root.
+ * Computes the Merkle root from an array of chunks.
+ *
+ * This function constructs a Merkle tree by first copying the provided chunks
+ * into leaf nodes, padding with zeros if necessary, and then iteratively hashing
+ * pairs of nodes until a single root is obtained.
+ *
+ * @param chunks Pointer to the array of chunks (each chunk is BYTES_PER_CHUNK bytes).
+ * @param chunk_count Number of chunks provided.
+ * @param limit Maximum number of chunks allowed; if non-zero, chunk_count must not exceed this limit.
+ * @param out_root Output buffer to write the resulting Merkle root (at least BYTES_PER_CHUNK bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_merkleize(
@@ -24,15 +26,16 @@ ssz_error_t ssz_merkleize(
     uint8_t *out_root);
 
 /**
- * Packs an array of basic-type values into BYTES_PER_CHUNK-sized chunks.
- * Zero-pads the data to a multiple of BYTES_PER_CHUNK if necessary and writes the
- * chunk-aligned data to 'out_chunks'. The total number of chunks is returned in 'out_chunk_count'.
- * 
- * @param values Pointer to the input values.
- * @param value_size The size in bytes of each basic-type element.
- * @param value_count The number of elements in the input array.
- * @param out_chunks Pointer to the output buffer for the packed chunks.
- * @param out_chunk_count Pointer to store the total number of chunks.
+ * Packs a contiguous byte array into fixed-size chunks.
+ *
+ * This function divides the input byte array into chunks of size BYTES_PER_CHUNK.
+ * If the total number of bytes is not a multiple of BYTES_PER_CHUNK, the last chunk is zero-padded.
+ *
+ * @param values Pointer to the input byte array.
+ * @param value_size Size of each value element in bytes.
+ * @param value_count Number of values in the array.
+ * @param out_chunks Output buffer to write the chunked data.
+ * @param out_chunk_count Pointer to store the number of chunks written.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_pack(
@@ -43,15 +46,16 @@ ssz_error_t ssz_pack(
     size_t *out_chunk_count);
 
 /**
- * Packs bits into BYTES_PER_CHUNK-sized chunks.
- * Packs the bits into an array of bytes in little-endian bit ordering, zero-pads to the
- * chunk boundary, and splits into BYTES_PER_CHUNK-sized chunks. The resulting chunks
- * are written to 'out_chunks', and the total chunk count is written to 'out_chunk_count'.
- * 
- * @param bits Pointer to the input bit array.
- * @param bit_count The number of bits to pack.
- * @param out_chunks Pointer to the output buffer for the packed chunks.
- * @param out_chunk_count Pointer to store the total number of chunks.
+ * Packs an array of boolean values into fixed-size chunks as a bitfield.
+ *
+ * This function converts the boolean array into a bitfield representation,
+ * appending a terminating bit after the provided bits, then packs the bitfield
+ * into chunks of size BYTES_PER_CHUNK, padding with zeros if necessary.
+ *
+ * @param bits Pointer to the array of boolean values.
+ * @param bit_count Number of boolean values in the array.
+ * @param out_chunks Output buffer to write the packed bitfield chunks.
+ * @param out_chunk_count Pointer to store the number of chunks written.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_pack_bits(
@@ -61,13 +65,14 @@ ssz_error_t ssz_pack_bits(
     size_t *out_chunk_count);
 
 /**
- * Combines a Merkle root with a length value to produce a new root.
- * The length is provided as a 64-bit value and zero-padded to 256 bits internally
- * before hashing, in accordance with the SSZ spec's 'mix_in_length'.
- * 
- * @param root Pointer to the input Merkle root.
- * @param length The length value to mix in.
- * @param out_root Pointer to the output buffer for the new root.
+ * Mixes a length value into a Merkle root to produce an updated root.
+ *
+ * This function takes an existing Merkle root and a length value, then mixes the length
+ * into the root by placing it in a buffer alongside the original root and computing SHA256.
+ *
+ * @param root Pointer to the original Merkle root (32 bytes).
+ * @param length 64-bit unsigned integer representing the length to mix in.
+ * @param out_root Output buffer to write the new Merkle root (32 bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_mix_in_length(
@@ -76,13 +81,14 @@ ssz_error_t ssz_mix_in_length(
     uint8_t *out_root);
 
 /**
- * Combines a Merkle root with a union selector to produce a new root.
- * The selector is zero-padded to 256 bits internally before hashing, in accordance
- * with the SSZ spec's 'mix_in_selector'.
- * 
- * @param root Pointer to the input Merkle root.
- * @param selector The union selector to mix in.
- * @param out_root Pointer to the output buffer for the new root.
+ * Mixes a selector byte into a Merkle root to produce an updated root.
+ *
+ * This function takes an existing Merkle root and a selector byte, places the selector in a
+ * buffer along with the root, and computes SHA256 to produce a new Merkle root.
+ *
+ * @param root Pointer to the original Merkle root (32 bytes).
+ * @param selector The selector byte to mix into the root.
+ * @param out_root Output buffer to write the new Merkle root (32 bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_mix_in_selector(

@@ -108,8 +108,7 @@ ssz_error_t ssz_pack_bits(
     uint8_t *out_chunks,
     size_t *out_chunk_count)
 {
-    size_t total_bits = bit_count + 1;
-    size_t bitfield_len = (total_bits + 7) / 8;
+    size_t bitfield_len = (bit_count + 7) / 8;
     size_t chunk_count = (bitfield_len + BYTES_PER_CHUNK - 1) / BYTES_PER_CHUNK;
     size_t padded_size = chunk_count * BYTES_PER_CHUNK;
     memset(out_chunks, 0, padded_size);
@@ -118,7 +117,6 @@ ssz_error_t ssz_pack_bits(
             out_chunks[i / 8] |= (1 << (i % 8));
         }
     }
-    out_chunks[bit_count / 8] |= (1 << (bit_count % 8));
     *out_chunk_count = chunk_count;
     return SSZ_SUCCESS;
 }
@@ -141,15 +139,13 @@ ssz_error_t ssz_mix_in_length(
 {
     uint8_t buf[64];
     memcpy(buf, root, 32);
-    memset(buf + 32, 0, 32);
-    buf[32] = (uint8_t)(length & 0xFF);
-    buf[33] = (uint8_t)((length >> 8) & 0xFF);
-    buf[34] = (uint8_t)((length >> 16) & 0xFF);
-    buf[35] = (uint8_t)((length >> 24) & 0xFF);
-    buf[36] = (uint8_t)((length >> 32) & 0xFF);
-    buf[37] = (uint8_t)((length >> 40) & 0xFF);
-    buf[38] = (uint8_t)((length >> 48) & 0xFF);
-    buf[39] = (uint8_t)((length >> 56) & 0xFF);
+    for (size_t i = 0; i < 32; i++) {
+        if (i < 8) {
+            buf[32 + i] = (uint8_t)((length >> (8 * i)) & 0xFF);
+        } else {
+            buf[32 + i] = 0;
+        }
+    }
     SHA256(buf, 64, out_root);
     return SSZ_SUCCESS;
 }
