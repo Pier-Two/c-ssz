@@ -10,11 +10,12 @@
  */
 typedef enum
 {
-    SSZ_SUCCESS = 0,              /**< Operation completed successfully. */
+    SSZ_SUCCESS,              /**< Operation completed successfully. */
     SSZ_ERROR_INVALID_OFFSET,     /**< An invalid offset was encountered. */
     SSZ_ERROR_OUT_OF_RANGE,       /**< A value was out of the acceptable range. */
     SSZ_ERROR_DESERIALIZATION,    /**< An error occurred during deserialization. */
-    SSZ_ERROR_SERIALIZATION       /**< An error occurred during serialization. */
+    SSZ_ERROR_SERIALIZATION,       /**< An error occurred during serialization. */
+    SSZ_ERROR_MERKLEIZATION       /**< An error occurred during merkleization. */
 } ssz_error_t;
 
 /**
