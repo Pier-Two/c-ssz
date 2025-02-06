@@ -428,7 +428,6 @@ uint8_t *read_yaml_field(const char *file_path, const char *field_name, size_t *
                 }
                 else if (val[0] == '[')
                 {
-                    // Use a dynamically resized buffer instead of a fixed-size char[].
                     size_t buffer_capacity = 1024 * 1024;
                     size_t buffer_len = 0;
                     char *buffer = (char *)malloc(buffer_capacity);
@@ -456,14 +455,13 @@ uint8_t *read_yaml_field(const char *file_path, const char *field_name, size_t *
                     {
                         if (!fgets(line, sizeof(line), fp))
                         {
-                            // We reached EOF without finding ']'
                             break;
                         }
                         rstrip(line);
                         char *additional = trim_left(line);
                         size_t alen = strlen(additional);
 
-                        // Expand if needed
+
                         while (buffer_len + alen + 1 >= buffer_capacity)
                         {
                             size_t new_capacity = buffer_capacity * 2;

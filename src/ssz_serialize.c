@@ -82,7 +82,7 @@ ssz_error_t ssz_serialize_uint32(const void *value, uint8_t *out_buf, size_t *ou
  */
 ssz_error_t ssz_serialize_uint64(const void *value, uint8_t *out_buf, size_t *out_size)
 {
-    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 8)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size <= 8)
     {
         return SSZ_ERROR_SERIALIZATION;
     }

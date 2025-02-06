@@ -44,7 +44,6 @@ bench_ssz_stats_t bench_ssz_run_benchmark(
     
     bench_ssz_stats_t stats = {0};
 
-    // Warmup phase
     for (unsigned long i = 0; i < warmup_iterations; i++) {
         test_func(user_data);
     }
@@ -58,7 +57,6 @@ bench_ssz_stats_t bench_ssz_run_benchmark(
         return stats;
     }
 
-    // Measure each iteration
     for (unsigned long i = 0; i < measured_iterations; i++) {
         double start = bench_ssz_get_time_in_nanoseconds();
         test_func(user_data);
@@ -66,13 +64,11 @@ bench_ssz_stats_t bench_ssz_run_benchmark(
         durations[i] = end - start;
     }
 
-    // Calculate statistics
     stats.iterations = measured_iterations;
     stats.total_time_ns = 0;
     stats.min_time_ns = durations[0];
     stats.max_time_ns = durations[0];
 
-    // Sum, min, max
     for (unsigned long i = 0; i < measured_iterations; i++) {
         stats.total_time_ns += durations[i];
         if (durations[i] < stats.min_time_ns) stats.min_time_ns = durations[i];
@@ -80,7 +76,6 @@ bench_ssz_stats_t bench_ssz_run_benchmark(
     }
     stats.avg_time_ns = stats.total_time_ns / measured_iterations;
 
-    // Variance and standard deviation
     double sum_sq_diff = 0.0;
     for (unsigned long i = 0; i < measured_iterations; i++) {
         double diff = durations[i] - stats.avg_time_ns;

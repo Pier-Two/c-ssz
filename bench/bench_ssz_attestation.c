@@ -444,18 +444,18 @@ static ssz_error_t hash_tree_root_attestation_data(const AttestationData *data, 
 }
 
 static ssz_error_t hash_tree_root_aggregation_bits(const AggregationBits *bits, uint8_t *out_root) {
+    size_t chunk_count;
     size_t limit = (MAX_VALIDATORS_PER_COMMITTEE + 255) / 256;  
     size_t alloc_size = limit * BYTES_PER_CHUNK;
     uint8_t *packed = malloc(alloc_size);
     if (!packed) return SSZ_ERROR_SERIALIZATION;
     memset(packed, 0, alloc_size);  
-    size_t actual_bytes = (bits->length + 7) / 8;
-    ssz_error_t err = ssz_pack_bits(bits->data, bits->length, packed, &actual_bytes);
+    ssz_error_t err = ssz_pack_bits(bits->data, bits->length, packed, &chunk_count);
     if (err != SSZ_SUCCESS) {
         free(packed);
         return err;
     }
-    err = ssz_merkleize(packed, limit, limit, out_root); 
+    err = ssz_merkleize(packed, chunk_count, limit, out_root); 
     free(packed);
     if (err != SSZ_SUCCESS) return err;
     err = ssz_mix_in_length(out_root, bits->length, out_root);
