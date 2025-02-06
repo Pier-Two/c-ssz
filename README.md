@@ -31,6 +31,11 @@ The library includes functions to compute Merkle roots for SSZ serialized data. 
 ### Prerequisites
 - A C compiler (e.g., GCC, Clang) supporting C99 or later.
 - `make` (optional, for building tests, benchmarks, and examples).
+#### External Libraries
+
+- **OpenSSL (version 3.x)**: This library is used for SHA256 hashing. Ensure that the OpenSSL development headers and binaries (specifically, -lssl and -lcrypto) are installed. 
+
+- **Snappy**: A compression library required by the project. Ensure that both the library and its development headers are installed. 
 
 ### Building the Library
 The project includes a `Makefile` to simplify the build process. The `Makefile` provides the following targets:
