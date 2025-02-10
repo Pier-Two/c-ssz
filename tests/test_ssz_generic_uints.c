@@ -17,6 +17,34 @@
 #define TESTS_DIR "tests/fixtures/general/phase0/ssz_generic/uints"
 #endif
 
+#define MAX_FAILURES 1024
+
+typedef struct {
+    char folder_name[256];
+    char folder_path[1024];
+    char message[1024];
+} FailureDetail;
+
+FailureDetail failures[MAX_FAILURES];
+int failure_count = 0;
+int total_valid_tests = 0;
+int total_invalid_tests = 0;
+int valid_passed = 0;
+int valid_failed = 0;
+int invalid_passed = 0;
+int invalid_failed = 0;
+
+void record_failure(const char *folder_name, const char *folder_path, const char *message)
+{
+    if (failure_count < MAX_FAILURES)
+    {
+        snprintf(failures[failure_count].folder_name, sizeof(failures[failure_count].folder_name), "%s", folder_name);
+        snprintf(failures[failure_count].folder_path, sizeof(failures[failure_count].folder_path), "%s", folder_path);
+        snprintf(failures[failure_count].message, sizeof(failures[failure_count].message), "%s", message);
+        failure_count++;
+    }
+}
+
 unsigned char *snappy_decode(const unsigned char *compressed_data, size_t compressed_size, size_t *decoded_size)
 {
     size_t uncompressed_length;
@@ -85,13 +113,15 @@ void print_hex(const unsigned char *data, size_t size)
     printf("\n");
 }
 
-void process_serialized_file(const char *folder_name, const char *serialized_file_path)
+void process_serialized_file(const char *folder_name, const char *folder_path, const char *serialized_file_path)
 {
+    total_valid_tests++;
     size_t comp_size = 0;
     unsigned char *comp_data = read_file(serialized_file_path, &comp_size);
     if (!comp_data)
     {
-        fprintf(stderr, "Failed to read data from %s\n", serialized_file_path);
+        valid_failed++;
+        record_failure(folder_name, folder_path, "Failed to read serialized file");
         return;
     }
     size_t dec_size = 0;
@@ -99,23 +129,29 @@ void process_serialized_file(const char *folder_name, const char *serialized_fil
     free(comp_data);
     if (!expected_data)
     {
-        fprintf(stderr, "Failed to decode Snappy data from %s\n", serialized_file_path);
+        valid_failed++;
+        record_failure(folder_name, folder_path, "Failed to decode Snappy data");
         return;
     }
     unsigned int bit_size;
     char variant[64];
     if (sscanf(folder_name, "uint_%u_%63s", &bit_size, variant) != 2)
     {
+        valid_failed++;
+        record_failure(folder_name, folder_path, "Folder name does not match expected pattern");
         free(expected_data);
         return;
     }
     void *in_mem = NULL;
     ssz_error_t des_err;
+    char err_msg[256];
     if (bit_size == 8)
     {
         in_mem = malloc(sizeof(uint8_t));
         if (!in_mem)
         {
+            valid_failed++;
+            record_failure(folder_name, folder_path, "Memory allocation failed for uint8");
             free(expected_data);
             return;
         }
@@ -126,6 +162,8 @@ void process_serialized_file(const char *folder_name, const char *serialized_fil
         in_mem = malloc(sizeof(uint16_t));
         if (!in_mem)
         {
+            valid_failed++;
+            record_failure(folder_name, folder_path, "Memory allocation failed for uint16");
             free(expected_data);
             return;
         }
@@ -136,6 +174,8 @@ void process_serialized_file(const char *folder_name, const char *serialized_fil
         in_mem = malloc(sizeof(uint32_t));
         if (!in_mem)
         {
+            valid_failed++;
+            record_failure(folder_name, folder_path, "Memory allocation failed for uint32");
             free(expected_data);
             return;
         }
@@ -146,6 +186,8 @@ void process_serialized_file(const char *folder_name, const char *serialized_fil
         in_mem = malloc(sizeof(uint64_t));
         if (!in_mem)
         {
+            valid_failed++;
+            record_failure(folder_name, folder_path, "Memory allocation failed for uint64");
             free(expected_data);
             return;
         }
@@ -156,6 +198,8 @@ void process_serialized_file(const char *folder_name, const char *serialized_fil
         in_mem = malloc(16);
         if (!in_mem)
         {
+            valid_failed++;
+            record_failure(folder_name, folder_path, "Memory allocation failed for uint128");
             free(expected_data);
             return;
         }
@@ -166,6 +210,8 @@ void process_serialized_file(const char *folder_name, const char *serialized_fil
         in_mem = malloc(32);
         if (!in_mem)
         {
+            valid_failed++;
+            record_failure(folder_name, folder_path, "Memory allocation failed for uint256");
             free(expected_data);
             return;
         }
@@ -173,12 +219,16 @@ void process_serialized_file(const char *folder_name, const char *serialized_fil
     }
     else
     {
+        valid_failed++;
+        record_failure(folder_name, folder_path, "Unsupported bit size");
         free(expected_data);
         return;
     }
     if (des_err != SSZ_SUCCESS)
     {
-        fprintf(stderr, "Deserialization error in folder %s: %d\n", folder_name, des_err);
+        snprintf(err_msg, sizeof(err_msg), "Deserialization error: %d", des_err);
+        valid_failed++;
+        record_failure(folder_name, folder_path, err_msg);
         free(in_mem);
         free(expected_data);
         return;
@@ -199,6 +249,8 @@ void process_serialized_file(const char *folder_name, const char *serialized_fil
     uint8_t *out_buf = malloc(expected_out_size);
     if (!out_buf)
     {
+        valid_failed++;
+        record_failure(folder_name, folder_path, "Memory allocation failed for output buffer");
         free(in_mem);
         free(expected_data);
         return;
@@ -222,28 +274,44 @@ void process_serialized_file(const char *folder_name, const char *serialized_fil
         free(in_mem);
         free(expected_data);
         free(out_buf);
+        valid_failed++;
+        record_failure(folder_name, folder_path, "Unsupported bit size in serialization");
         return;
     }
     free(in_mem);
-    printf("\nFolder: %s | BitSize: %u | Variant: %s\n", folder_name, bit_size, variant);
     if (ser_err != SSZ_SUCCESS)
     {
-        fprintf(stderr, "Serialization error in folder %s: %d\n", folder_name, ser_err);
+        snprintf(err_msg, sizeof(err_msg), "Serialization error: %d", ser_err);
+        valid_failed++;
+        record_failure(folder_name, folder_path, err_msg);
+        free(out_buf);
+        free(expected_data);
+        return;
     }
-    else
+    if (out_size != dec_size)
     {
-        if (out_size != dec_size)
-            printf("Size mismatch for folder %s: expected %zu, got %zu\n", folder_name, dec_size, out_size);
-        else if (memcmp(out_buf, expected_data, out_size) != 0)
-            printf("Content mismatch for folder %s\n", folder_name);
-        else
-            printf("Folder %s: re-serialized output matches expected data!\n", folder_name);
+        snprintf(err_msg, sizeof(err_msg), "Size mismatch: expected %zu, got %zu", dec_size, out_size);
+        valid_failed++;
+        record_failure(folder_name, folder_path, err_msg);
+        free(out_buf);
+        free(expected_data);
+        return;
     }
+    if (memcmp(out_buf, expected_data, out_size) != 0)
+    {
+        valid_failed++;
+        record_failure(folder_name, folder_path, "Content mismatch");
+        free(out_buf);
+        free(expected_data);
+        return;
+    }
+    valid_passed++;
     size_t chunk_count = (out_size + BYTES_PER_CHUNK - 1) / BYTES_PER_CHUNK;
     uint8_t *packed_chunks = malloc(chunk_count * BYTES_PER_CHUNK);
     if (!packed_chunks)
     {
-        perror("malloc");
+        valid_failed++;
+        record_failure(folder_name, folder_path, "Memory allocation failed for packed chunks");
         free(out_buf);
         free(expected_data);
         return;
@@ -252,7 +320,9 @@ void process_serialized_file(const char *folder_name, const char *serialized_fil
     ssz_error_t pack_err = ssz_pack(out_buf, 1, out_size, packed_chunks, &packed_chunk_count);
     if (pack_err != SSZ_SUCCESS)
     {
-        fprintf(stderr, "Packing error in folder %s: %d\n", folder_name, pack_err);
+        snprintf(err_msg, sizeof(err_msg), "Packing error: %d", pack_err);
+        valid_failed++;
+        record_failure(folder_name, folder_path, err_msg);
         free(packed_chunks);
         free(out_buf);
         free(expected_data);
@@ -262,7 +332,9 @@ void process_serialized_file(const char *folder_name, const char *serialized_fil
     ssz_error_t merkle_err = ssz_merkleize(packed_chunks, packed_chunk_count, chunk_count, merkle_root);
     if (merkle_err != SSZ_SUCCESS)
     {
-        fprintf(stderr, "Merkleization error in folder %s: %d\n", folder_name, merkle_err);
+        snprintf(err_msg, sizeof(err_msg), "Merkleization error: %d", merkle_err);
+        valid_failed++;
+        record_failure(folder_name, folder_path, err_msg);
         free(packed_chunks);
         free(out_buf);
         free(expected_data);
@@ -281,20 +353,105 @@ void process_serialized_file(const char *folder_name, const char *serialized_fil
     uint8_t *yaml_data = read_yaml_field(meta_yaml_path, "root", &yaml_size);
     if (!yaml_data)
     {
-        fprintf(stderr, "Failed to read 'root' field from %s\n", meta_yaml_path);
+        valid_failed++;
+        record_failure(folder_name, folder_path, "Failed to read 'root' field from meta.yaml");
+        free(out_buf);
+        free(expected_data);
+        return;
+    }
+    if (yaml_size != BYTES_PER_CHUNK)
+    {
+        snprintf(err_msg, sizeof(err_msg), "Meta.yaml 'root' field size mismatch: expected %d, got %zu", BYTES_PER_CHUNK, yaml_size);
+        valid_failed++;
+        record_failure(folder_name, folder_path, err_msg);
+    }
+    else if (memcmp(yaml_data, merkle_root, BYTES_PER_CHUNK) != 0)
+    {
+        valid_failed++;
+        record_failure(folder_name, folder_path, "Meta.yaml 'root' field does not match Merkle root");
+    }
+    free(yaml_data);
+    free(out_buf);
+    free(expected_data);
+}
+
+void process_invalid_serialized_file(const char *folder_name, const char *folder_path, const char *serialized_file_path)
+{
+    total_invalid_tests++;
+    size_t comp_size = 0;
+    unsigned char *comp_data = read_file(serialized_file_path, &comp_size);
+    if (!comp_data)
+    {
+        invalid_failed++;
+        record_failure(folder_name, folder_path, "Failed to read serialized file");
+        return;
+    }
+    size_t dec_size = 0;
+    unsigned char *decoded_data = snappy_decode(comp_data, comp_size, &dec_size);
+    free(comp_data);
+    if (!decoded_data)
+    {
+        invalid_failed++;
+        record_failure(folder_name, folder_path, "Failed to decode Snappy data");
+        return;
+    }
+    unsigned int bit_size;
+    char variant[64];
+    if (sscanf(folder_name, "uint_%u_%63s", &bit_size, variant) != 2)
+    {
+        invalid_failed++;
+        record_failure(folder_name, folder_path, "Folder name does not match expected pattern");
+        free(decoded_data);
+        return;
+    }
+    ssz_error_t des_err;
+    if (bit_size == 8)
+    {
+        uint8_t dummy;
+        des_err = ssz_deserialize_uint8(decoded_data, dec_size, &dummy);
+    }
+    else if (bit_size == 16)
+    {
+        uint16_t dummy;
+        des_err = ssz_deserialize_uint16(decoded_data, dec_size, &dummy);
+    }
+    else if (bit_size == 32)
+    {
+        uint32_t dummy;
+        des_err = ssz_deserialize_uint32(decoded_data, dec_size, &dummy);
+    }
+    else if (bit_size == 64)
+    {
+        uint64_t dummy;
+        des_err = ssz_deserialize_vector_uint64(decoded_data, dec_size, 1, &dummy);
+    }
+    else if (bit_size == 128)
+    {
+        uint8_t dummy[16];
+        des_err = ssz_deserialize_uint128(decoded_data, dec_size, dummy);
+    }
+    else if (bit_size == 256)
+    {
+        uint8_t dummy[32];
+        des_err = ssz_deserialize_uint256(decoded_data, dec_size, dummy);
     }
     else
     {
-        if (yaml_size != BYTES_PER_CHUNK)
-            printf("Meta.yaml 'root' field size mismatch for folder %s: expected %d, got %zu\n", folder_name, BYTES_PER_CHUNK, yaml_size);
-        else if (memcmp(yaml_data, merkle_root, BYTES_PER_CHUNK) != 0)
-            printf("Meta.yaml 'root' field does not match Merkle root for folder %s.\n", folder_name);
-        else
-            printf("Meta.yaml 'root' field matches Merkle root for folder %s!\n", folder_name);
-        free(yaml_data);
+        invalid_failed++;
+        record_failure(folder_name, folder_path, "Unsupported bit size");
+        free(decoded_data);
+        return;
     }
-    free(out_buf);
-    free(expected_data);
+    if (des_err == SSZ_SUCCESS)
+    {
+        invalid_failed++;
+        record_failure(folder_name, folder_path, "Deserialization unexpectedly succeeded");
+    }
+    else
+    {
+        invalid_passed++;
+    }
+    free(decoded_data);
 }
 
 int main(void)
@@ -319,8 +476,39 @@ int main(void)
             continue;
         char serialized_file_path[1024];
         snprintf(serialized_file_path, sizeof(serialized_file_path), "%s/serialized.ssz_snappy", folder_path);
-        process_serialized_file(entry->d_name, serialized_file_path);
+        process_serialized_file(entry->d_name, folder_path, serialized_file_path);
     }
     closedir(dir);
+    char invalid_dir_path[1024];
+    snprintf(invalid_dir_path, sizeof(invalid_dir_path), "%s/invalid", TESTS_DIR);
+    DIR *dir_invalid = opendir(invalid_dir_path);
+    if (!dir_invalid)
+    {
+        perror("opendir");
+        return EXIT_FAILURE;
+    }
+    while ((entry = readdir(dir_invalid)) != NULL)
+    {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+        char folder_path[1024];
+        snprintf(folder_path, sizeof(folder_path), "%s/%s", invalid_dir_path, entry->d_name);
+        struct stat statbuf;
+        if (stat(folder_path, &statbuf) != 0 || !S_ISDIR(statbuf.st_mode))
+            continue;
+        char serialized_file_path[1024];
+        snprintf(serialized_file_path, sizeof(serialized_file_path), "%s/serialized.ssz_snappy", folder_path);
+        process_invalid_serialized_file(entry->d_name, folder_path, serialized_file_path);
+    }
+    closedir(dir_invalid);
+    printf("\nValid tests: %d passed, %d failed, out of %d\n", valid_passed, valid_failed, total_valid_tests);
+    printf("Invalid tests: %d passed, %d failed, out of %d\n", invalid_passed, invalid_failed, total_invalid_tests);
+    if (failure_count > 0)
+    {
+        for (int i = 0; i < failure_count; i++)
+        {
+            printf("Folder %s: FAILED - %s (Path: %s)\n", failures[i].folder_name, failures[i].message, failures[i].folder_path);
+        }
+    }
     return EXIT_SUCCESS;
 }

@@ -89,6 +89,8 @@ clean:
 	@find $(BIN_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
 	@echo "Removing library files from $(LIB_DIR)"
 	@find $(LIB_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
+	@echo "Removing .dSYM directories from $(BIN_DIR)"
+	@find $(BIN_DIR) -type d -name '*.dSYM' -exec rm -rf {} +
 
 run-tests: test
 

@@ -12,7 +12,7 @@
  * @param len The length of the memory region in bytes.
  * @return true if all bytes are zero, otherwise false.
  */
-bool is_all_zero(const uint8_t *ptr, size_t len)
+bool is_zero(const uint8_t *ptr, size_t len)
 {
     size_t i = 0;
     while (len >= 8)

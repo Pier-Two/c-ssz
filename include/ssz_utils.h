@@ -11,7 +11,7 @@
  * @param len The length of the memory region in bytes.
  * @return true if all bytes are zero, otherwise false.
  */
-bool is_all_zero(const uint8_t *ptr, size_t len);
+bool is_zero(const uint8_t *ptr, size_t len);
 
 /**
  * Computes the next power of two for the given value.
