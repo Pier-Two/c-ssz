@@ -6,7 +6,7 @@
 #if defined(_WIN32) || defined(_WIN64)
 #include <Windows.h>
 
-static double bench_ssz_get_time_in_nanoseconds(void) {
+static double bench_get_time_in_nanoseconds(void) {
     LARGE_INTEGER frequency, counter;
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&counter);
@@ -16,7 +16,7 @@ static double bench_ssz_get_time_in_nanoseconds(void) {
 #elif defined(__APPLE__)
 #include <mach/mach_time.h>
 
-static double bench_ssz_get_time_in_nanoseconds(void) {
+static double bench_get_time_in_nanoseconds(void) {
     static mach_timebase_info_data_t timebase = {0};
     if (timebase.denom == 0) {
         mach_timebase_info(&timebase);
@@ -28,7 +28,7 @@ static double bench_ssz_get_time_in_nanoseconds(void) {
 #else
 #include <time.h>
 
-static double bench_ssz_get_time_in_nanoseconds(void) {
+static double bench_get_time_in_nanoseconds(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec * 1e9 + (double)ts.tv_nsec;
@@ -36,13 +36,13 @@ static double bench_ssz_get_time_in_nanoseconds(void) {
 
 #endif
 
-bench_ssz_stats_t bench_ssz_run_benchmark(
-    bench_ssz_test_func_t test_func,
+bench_stats_t bench_run_benchmark(
+    bench_test_func_t test_func,
     void *user_data,
     unsigned long warmup_iterations,
     unsigned long measured_iterations) {
     
-    bench_ssz_stats_t stats = {0};
+    bench_stats_t stats = {0};
 
     for (unsigned long i = 0; i < warmup_iterations; i++) {
         test_func(user_data);
@@ -58,9 +58,9 @@ bench_ssz_stats_t bench_ssz_run_benchmark(
     }
 
     for (unsigned long i = 0; i < measured_iterations; i++) {
-        double start = bench_ssz_get_time_in_nanoseconds();
+        double start = bench_get_time_in_nanoseconds();
         test_func(user_data);
-        double end = bench_ssz_get_time_in_nanoseconds();
+        double end = bench_get_time_in_nanoseconds();
         durations[i] = end - start;
     }
 
@@ -93,7 +93,7 @@ bench_ssz_stats_t bench_ssz_run_benchmark(
     return stats;
 }
 
-void bench_ssz_print_stats(const char* label, const bench_ssz_stats_t* stats) {
+void bench_print_stats(const char* label, const bench_stats_t* stats) {
     if (!label || !stats) return;
 
     printf("\nBenchmark: %s\n", label);

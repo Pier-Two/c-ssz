@@ -203,10 +203,10 @@ static void run_uintN_deserialize_benchmarks(void) {
     };
     for (int i = 0; i < (int)(sizeof(tests) / sizeof(tests[0])); i++) {
         memset(tests[i].buffer, 0xFF, tests[i].buffer_size);
-        bench_ssz_stats_t stats = bench_ssz_run_benchmark(test_uintN_deserialize, &tests[i], 100000, 1000000);
+        bench_stats_t stats = bench_run_benchmark(test_uintN_deserialize, &tests[i], 100000, 1000000);
         char label[64];
         snprintf(label, sizeof(label), "Benchmark ssz_deserialize_uint%zu", tests[i].bit_size);
-        bench_ssz_print_stats(label, &stats);
+        bench_print_stats(label, &stats);
     }
 }
 
@@ -216,10 +216,10 @@ static void run_boolean_deserialize_benchmarks(void) {
         {{0x01}, 1}
     };
     for (int i = 0; i < 2; i++) {
-        bench_ssz_stats_t stats = bench_ssz_run_benchmark(test_boolean_deserialize, &tests[i], 100000, 1000000);
+        bench_stats_t stats = bench_run_benchmark(test_boolean_deserialize, &tests[i], 100000, 1000000);
         char label[64];
         snprintf(label, sizeof(label), "Benchmark ssz_deserialize_boolean %s", tests[i].buffer[0] ? "true" : "false");
-        bench_ssz_print_stats(label, &stats);
+        bench_print_stats(label, &stats);
     }
 }
 
@@ -228,8 +228,8 @@ static void run_bitvector_deserialize_benchmarks(void) {
     test_data.num_bits = 262144;
     test_data.buffer_size = 262144 / 8;
     memset(test_data.buffer, 0xFF, test_data.buffer_size);
-    bench_ssz_stats_t stats = bench_ssz_run_benchmark(test_bitvector_deserialize, &test_data, 100, 100);
-    bench_ssz_print_stats("Benchmark ssz_deserialize_bitvector", &stats);
+    bench_stats_t stats = bench_run_benchmark(test_bitvector_deserialize, &test_data, 100, 100);
+    bench_print_stats("Benchmark ssz_deserialize_bitvector", &stats);
 }
 
 static void run_bitlist_deserialize_benchmarks(void) {
@@ -238,8 +238,8 @@ static void run_bitlist_deserialize_benchmarks(void) {
     test_data.buffer_size = (524288 / 8) + 1;
     memset(test_data.buffer, 0xFF, test_data.buffer_size);
     test_data.buffer[test_data.buffer_size - 1] = 0x01;
-    bench_ssz_stats_t stats = bench_ssz_run_benchmark(test_bitlist_deserialize, &test_data, 100, 100);
-    bench_ssz_print_stats("Benchmark ssz_deserialize_bitlist", &stats);
+    bench_stats_t stats = bench_run_benchmark(test_bitlist_deserialize, &test_data, 100, 100);
+    bench_print_stats("Benchmark ssz_deserialize_bitlist", &stats);
 }
 
 static void run_vector_deserialize_benchmarks(void) {
@@ -259,14 +259,14 @@ static void run_vector_deserialize_benchmarks(void) {
             tests[i].buffer_size = (tests[i].bit_size / 8) * tests[i].element_count;
         }
         memset(tests[i].buffer, 0xFF, tests[i].buffer_size);
-        bench_ssz_stats_t stats = bench_ssz_run_benchmark(test_vector_deserialize, &tests[i], 5000, 10000);
+        bench_stats_t stats = bench_run_benchmark(test_vector_deserialize, &tests[i], 5000, 10000);
         char label[64];
         if (tests[i].bit_size == 1) {
             snprintf(label, sizeof(label), "Benchmark ssz_deserialize_vector_bool");
         } else {
             snprintf(label, sizeof(label), "Benchmark ssz_deserialize_vector_uint%zu", tests[i].bit_size);
         }
-        bench_ssz_print_stats(label, &stats);
+        bench_print_stats(label, &stats);
     }
 }
 
@@ -294,14 +294,14 @@ static void run_list_deserialize_benchmarks(void) {
         tests[i].buffer[1] = (uint8_t)((data_size >> 8) & 0xFF);
         tests[i].buffer[2] = (uint8_t)((data_size >> 16) & 0xFF);
         tests[i].buffer[3] = (uint8_t)((data_size >> 24) & 0xFF);
-        bench_ssz_stats_t stats = bench_ssz_run_benchmark(test_list_deserialize, &tests[i], 5000, 10000);
+        bench_stats_t stats = bench_run_benchmark(test_list_deserialize, &tests[i], 5000, 10000);
         char label[64];
         if (tests[i].bit_size == 1) {
             snprintf(label, sizeof(label), "Benchmark ssz_deserialize_list_bool");
         } else {
             snprintf(label, sizeof(label), "Benchmark ssz_deserialize_list_uint%zu", tests[i].bit_size);
         }
-        bench_ssz_print_stats(label, &stats);
+        bench_print_stats(label, &stats);
     }
 }
 

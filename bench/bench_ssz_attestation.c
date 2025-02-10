@@ -542,8 +542,8 @@ int main(void) {
     init_attestation_data_from_yaml();
     unsigned long warmup_iterations = 0;
     unsigned long measured_iterations = 100000;
-    bench_ssz_stats_t stats_serialize = bench_ssz_run_benchmark(attestation_bench_test_func_serialize, NULL, warmup_iterations, measured_iterations);
-    bench_ssz_stats_t stats_deserialize = bench_ssz_run_benchmark(attestation_bench_test_func_deserialize, NULL, warmup_iterations, measured_iterations);
+    bench_stats_t stats_serialize = bench_run_benchmark(attestation_bench_test_func_serialize, NULL, warmup_iterations, measured_iterations);
+    bench_stats_t stats_deserialize = bench_run_benchmark(attestation_bench_test_func_deserialize, NULL, warmup_iterations, measured_iterations);
     print_attestation(&g_original);
     uint8_t merkle_root[32];
     if (hash_tree_root_attestation(&g_original, merkle_root) == SSZ_SUCCESS) {
@@ -554,7 +554,7 @@ int main(void) {
     }
     printf("\nSerialized form:\n0x");
     print_hex(g_serialized, g_serialized_size);
-    bench_ssz_print_stats("SSZ Attestation serialization", &stats_serialize);
-    bench_ssz_print_stats("SSZ Attestation deserialization", &stats_deserialize);
+    bench_print_stats("SSZ Attestation serialization", &stats_serialize);
+    bench_print_stats("SSZ Attestation deserialization", &stats_deserialize);
     return 0;
 }
