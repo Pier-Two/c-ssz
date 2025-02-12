@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <ctype.h>
-#include <snappy-c.h>
+#include "snappy_decode.h"
 #include "ssz_serialize.h"
 #include "ssz_deserialize.h"
 #include "ssz_constants.h"

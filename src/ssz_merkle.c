@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
-#include <openssl/sha.h>
+#include "crypto/mincrypt/sha256.h"
 #include "ssz_merkle.h"
 #include "ssz_utils.h"
 #include "ssz_constants.h"
@@ -45,7 +45,7 @@ ssz_error_t ssz_merkleize(
             uint8_t concat[64];
             memcpy(concat, nodes + 2 * i * BYTES_PER_CHUNK, BYTES_PER_CHUNK);
             memcpy(concat + BYTES_PER_CHUNK, nodes + (2 * i + 1) * BYTES_PER_CHUNK, BYTES_PER_CHUNK);
-            SHA256(concat, 64, nodes + i * BYTES_PER_CHUNK);
+            SHA256_hash(concat, 64, nodes + i * BYTES_PER_CHUNK);
         }
         num_leaves = parent_count;
     }
@@ -128,7 +128,7 @@ ssz_error_t ssz_pack_bits(
  * Mixes a length value into a Merkle root to produce an updated root.
  *
  * This function takes an existing Merkle root and a length value, then mixes the length
- * into the root by placing it in a buffer alongside the original root and computing SHA256.
+ * into the root by placing it in a buffer alongside the original root and computing SHA256_hash.
  *
  * @param root Pointer to the original Merkle root (32 bytes).
  * @param length 64-bit unsigned integer representing the length to mix in.
@@ -149,7 +149,7 @@ ssz_error_t ssz_mix_in_length(
             buf[32 + i] = 0;
         }
     }
-    SHA256(buf, 64, out_root);
+    SHA256_hash(buf, 64, out_root);
     return SSZ_SUCCESS;
 }
 
@@ -157,7 +157,7 @@ ssz_error_t ssz_mix_in_length(
  * Mixes a selector byte into a Merkle root to produce an updated root.
  *
  * This function takes an existing Merkle root and a selector byte, places the selector in a
- * buffer along with the root, and computes SHA256 to produce a new Merkle root.
+ * buffer along with the root, and computes SHA256_hash to produce a new Merkle root.
  *
  * @param root Pointer to the original Merkle root (32 bytes).
  * @param selector The selector byte to mix into the root.
@@ -173,6 +173,6 @@ ssz_error_t ssz_mix_in_selector(
     memcpy(buf, root, 32);
     memset(buf + 32, 0, 32);
     buf[32] = selector;
-    SHA256(buf, 64, out_root);
+    SHA256_hash(buf, 64, out_root);
     return SSZ_SUCCESS;
 }

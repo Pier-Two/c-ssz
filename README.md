@@ -32,12 +32,6 @@ The library includes functions to compute Merkle roots for SSZ serialized data. 
 - A C compiler (e.g., GCC, Clang) supporting C99 or later.
 - `make` (optional, for building tests, benchmarks, and examples).
 
-### External Libraries
-
-- **OpenSSL (version 3.x or later)**: This library is required for SHA256 hashing. Ensure that the OpenSSL development package, including headers and binaries (`-lssl` and `-lcrypto`), is installed on your system. 
-
-- **Snappy**: A compression library required by the project. Ensure that both the library and its development headers are installed. 
-
 ### Building the Library
 The project includes a `Makefile` to simplify the build process. The `Makefile` provides the following targets:
 
@@ -58,6 +52,10 @@ To run benchmarks:
    ```bash
    make bench attestation
    ```
+
+## Attributions
+
+This project incorporates a SHA-256 implementation sourced from [mincrypt](https://android.googlesource.com/platform/system/core/+/669ecc2f5e80ff924fa20ce7445354a7c5bcfd98/libmincrypt), which is originally part of the Android Open Source Project. The mincrypt code is licensed under a BSD 3-Clause License by Google Inc. 
 
 ## License
 This project is licensed under the MIT License. See the `LICENSE` file for details.

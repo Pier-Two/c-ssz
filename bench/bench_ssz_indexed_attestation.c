@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include <openssl/sha.h>
+#include "crypto/mincrypt/sha256.h"
 #include "bench.h"
 #include "ssz_serialize.h"
 #include "ssz_deserialize.h"
@@ -576,14 +576,14 @@ static void print_indexed_attestation_tree(const IndexedAttestation *att) {
         uint8_t concat[64];
         memcpy(concat, nodes[2*i], 32);
         memcpy(concat+32, nodes[2*i+1], 32);
-        SHA256(concat, 64, parent[i]);
+        SHA256_hash(concat, 64, parent[i]);
         printf("  Node %d: 0x", i); print_hex(parent[i], 32);
     }
     printf("Level 2 (Merkle Root):\n");
     uint8_t concat[64];
     memcpy(concat, parent[0], 32);
     memcpy(concat+32, parent[1], 32);
-    SHA256(concat, 64, final_root);
+    SHA256_hash(concat, 64, final_root);
     printf("  Merkle Root: 0x"); print_hex(final_root, 32);
 }
 
