@@ -89,9 +89,9 @@ uint64_t next_pow_of_two(uint64_t value)
  * @param offset The offset to validate.
  * @return true if offset is within the allowed range, false otherwise.
  */
-bool check_max_offset(size_t offset)
+bool check_max_offset(size_t offset) 
 {
-    size_t max_offset = ((size_t)1 << (BYTES_PER_LENGTH_OFFSET * BITS_PER_BYTE));
-    return (offset < max_offset);
+    uint64_t max_offset = 1ULL << (BYTES_PER_LENGTH_OFFSET * BITS_PER_BYTE);
+    return offset < max_offset;
 }
 
