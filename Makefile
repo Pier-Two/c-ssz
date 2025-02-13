@@ -1,11 +1,9 @@
-# For Windows, force the use of gcc even if the environment variable CC is set.
 ifeq ($(OS),Windows_NT)
 	override CC = gcc
 else
 	CC ?= gcc
 endif
 
-# Compiler flags
 CFLAGS = -Wall -Wextra -O3 -g
 INCLUDE_FLAGS = -Iinclude -Ibench
 LDFLAGS =
@@ -13,7 +11,6 @@ LDFLAGS =
 AR = ar
 ARFLAGS = rcs
 
-# Directories
 SRC_DIR = src
 OBJ_DIR = obj
 BIN_DIR = bin
@@ -21,7 +18,6 @@ TEST_DIR = tests
 LIB_DIR = lib
 BENCH_DIR = bench
 
-# Sources and objects
 LIB_SOURCES = \
 	$(SRC_DIR)/ssz_deserialize.c \
 	$(SRC_DIR)/ssz_serialize.c \
@@ -48,25 +44,25 @@ BENCH_COMMON_OBJECTS = $(patsubst $(BENCH_DIR)/%.c, $(OBJ_DIR)/bench/%.o, $(BENC
 BENCH_BASENAMES := $(patsubst bench_ssz_%.c, %, $(notdir $(BENCH_SOURCES)))
 SUB_BENCHES := $(BENCH_BASENAMES)
 
-SSZ_LDFLAGS = -L$(LIB_DIR) -lssz
-
-# New variables for minimal snappy implementation
-SNAPPY_DECODE_SRC = $(TEST_DIR)/snappy_decode.c
-SNAPPY_DECODE_OBJ = $(OBJ_DIR)/tests/snappy_decode.o
-
-# Detect OS: Windows sets OS=Windows_NT
 ifeq ($(OS),Windows_NT)
 	IS_WINDOWS = 1
 else
 	IS_WINDOWS = 0
 endif
 
-# For Windows, force cmd.exe as the shell.
+ifeq ($(IS_WINDOWS),1)
+	SSZ_LDFLAGS = -L$(LIB_DIR) -lssz
+else
+	SSZ_LDFLAGS = -L$(LIB_DIR) -lssz -lm
+endif
+
+SNAPPY_DECODE_SRC = $(TEST_DIR)/snappy_decode.c
+SNAPPY_DECODE_OBJ = $(OBJ_DIR)/tests/snappy_decode.o
+
 ifeq ($(IS_WINDOWS),1)
 	SHELL = cmd.exe
 endif
 
-# Define a portable mkdir command as a variable (avoiding multi-line define)
 ifeq ($(IS_WINDOWS),1)
 	# Replace forward slashes with backslashes for Windows.
 	MKDIR_P = if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
