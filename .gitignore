@@ -56,6 +56,9 @@ dkms.conf
 # Ignore all files in the tests folder without extensions 
 tests/*
 
+# Un-ignore the fixtures folder inside tests (this re-includes the directory and its contents)
+!tests/fixtures/
+
 # Allow .c files (and other source files) in the tests folder
 !tests/*.c
 
