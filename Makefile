@@ -1,7 +1,17 @@
+###############################################################################
+# Compiler and OS settings
+###############################################################################
 ifeq ($(OS),Windows_NT)
-	override CC = gcc
+override CC = gcc
+IS_WINDOWS = 1
+EXE_EXT = .exe
+SHELL = cmd.exe
+MKDIR_P = if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
 else
-	CC ?= gcc
+CC ?= gcc
+IS_WINDOWS = 0
+EXE_EXT =
+MKDIR_P = mkdir -p $1
 endif
 
 CFLAGS = -Wall -Wextra -O3 -g
@@ -11,6 +21,9 @@ LDFLAGS =
 AR = ar
 ARFLAGS = rcs
 
+###############################################################################
+# Directories
+###############################################################################
 SRC_DIR = src
 OBJ_DIR = obj
 BIN_DIR = bin
@@ -18,25 +31,33 @@ TEST_DIR = tests
 LIB_DIR = lib
 BENCH_DIR = bench
 
+###############################################################################
+# Library sources/objects
+###############################################################################
 LIB_SOURCES = \
 	$(SRC_DIR)/ssz_deserialize.c \
 	$(SRC_DIR)/ssz_serialize.c \
 	$(SRC_DIR)/ssz_utils.c \
 	$(SRC_DIR)/ssz_merkle.c \
+	$(SRC_DIR)/ssz_constants.c \
 	$(SRC_DIR)/crypto/mincrypt/sha256.c \
 	$(BENCH_DIR)/yaml_parser.c
 
 LIB_OBJECTS = \
-	$(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, \
-		$(filter $(SRC_DIR)/%.c, $(LIB_SOURCES))) \
-	$(patsubst $(BENCH_DIR)/%.c, $(OBJ_DIR)/bench/%.o, \
-		$(filter $(BENCH_DIR)/%.c, $(LIB_SOURCES)))
+	$(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(filter $(SRC_DIR)/%.c, $(LIB_SOURCES))) \
+	$(patsubst $(BENCH_DIR)/%.c, $(OBJ_DIR)/bench/%.o, $(filter $(BENCH_DIR)/%.c, $(LIB_SOURCES)))
 
 STATIC_LIB = $(LIB_DIR)/libssz.a
 
-TEST_SOURCES := $(wildcard $(TEST_DIR)/test_*.c)
-TEST_BINARIES := $(patsubst $(TEST_DIR)/%.c, $(BIN_DIR)/%, $(TEST_SOURCES))
+###############################################################################
+# Test sources/binaries
+###############################################################################
+TEST_SOURCES := $(wildcard $(TEST_DIR)/test_ssz_*.c)
+TEST_BINARIES := $(patsubst $(TEST_DIR)/%.c, $(BIN_DIR)/%$(EXE_EXT), $(TEST_SOURCES))
 
+###############################################################################
+# Bench sources/binaries
+###############################################################################
 BENCH_SOURCES := $(wildcard $(BENCH_DIR)/bench_ssz_*.c)
 BENCH_COMMON_SOURCES = $(BENCH_DIR)/bench.c
 BENCH_COMMON_OBJECTS = $(patsubst $(BENCH_DIR)/%.c, $(OBJ_DIR)/bench/%.o, $(BENCH_COMMON_SOURCES))
@@ -44,35 +65,40 @@ BENCH_COMMON_OBJECTS = $(patsubst $(BENCH_DIR)/%.c, $(OBJ_DIR)/bench/%.o, $(BENC
 BENCH_BASENAMES := $(patsubst bench_ssz_%.c, %, $(notdir $(BENCH_SOURCES)))
 SUB_BENCHES := $(BENCH_BASENAMES)
 
-ifeq ($(OS),Windows_NT)
-	IS_WINDOWS = 1
-else
-	IS_WINDOWS = 0
+###############################################################################
+# Additional detection for bench target
+###############################################################################
+ifeq ($(firstword $(MAKECMDGOALS)),bench)
+EXTRA_BENCH := $(word 2, $(MAKECMDGOALS))
+ifneq ($(EXTRA_BENCH),)
+$(eval .PHONY: $(EXTRA_BENCH))
+$(eval $(EXTRA_BENCH): ; @:)
+endif
 endif
 
+###############################################################################
+# Platform-specific LDFLAGS
+###############################################################################
 ifeq ($(IS_WINDOWS),1)
-	SSZ_LDFLAGS = -L$(LIB_DIR) -lssz
+SSZ_LDFLAGS = -L$(LIB_DIR) -lssz
 else
-	SSZ_LDFLAGS = -L$(LIB_DIR) -lssz -lm
+SSZ_LDFLAGS = -L$(LIB_DIR) -lssz -lm
 endif
 
+###############################################################################
+# Snappy decode file
+###############################################################################
 SNAPPY_DECODE_SRC = $(TEST_DIR)/snappy_decode.c
 SNAPPY_DECODE_OBJ = $(OBJ_DIR)/tests/snappy_decode.o
 
-ifeq ($(IS_WINDOWS),1)
-	SHELL = cmd.exe
-endif
+###############################################################################
+# Default target
+###############################################################################
+all: $(STATIC_LIB) $(TEST_BINARIES) $(BIN_DIR)/snappy_decode$(EXE_EXT)
 
-ifeq ($(IS_WINDOWS),1)
-	# Replace forward slashes with backslashes for Windows.
-	MKDIR_P = if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
-else
-	MKDIR_P = mkdir -p $1
-endif
-
-# Targets
-all: $(STATIC_LIB) $(TEST_BINARIES) $(BIN_DIR)/snappy_decode
-
+###############################################################################
+# Build rules for library objects
+###############################################################################
 $(STATIC_LIB): $(LIB_OBJECTS)
 	@$(call MKDIR_P,$(LIB_DIR))
 	$(AR) $(ARFLAGS) $@ $^
@@ -93,31 +119,50 @@ $(OBJ_DIR)/tests/snappy_decode.o: $(SNAPPY_DECODE_SRC)
 -include $(OBJ_DIR)/bench/*.d
 -include $(OBJ_DIR)/tests/*.d
 
-$(BIN_DIR)/test_%: $(TEST_DIR)/test_%.c $(STATIC_LIB) $(SNAPPY_DECODE_OBJ)
+###############################################################################
+# Test build rule
+###############################################################################
+$(BIN_DIR)/test_ssz_%$(EXE_EXT): $(TEST_DIR)/test_ssz_%.c $(STATIC_LIB) $(SNAPPY_DECODE_OBJ)
 	@$(call MKDIR_P,$(BIN_DIR))
 	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< $(STATIC_LIB) $(SNAPPY_DECODE_OBJ) -o $@ $(LDFLAGS) $(SSZ_LDFLAGS)
 
-$(BIN_DIR)/snappy_decode: $(SNAPPY_DECODE_SRC)
+###############################################################################
+# Snappy decode binary
+###############################################################################
+$(BIN_DIR)/snappy_decode$(EXE_EXT): $(SNAPPY_DECODE_SRC)
 	@$(call MKDIR_P,$(BIN_DIR))
 	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< -o $@ $(LDFLAGS)
 
+###############################################################################
+# SINGLE_TEST handling for "make test <test_name>"
+###############################################################################
 SINGLE_TEST := $(filter-out test,$(MAKECMDGOALS))
 
+ifeq ($(firstword $(MAKECMDGOALS)),test)
+ifneq ($(SINGLE_TEST),)
+$(eval .PHONY: $(SINGLE_TEST))
+$(eval $(SINGLE_TEST): ; @:)
+endif
+endif
+
+###############################################################################
+# Test target (Windows vs. non-Windows)
+###############################################################################
 ifeq ($(IS_WINDOWS),1)
 test: $(STATIC_LIB)
-	@if "%SINGLE_TEST%"=="" ( \
+	@if "$(SINGLE_TEST)"=="" ( \
 	  echo Building all test binaries... && \
 	  $(MAKE) $(TEST_BINARIES) && \
 	  echo Running all tests: && \
-	  for %%t in ($(TEST_BINARIES)) do ( \
+	  for %%t in ($(subst /,\,$(TEST_BINARIES))) do ( \
 	    echo Running %%t... && \
 	    "%%t" \
 	  ) \
 	) else ( \
-	  echo Building test $(SINGLE_TEST)... && \
-	  $(MAKE) $(BIN_DIR)\$(SINGLE_TEST) && \
-	  echo Running test $(SINGLE_TEST)... && \
-	  .\$(BIN_DIR)\$(SINGLE_TEST) \
+	  echo Building test ssz_$(SINGLE_TEST)... && \
+	  $(MAKE) $(BIN_DIR)/test_ssz_$(SINGLE_TEST)$(EXE_EXT) && \
+	  echo Running test ssz_$(SINGLE_TEST)... && \
+	  cmd /c "$(subst /,\,$(BIN_DIR)/test_ssz_$(SINGLE_TEST)$(EXE_EXT))" \
 	)
 else
 test: $(STATIC_LIB)
@@ -130,68 +175,75 @@ test: $(STATIC_LIB)
 	    $$testbin; \
 	  done; \
 	else \
-	  echo "Building test $(SINGLE_TEST)..."; \
-	  $(MAKE) $(BIN_DIR)/$(SINGLE_TEST); \
-	  echo "Running test $(SINGLE_TEST)..."; \
-	  ./$(BIN_DIR)/$(SINGLE_TEST); \
+	  echo "Building test ssz_$(SINGLE_TEST)..."; \
+	  $(MAKE) $(BIN_DIR)/test_ssz_$(SINGLE_TEST)$(EXE_EXT); \
+	  echo "Running test ssz_$(SINGLE_TEST)..."; \
+	  ./$(BIN_DIR)/test_ssz_$(SINGLE_TEST)$(EXE_EXT); \
 	fi
 endif
 
-ifeq ($(IS_WINDOWS),1)
-$(BIN_DIR)/bench_ssz_%: $(BENCH_DIR)/bench_ssz_%.c $(STATIC_LIB) $(BENCH_COMMON_OBJECTS)
-	@$(call MKDIR_P,$(BIN_DIR))
-	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< $(BENCH_COMMON_OBJECTS) -o $@ $(LDFLAGS) $(SSZ_LDFLAGS)
-	
-bench: $(STATIC_LIB) $(BENCH_COMMON_OBJECTS)
-	@set second=$(word 2, $(MAKECMDGOALS)) && \
-	if "%second%"=="" ( \
-	  echo No <type> provided, running ALL benchmarks... & \
-	  for %%b in ($(SUB_BENCHES)) do ( \
-	    echo Building bench_ssz_%%b... & \
-	    $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_%%b & \
-	    echo Running bench_ssz_%%b... & \
-	    .\$(BIN_DIR)\bench_ssz_%%b \
-	  ) \
-	) else ( \
-	  echo Building only bench_ssz_%second%... & \
-	  $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_%second% & \
-	  echo Running bench_ssz_%second%... & \
-	  .\$(BIN_DIR)\bench_ssz_%second% \
-	)
-else
-$(BIN_DIR)/bench_ssz_%: $(BENCH_DIR)/bench_ssz_%.c $(STATIC_LIB) $(BENCH_COMMON_OBJECTS)
+###############################################################################
+# Bench build rule
+###############################################################################
+$(BIN_DIR)/bench_ssz_%$(EXE_EXT): $(BENCH_DIR)/bench_ssz_%.c $(STATIC_LIB) $(BENCH_COMMON_OBJECTS)
 	@$(call MKDIR_P,$(BIN_DIR))
 	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< $(BENCH_COMMON_OBJECTS) -o $@ $(LDFLAGS) $(SSZ_LDFLAGS)
 
+###############################################################################
+# Bench target
+###############################################################################
+ifeq ($(IS_WINDOWS),1)
+bench: $(STATIC_LIB) $(BENCH_COMMON_OBJECTS)
+	@if "$(EXTRA_BENCH)"=="" ( \
+	  echo No ^<type^> provided, running ALL benchmarks... & \
+	  for %%b in ($(SUB_BENCHES)) do ( \
+	    echo Building bench_ssz_%%b... & \
+	    $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_%%b$(EXE_EXT) & \
+	    echo Running bench_ssz_%%b... & \
+	    "%%b" \
+	  ) \
+	) else ( \
+	  echo Building only bench_ssz_$(EXTRA_BENCH)... & \
+	  $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$(EXTRA_BENCH)$(EXE_EXT) & \
+	  echo Running bench_ssz_$(EXTRA_BENCH)... & \
+	  cmd /c "$(subst /,\,$(BIN_DIR)/bench_ssz_$(EXTRA_BENCH)$(EXE_EXT))" \
+	)
+else
 bench: $(STATIC_LIB) $(BENCH_COMMON_OBJECTS)
 	@ second="$(word 2, $(MAKECMDGOALS))"; \
 	if [ -z "$$second" ]; then \
 	  echo "No <type> provided, running ALL benchmarks..."; \
 	  for b in $(SUB_BENCHES); do \
 	    echo "Building bench_ssz_$$b..."; \
-	    $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$$b; \
+	    $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$$b$(EXE_EXT); \
 	    echo "Running bench_ssz_$$b..."; \
-	    ./$(BIN_DIR)/bench_ssz_$$b; \
+	    ./$(BIN_DIR)/bench_ssz_$$b$(EXE_EXT); \
 	  done; \
 	elif echo "$(SUB_BENCHES)" | grep -qw "$$second"; then \
 	  echo "Building bench_ssz_$$second..."; \
-	  $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$$second; \
+	  $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$$second$(EXE_EXT); \
 	  echo "Running bench_ssz_$$second..."; \
-	  ./$(BIN_DIR)/bench_ssz_$$second; \
+	  ./$(BIN_DIR)/bench_ssz_$$second$(EXE_EXT); \
 	else \
 	  echo "Argument '$$second' not recognized, running ALL benchmarks..."; \
 	  for b in $(SUB_BENCHES); do \
 	    echo "Building bench_ssz_$$b..."; \
-	    $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$$b; \
+	    $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$$b$(EXE_EXT); \
 	    echo "Running bench_ssz_$$b..."; \
-	    ./$(BIN_DIR)/bench_ssz_$$b; \
+	    ./$(BIN_DIR)/bench_ssz_$$b$(EXE_EXT); \
 	  done; \
 	fi
 endif
 
+###############################################################################
+# Dummy target for test_% calls
+###############################################################################
 test_%:
 	@:
 
+###############################################################################
+# Cleanup
+###############################################################################
 .PHONY: all test clean run-tests bench
 
 ifeq ($(IS_WINDOWS),1)

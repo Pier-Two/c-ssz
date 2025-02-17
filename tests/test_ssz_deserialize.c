@@ -161,8 +161,7 @@ static void test_deserialize_uintN(void)
             0xEF, 0xCD, 0xAB, 0x89,
             0x67, 0x45, 0x23, 0x01,
             0xEF, 0xCD, 0xAB, 0x89,
-            0x67, 0x45, 0x23, 0x01
-        };
+            0x67, 0x45, 0x23, 0x01};
         uint8_t value[16];
         memset(value, 0, sizeof(value));
         ssz_error_t err = ssz_deserialize_uint128(buf, 16, value);
@@ -199,8 +198,7 @@ static void test_deserialize_uintN(void)
             0x30, 0x40, 0x50, 0x60,
             0x70, 0x80, 0x90, 0xA0,
             0xB0, 0xC0, 0xD0, 0xE0,
-            0xF0, 0x01, 0x02, 0x03
-        };
+            0xF0, 0x01, 0x02, 0x03};
         uint8_t value[32];
         memset(value, 0, sizeof(value));
         ssz_error_t err = ssz_deserialize_uint256(buf, 32, value);
@@ -223,8 +221,7 @@ static void test_deserialize_uintN(void)
             0x10, 0x11, 0x12, 0x13,
             0x14, 0x15, 0x16, 0x17,
             0x18, 0x19, 0x1A, 0x1B,
-            0x1C, 0x1D, 0x1E, 0x1F
-        };
+            0x1C, 0x1D, 0x1E, 0x1F};
         ssz_error_t err = ssz_deserialize_uint256(buf, 32, NULL);
         if (err == SSZ_ERROR_DESERIALIZATION)
         {
@@ -699,8 +696,7 @@ static void test_deserialize_vector_uint128(void)
             0x12, 0x34, 0x56, 0x78,
             0x9A, 0xBC, 0xDE, 0xF0,
             0x01, 0x02, 0x03, 0x04,
-            0x05, 0x06, 0x07, 0x08
-        };
+            0x05, 0x06, 0x07, 0x08};
         uint8_t serialized[64];
         size_t out_size = sizeof(serialized);
         ssz_error_t serr = ssz_serialize_vector_uint128(data, 2, serialized, &out_size);
@@ -746,8 +742,7 @@ static void test_deserialize_vector_uint256(void)
             0xDE, 0xAD, 0xBE, 0xEF,
             0xFE, 0xED, 0xFA, 0xCE,
             0x12, 0xFE, 0x34, 0x56,
-            0x78, 0x9A, 0xBC, 0xDF
-        };
+            0x78, 0x9A, 0xBC, 0xDF};
         uint8_t serialized[128];
         size_t out_size = sizeof(serialized);
         ssz_error_t serr = ssz_serialize_vector_uint256(data, 2, serialized, &out_size);
@@ -834,7 +829,8 @@ static void test_deserialize_list_uint8(void)
     printf("Testing list with more elements than max_length...\n");
     {
         uint8_t buffer[10];
-        for (int i = 0; i < 10; i++) buffer[i] = (uint8_t)i;
+        for (int i = 0; i < 10; i++)
+            buffer[i] = (uint8_t)i;
         size_t out_size = 10;
         uint8_t recovered[5];
         size_t actual_count = 0;
@@ -924,7 +920,8 @@ static void test_deserialize_list_uint16(void)
     printf("Testing list exceeding max_length...\n");
     {
         uint8_t buffer[8];
-        for (int i = 0; i < 8; i++) buffer[i] = (uint8_t)i;
+        for (int i = 0; i < 8; i++)
+            buffer[i] = (uint8_t)i;
         size_t out_size = 8;
         uint16_t recovered[2];
         size_t actual_count = 0;
@@ -972,7 +969,8 @@ static void test_deserialize_list_uint32(void)
     printf("Testing list exceeding max_length...\n");
     {
         uint8_t buffer[16];
-        for (int i = 0; i < 16; i++) buffer[i] = (uint8_t)i;
+        for (int i = 0; i < 16; i++)
+            buffer[i] = (uint8_t)i;
         size_t out_size = 16;
         uint32_t recovered[3];
         size_t actual_count = 0;
@@ -1020,7 +1018,8 @@ static void test_deserialize_list_uint64(void)
     printf("Testing list exceeding max_length...\n");
     {
         uint8_t buffer[24];
-        for (int i = 0; i < 24; i++) buffer[i] = (uint8_t)i;
+        for (int i = 0; i < 24; i++)
+            buffer[i] = (uint8_t)i;
         size_t out_size = 24;
         uint64_t recovered[2];
         size_t actual_count = 0;
@@ -1049,8 +1048,7 @@ static void test_deserialize_list_uint128(void)
             0x12, 0x34, 0x56, 0x78,
             0x9A, 0xBC, 0xDE, 0xF0,
             0x01, 0x02, 0x03, 0x04,
-            0x05, 0x06, 0x07, 0x08
-        };
+            0x05, 0x06, 0x07, 0x08};
         uint8_t serialized[128];
         size_t out_size = sizeof(serialized);
         ssz_error_t serr = ssz_serialize_list_uint128(data, 2, serialized, &out_size);
@@ -1077,7 +1075,8 @@ static void test_deserialize_list_uint128(void)
     printf("Testing list exceeding max_length...\n");
     {
         uint8_t buffer[48];
-        for (int i = 0; i < 48; i++) buffer[i] = (uint8_t)i;
+        for (int i = 0; i < 48; i++)
+            buffer[i] = (uint8_t)i;
         size_t out_size = 48;
         uint8_t recovered[32];
         size_t actual_count = 0;
@@ -1114,8 +1113,7 @@ static void test_deserialize_list_uint256(void)
             0xDE, 0xAD, 0xBE, 0xEF,
             0xFE, 0xED, 0xFA, 0xCE,
             0x12, 0xFE, 0x34, 0x56,
-            0x78, 0x9A, 0xBC, 0xDF
-        };
+            0x78, 0x9A, 0xBC, 0xDF};
         uint8_t serialized[256];
         size_t out_size = sizeof(serialized);
         ssz_error_t serr = ssz_serialize_list_uint256(data, 2, serialized, &out_size);
@@ -1142,7 +1140,8 @@ static void test_deserialize_list_uint256(void)
     printf("Testing list exceeding max_length...\n");
     {
         uint8_t buffer[192];
-        for (int i = 0; i < 192; i++) buffer[i] = (uint8_t)i;
+        for (int i = 0; i < 192; i++)
+            buffer[i] = (uint8_t)i;
         size_t out_size = 192;
         uint8_t recovered[64];
         size_t actual_count = 0;

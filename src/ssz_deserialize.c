@@ -18,7 +18,7 @@
  */
 ssz_error_t ssz_deserialize_uint8(const uint8_t *buffer, size_t buffer_size, void *out_value)
 {
-    if (buffer == NULL || out_value == NULL || buffer_size != 1)
+    if (buffer == NULL || out_value == NULL || buffer_size != SSZ_BYTE_SIZE_OF_UINT8)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
@@ -36,7 +36,7 @@ ssz_error_t ssz_deserialize_uint8(const uint8_t *buffer, size_t buffer_size, voi
  */
 ssz_error_t ssz_deserialize_uint16(const uint8_t *buffer, size_t buffer_size, void *out_value)
 {
-    if (buffer_size < 2 || buffer == NULL || out_value == NULL || buffer_size != 2)
+    if (buffer_size < 2 || buffer == NULL || out_value == NULL || buffer_size != SSZ_BYTE_SIZE_OF_UINT16)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
@@ -55,7 +55,7 @@ ssz_error_t ssz_deserialize_uint16(const uint8_t *buffer, size_t buffer_size, vo
  */
 ssz_error_t ssz_deserialize_uint32(const uint8_t *buffer, size_t buffer_size, void *out_value)
 {
-    if (buffer == NULL || out_value == NULL || buffer_size != 4)
+    if (buffer == NULL || out_value == NULL || buffer_size != SSZ_BYTE_SIZE_OF_UINT32)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
@@ -78,7 +78,7 @@ ssz_error_t ssz_deserialize_uint32(const uint8_t *buffer, size_t buffer_size, vo
  */
 ssz_error_t ssz_deserialize_uint64(const uint8_t *buffer, size_t buffer_size, void *out_value)
 {
-    if (buffer == NULL || out_value == NULL || buffer_size != 8)
+    if (buffer == NULL || out_value == NULL || buffer_size != SSZ_BYTE_SIZE_OF_UINT64)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
@@ -105,7 +105,7 @@ ssz_error_t ssz_deserialize_uint64(const uint8_t *buffer, size_t buffer_size, vo
  */
 ssz_error_t ssz_deserialize_uint128(const uint8_t *buffer, size_t buffer_size, void *out_value)
 {
-    if (buffer == NULL || out_value == NULL || buffer_size != 16)
+    if (buffer == NULL || out_value == NULL || buffer_size != SSZ_BYTE_SIZE_OF_UINT128)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
@@ -136,7 +136,7 @@ ssz_error_t ssz_deserialize_uint128(const uint8_t *buffer, size_t buffer_size, v
  */
 ssz_error_t ssz_deserialize_uint256(const uint8_t *buffer, size_t buffer_size, void *out_value)
 {
-    if (buffer == NULL || out_value == NULL || buffer_size != 32)
+    if (buffer == NULL || out_value == NULL || buffer_size != SSZ_BYTE_SIZE_OF_UINT256)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
@@ -171,7 +171,7 @@ ssz_error_t ssz_deserialize_boolean(
     size_t buffer_size,
     bool *out_value)
 {
-    if (buffer == NULL || out_value == NULL || buffer_size < 1)
+    if (buffer == NULL || out_value == NULL || buffer_size < SSZ_BYTE_SIZE_OF_BOOL)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
@@ -210,17 +210,14 @@ ssz_error_t ssz_deserialize_bitvector(
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
-
     const size_t needed = (num_bits + 7) / 8;
     if (needed != buffer_size)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
-
     const size_t full_bytes = num_bits / 8;
     const size_t remainder_bits = num_bits % 8;
     bool *out_ptr = out_bits;
-
     for (size_t i = 0; i < full_bytes; ++i)
     {
         const uint8_t byte = buffer[i];
@@ -233,7 +230,6 @@ ssz_error_t ssz_deserialize_bitvector(
         *out_ptr++ = (byte & 0x40) != 0;
         *out_ptr++ = (byte & 0x80) != 0;
     }
-
     if (remainder_bits > 0)
     {
         const uint8_t byte = buffer[full_bytes];
@@ -247,7 +243,6 @@ ssz_error_t ssz_deserialize_bitvector(
             *out_ptr++ = (byte & (1 << bit)) != 0;
         }
     }
-
     return SSZ_SUCCESS;
 }
 
@@ -277,7 +272,6 @@ ssz_error_t ssz_deserialize_bitlist(
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
-
     const size_t max_bytes = (max_bits + 8) / 8;
     if (buffer_size > max_bytes)
     {
@@ -287,7 +281,6 @@ ssz_error_t ssz_deserialize_bitlist(
         }
         buffer_size = max_bytes;
     }
-
     ssize_t boundary = -1;
     for (ssize_t byte_i = (ssize_t)buffer_size - 1; byte_i >= 0; byte_i--)
     {
@@ -299,12 +292,10 @@ ssz_error_t ssz_deserialize_bitlist(
             break;
         }
     }
-
     if (boundary < 0 || (size_t)boundary > max_bits)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
-
     const size_t boundary_byte = (boundary / 8) + 1;
     if (boundary_byte < buffer_size)
     {
@@ -313,21 +304,17 @@ ssz_error_t ssz_deserialize_bitlist(
             return SSZ_ERROR_DESERIALIZATION;
         }
     }
-
     const uint8_t boundary_mask = (uint8_t)((1U << ((boundary % 8) + 1)) - 1);
     if ((buffer[boundary / 8] & ~boundary_mask) != 0)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
-
     const size_t data_bits = (size_t)boundary;
     *out_actual_bits = data_bits;
-
     if (data_bits < max_bits)
     {
         memset(out_bits + data_bits, 0, (max_bits - data_bits) * sizeof(bool));
     }
-
     const size_t full_bytes = data_bits / 8;
     const size_t rem_bits = data_bits % 8;
     size_t i = 0;
@@ -351,7 +338,6 @@ ssz_error_t ssz_deserialize_bitlist(
             out_bits[i * 8 + bit] = val & (1 << bit);
         }
     }
-
     return SSZ_SUCCESS;
 }
 

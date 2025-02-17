@@ -29,7 +29,7 @@ The library includes functions to compute Merkle roots for SSZ serialized data. 
 ## Getting Started
 
 ### Prerequisites
-- A C compiler (e.g., GCC, Clang) supporting C99 or later.
+- A C compiler (e.g., GCC, Clang) supporting C99 or later. (Note: The library is written in C99 and should compile on any platform with a C99 compiler; it has been tested on MacOS, Linux, and Windows.)
 - `make` (optional, for building tests, benchmarks, and examples).
 
 ### Building the Library

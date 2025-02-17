@@ -6,7 +6,8 @@
 #if defined(_WIN32) || defined(_WIN64)
 #include <Windows.h>
 
-static double bench_get_time_in_nanoseconds(void) {
+static double bench_get_time_in_nanoseconds(void)
+{
     LARGE_INTEGER frequency, counter;
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&counter);
@@ -16,9 +17,11 @@ static double bench_get_time_in_nanoseconds(void) {
 #elif defined(__APPLE__)
 #include <mach/mach_time.h>
 
-static double bench_get_time_in_nanoseconds(void) {
+static double bench_get_time_in_nanoseconds(void)
+{
     static mach_timebase_info_data_t timebase = {0};
-    if (timebase.denom == 0) {
+    if (timebase.denom == 0)
+    {
         mach_timebase_info(&timebase);
     }
     uint64_t time = mach_absolute_time();
@@ -28,7 +31,8 @@ static double bench_get_time_in_nanoseconds(void) {
 #else
 #include <time.h>
 
-static double bench_get_time_in_nanoseconds(void) {
+static double bench_get_time_in_nanoseconds(void)
+{
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec * 1e9 + (double)ts.tv_nsec;
@@ -40,24 +44,29 @@ bench_stats_t bench_run_benchmark(
     bench_test_func_t test_func,
     void *user_data,
     unsigned long warmup_iterations,
-    unsigned long measured_iterations) {
-    
+    unsigned long measured_iterations)
+{
+
     bench_stats_t stats = {0};
 
-    for (unsigned long i = 0; i < warmup_iterations; i++) {
+    for (unsigned long i = 0; i < warmup_iterations; i++)
+    {
         test_func(user_data);
     }
 
-    if (measured_iterations == 0) {
+    if (measured_iterations == 0)
+    {
         return stats;
     }
 
     double *durations = (double *)malloc(measured_iterations * sizeof(double));
-    if (!durations) {
+    if (!durations)
+    {
         return stats;
     }
 
-    for (unsigned long i = 0; i < measured_iterations; i++) {
+    for (unsigned long i = 0; i < measured_iterations; i++)
+    {
         double start = bench_get_time_in_nanoseconds();
         test_func(user_data);
         double end = bench_get_time_in_nanoseconds();
@@ -69,22 +78,29 @@ bench_stats_t bench_run_benchmark(
     stats.min_time_ns = durations[0];
     stats.max_time_ns = durations[0];
 
-    for (unsigned long i = 0; i < measured_iterations; i++) {
+    for (unsigned long i = 0; i < measured_iterations; i++)
+    {
         stats.total_time_ns += durations[i];
-        if (durations[i] < stats.min_time_ns) stats.min_time_ns = durations[i];
-        if (durations[i] > stats.max_time_ns) stats.max_time_ns = durations[i];
+        if (durations[i] < stats.min_time_ns)
+            stats.min_time_ns = durations[i];
+        if (durations[i] > stats.max_time_ns)
+            stats.max_time_ns = durations[i];
     }
     stats.avg_time_ns = stats.total_time_ns / measured_iterations;
 
     double sum_sq_diff = 0.0;
-    for (unsigned long i = 0; i < measured_iterations; i++) {
+    for (unsigned long i = 0; i < measured_iterations; i++)
+    {
         double diff = durations[i] - stats.avg_time_ns;
         sum_sq_diff += diff * diff;
     }
-    if (measured_iterations > 1) {
+    if (measured_iterations > 1)
+    {
         stats.variance_ns2 = sum_sq_diff / (measured_iterations - 1);
         stats.stddev_ns = sqrt(stats.variance_ns2);
-    } else {
+    }
+    else
+    {
         stats.variance_ns2 = 0.0;
         stats.stddev_ns = 0.0;
     }
@@ -93,8 +109,10 @@ bench_stats_t bench_run_benchmark(
     return stats;
 }
 
-void bench_print_stats(const char* label, const bench_stats_t* stats) {
-    if (!label || !stats) return;
+void bench_print_stats(const char *label, const bench_stats_t *stats)
+{
+    if (!label || !stats)
+        return;
 
     printf("\nBenchmark: %s\n", label);
     printf("Iterations: %lu\n", stats->iterations);

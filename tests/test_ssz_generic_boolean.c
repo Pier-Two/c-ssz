@@ -181,11 +181,11 @@ void process_serialized_file(const char *folder_name, const char *folder_path, c
         free(expected_data);
         return;
     }
-    uint8_t padded[BYTES_PER_CHUNK];
-    memset(padded, 0, BYTES_PER_CHUNK);
+    uint8_t padded[SSZ_BYTES_PER_CHUNK];
+    memset(padded, 0, SSZ_BYTES_PER_CHUNK);
     if (ser_size > 0)
         padded[0] = out_buf[0];
-    uint8_t merkle_root[BYTES_PER_CHUNK];
+    uint8_t merkle_root[SSZ_BYTES_PER_CHUNK];
     ssz_error_t merkle_err = ssz_merkleize(padded, 1, 1, merkle_root);
     if (merkle_err != SSZ_SUCCESS)
     {
@@ -217,12 +217,12 @@ void process_serialized_file(const char *folder_name, const char *folder_path, c
         free(expected_data);
         return;
     }
-    if (yaml_size != BYTES_PER_CHUNK)
+    if (yaml_size != SSZ_BYTES_PER_CHUNK)
     {
         valid_failed++;
         {
             char msg[256];
-            snprintf(msg, sizeof(msg), "Meta.yaml 'root' field size mismatch: expected %d, got %zu", BYTES_PER_CHUNK, yaml_size);
+            snprintf(msg, sizeof(msg), "Meta.yaml 'root' field size mismatch: expected %d, got %zu", SSZ_BYTES_PER_CHUNK, yaml_size);
             record_failure(folder_name, folder_path, msg);
         }
         free(yaml_data);
@@ -230,7 +230,7 @@ void process_serialized_file(const char *folder_name, const char *folder_path, c
         free(expected_data);
         return;
     }
-    if (memcmp(yaml_data, merkle_root, BYTES_PER_CHUNK) != 0)
+    if (memcmp(yaml_data, merkle_root, SSZ_BYTES_PER_CHUNK) != 0)
     {
         valid_failed++;
         record_failure(folder_name, folder_path, "Meta.yaml 'root' field does not match Merkle root");

@@ -13,10 +13,10 @@
  * into leaf nodes, padding with zeros if necessary, and then iteratively hashing
  * pairs of nodes until a single root is obtained.
  *
- * @param chunks Pointer to the array of chunks (each chunk is BYTES_PER_CHUNK bytes).
+ * @param chunks Pointer to the array of chunks (each chunk is SSZ_BYTES_PER_CHUNK bytes).
  * @param chunk_count Number of chunks provided.
  * @param limit Maximum number of chunks allowed; if non-zero, chunk_count must not exceed this limit.
- * @param out_root Output buffer to write the resulting Merkle root (at least BYTES_PER_CHUNK bytes).
+ * @param out_root Output buffer to write the resulting Merkle root (at least SSZ_BYTES_PER_CHUNK bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_merkleize(
@@ -28,8 +28,8 @@ ssz_error_t ssz_merkleize(
 /**
  * Packs a contiguous byte array into fixed-size chunks.
  *
- * This function divides the input byte array into chunks of size BYTES_PER_CHUNK.
- * If the total number of bytes is not a multiple of BYTES_PER_CHUNK, the last chunk is zero-padded.
+ * This function divides the input byte array into chunks of size SSZ_BYTES_PER_CHUNK.
+ * If the total number of bytes is not a multiple of SSZ_BYTES_PER_CHUNK, the last chunk is zero-padded.
  *
  * @param values Pointer to the input byte array.
  * @param value_size Size of each value element in bytes.
@@ -46,12 +46,12 @@ ssz_error_t ssz_pack(
     size_t *out_chunk_count);
 
 /**
- * Packs an array of boolean values into fixed-size chunks as a bitfield.
+ * Packs an array of boolean values into fixed-size chunks.
  *
- * This function converts the boolean array into a bitfield representation,
- * appending a terminating bit after the provided bits, then packs the bitfield
- * into chunks of size BYTES_PER_CHUNK, padding with zeros if necessary.
- *
+ * This function converts a bitfield represented as an array of booleans into a compact byte array,
+ * and then divides that byte array into fixed-size chunks (each of size SSZ_BYTES_PER_CHUNK) for Merkleization.
+ * If bit_count is zero, a single default chunk is generated.
+ * 
  * @param bits Pointer to the array of boolean values.
  * @param bit_count Number of boolean values in the array.
  * @param out_chunks Output buffer to write the packed bitfield chunks.

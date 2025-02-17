@@ -12,10 +12,10 @@
  * into leaf nodes, padding with zeros if necessary, and then iteratively hashing
  * pairs of nodes until a single root is obtained.
  *
- * @param chunks Pointer to the array of chunks (each chunk is BYTES_PER_CHUNK bytes).
+ * @param chunks Pointer to the array of chunks (each chunk is SSZ_BYTES_PER_CHUNK bytes).
  * @param chunk_count Number of chunks provided.
  * @param limit Maximum number of chunks allowed; if non-zero, chunk_count must not exceed this limit.
- * @param out_root Output buffer to write the resulting Merkle root (at least BYTES_PER_CHUNK bytes).
+ * @param out_root Output buffer to write the resulting Merkle root (at least SSZ_BYTES_PER_CHUNK bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_merkleize(
@@ -25,31 +25,42 @@ ssz_error_t ssz_merkleize(
     uint8_t *out_root)
 {
     size_t effective_count = chunk_count;
-    if (limit != 0) {
-        if (chunk_count > limit) return SSZ_ERROR_SERIALIZATION;
+    if (limit != 0)
+    {
+        if (chunk_count > limit)
+        {
+            return SSZ_ERROR_SERIALIZATION;
+        }
         effective_count = limit;
     }
     size_t padded_leaves = next_pow_of_two(effective_count);
     size_t num_leaves = padded_leaves;
-    uint8_t *nodes = malloc(num_leaves * BYTES_PER_CHUNK);
-    if (!nodes) return SSZ_ERROR_SERIALIZATION;
-    if (chunk_count > 0) {
-        memcpy(nodes, chunks, chunk_count * BYTES_PER_CHUNK);
+    uint8_t *nodes = malloc(num_leaves * SSZ_BYTES_PER_CHUNK);
+    if (!nodes)
+    {
+        return SSZ_ERROR_MERKLEIZATION;
     }
-    for (size_t i = chunk_count; i < num_leaves; i++) {
-        memset(nodes + i * BYTES_PER_CHUNK, 0, BYTES_PER_CHUNK);
+    if (chunk_count > 0)
+    {
+        memcpy(nodes, chunks, chunk_count * SSZ_BYTES_PER_CHUNK);
     }
-    while (num_leaves > 1) {
+    for (size_t i = chunk_count; i < num_leaves; i++)
+    {
+        memset(nodes + i * SSZ_BYTES_PER_CHUNK, 0, SSZ_BYTES_PER_CHUNK);
+    }
+    while (num_leaves > 1)
+    {
         size_t parent_count = num_leaves / 2;
-        for (size_t i = 0; i < parent_count; i++) {
+        for (size_t i = 0; i < parent_count; i++)
+        {
             uint8_t concat[64];
-            memcpy(concat, nodes + 2 * i * BYTES_PER_CHUNK, BYTES_PER_CHUNK);
-            memcpy(concat + BYTES_PER_CHUNK, nodes + (2 * i + 1) * BYTES_PER_CHUNK, BYTES_PER_CHUNK);
-            SHA256_hash(concat, 64, nodes + i * BYTES_PER_CHUNK);
+            memcpy(concat, nodes + 2 * i * SSZ_BYTES_PER_CHUNK, SSZ_BYTES_PER_CHUNK);
+            memcpy(concat + SSZ_BYTES_PER_CHUNK, nodes + (2 * i + 1) * SSZ_BYTES_PER_CHUNK, SSZ_BYTES_PER_CHUNK);
+            SHA256_hash(concat, 64, nodes + i * SSZ_BYTES_PER_CHUNK);
         }
         num_leaves = parent_count;
     }
-    memcpy(out_root, nodes, BYTES_PER_CHUNK);
+    memcpy(out_root, nodes, SSZ_BYTES_PER_CHUNK);
     free(nodes);
     return SSZ_SUCCESS;
 }
@@ -57,8 +68,8 @@ ssz_error_t ssz_merkleize(
 /**
  * Packs a contiguous byte array into fixed-size chunks.
  *
- * This function divides the input byte array into chunks of size BYTES_PER_CHUNK.
- * If the total number of bytes is not a multiple of BYTES_PER_CHUNK, the last chunk is zero-padded.
+ * This function divides the input byte array into chunks of size SSZ_BYTES_PER_CHUNK.
+ * If the total number of bytes is not a multiple of SSZ_BYTES_PER_CHUNK, the last chunk is zero-padded.
  *
  * @param values Pointer to the input byte array.
  * @param value_size Size of each value element in bytes.
@@ -75,14 +86,19 @@ ssz_error_t ssz_pack(
     size_t *out_chunk_count)
 {
     size_t total_bytes = value_size * value_count;
-    if (total_bytes == 0) {
+    if (value_count != 0 && total_bytes / value_count != value_size) {
+        return SSZ_ERROR_SERIALIZATION;
+    }
+    if (total_bytes == 0)
+    {
         *out_chunk_count = 0;
         return SSZ_SUCCESS;
     }
-    size_t chunk_count = (total_bytes + BYTES_PER_CHUNK - 1) / BYTES_PER_CHUNK;
-    size_t padded_size = chunk_count * BYTES_PER_CHUNK;
+    size_t chunk_count = (total_bytes + SSZ_BYTES_PER_CHUNK - 1) / SSZ_BYTES_PER_CHUNK;
+    size_t padded_size = chunk_count * SSZ_BYTES_PER_CHUNK;
     memcpy(out_chunks, values, total_bytes);
-    if (padded_size > total_bytes) {
+    if (padded_size > total_bytes)
+    {
         memset(out_chunks + total_bytes, 0, padded_size - total_bytes);
     }
     *out_chunk_count = chunk_count;
@@ -90,11 +106,11 @@ ssz_error_t ssz_pack(
 }
 
 /**
- * Packs an array of boolean values into fixed-size chunks as a bitfield.
+ * Packs an array of boolean values into fixed-size chunks.
  *
- * This function converts the boolean array into a bitfield representation,
- * appending a terminating bit after the provided bits, then packs the bitfield
- * into chunks of size BYTES_PER_CHUNK, padding with zeros if necessary.
+ * This function converts a bitfield represented as an array of booleans into a compact byte array,
+ * and then divides that byte array into fixed-size chunks (each of size SSZ_BYTES_PER_CHUNK) for Merkleization.
+ * If bit_count is zero, a single default chunk is generated.
  *
  * @param bits Pointer to the array of boolean values.
  * @param bit_count Number of boolean values in the array.
@@ -108,15 +124,33 @@ ssz_error_t ssz_pack_bits(
     uint8_t *out_chunks,
     size_t *out_chunk_count)
 {
-    size_t bitfield_len = (bit_count + 7) / 8;
-    uint8_t *bitfield_bytes = malloc(bitfield_len);
-    if (!bitfield_bytes) {
-        return SSZ_ERROR_SERIALIZATION;
+    size_t bitfield_len;
+    uint8_t *bitfield_bytes;
+    if (bit_count == 0)
+    {
+        bitfield_len = 1;
+        bitfield_bytes = malloc(bitfield_len);
+        if (!bitfield_bytes)
+        {
+            return SSZ_ERROR_MERKLEIZATION;
+        }
+        bitfield_bytes[0] = 0x01;
     }
-    memset(bitfield_bytes, 0, bitfield_len);
-    for (size_t i = 0; i < bit_count; i++) {
-        if (bits[i]) {
-            bitfield_bytes[i / 8] |= (1 << (i % 8));
+    else
+    {
+        bitfield_len = (bit_count + 7) / 8;
+        bitfield_bytes = malloc(bitfield_len);
+        if (!bitfield_bytes)
+        {
+            return SSZ_ERROR_MERKLEIZATION;
+        }
+        memset(bitfield_bytes, 0, bitfield_len);
+        for (size_t i = 0; i < bit_count; i++)
+        {
+            if (bits[i])
+            {
+                bitfield_bytes[i / 8] |= (1 << (i % 8));
+            }
         }
     }
     ssz_error_t err = ssz_pack(bitfield_bytes, 1, bitfield_len, out_chunks, out_chunk_count);
@@ -142,10 +176,14 @@ ssz_error_t ssz_mix_in_length(
 {
     uint8_t buf[64];
     memcpy(buf, root, 32);
-    for (size_t i = 0; i < 32; i++) {
-        if (i < 8) {
+    for (size_t i = 0; i < 32; i++)
+    {
+        if (i < 8)
+        {
             buf[32 + i] = (uint8_t)((length >> (8 * i)) & 0xFF);
-        } else {
+        }
+        else
+        {
             buf[32 + i] = 0;
         }
     }

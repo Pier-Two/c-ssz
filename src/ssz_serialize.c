@@ -17,12 +17,12 @@
  */
 ssz_error_t ssz_serialize_uint8(const void *value, uint8_t *out_buf, size_t *out_size)
 {
-    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 1)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_UINT8)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
     out_buf[0] = *(const uint8_t *)value;
-    *out_size = 1;
+    *out_size = SSZ_BYTE_SIZE_OF_UINT8;
     return SSZ_SUCCESS;
 }
 
@@ -36,7 +36,7 @@ ssz_error_t ssz_serialize_uint8(const void *value, uint8_t *out_buf, size_t *out
  */
 ssz_error_t ssz_serialize_uint16(const void *value, uint8_t *out_buf, size_t *out_size)
 {
-    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 2)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_UINT16)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -44,7 +44,7 @@ ssz_error_t ssz_serialize_uint16(const void *value, uint8_t *out_buf, size_t *ou
     memcpy(&val, value, sizeof(val));
     out_buf[0] = (uint8_t)(val);
     out_buf[1] = (uint8_t)(val >> 8);
-    *out_size = 2;
+    *out_size = SSZ_BYTE_SIZE_OF_UINT16;
     return SSZ_SUCCESS;
 }
 
@@ -58,7 +58,7 @@ ssz_error_t ssz_serialize_uint16(const void *value, uint8_t *out_buf, size_t *ou
  */
 ssz_error_t ssz_serialize_uint32(const void *value, uint8_t *out_buf, size_t *out_size)
 {
-    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 4)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_UINT32)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -68,7 +68,7 @@ ssz_error_t ssz_serialize_uint32(const void *value, uint8_t *out_buf, size_t *ou
     out_buf[1] = (uint8_t)(val >> 8);
     out_buf[2] = (uint8_t)(val >> 16);
     out_buf[3] = (uint8_t)(val >> 24);
-    *out_size = 4;
+    *out_size = SSZ_BYTE_SIZE_OF_UINT32;
     return SSZ_SUCCESS;
 }
 
@@ -82,7 +82,7 @@ ssz_error_t ssz_serialize_uint32(const void *value, uint8_t *out_buf, size_t *ou
  */
 ssz_error_t ssz_serialize_uint64(const void *value, uint8_t *out_buf, size_t *out_size)
 {
-    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 8)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_UINT64)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -95,7 +95,7 @@ ssz_error_t ssz_serialize_uint64(const void *value, uint8_t *out_buf, size_t *ou
     out_buf[5] = (uint8_t)(val >> 40);
     out_buf[6] = (uint8_t)(val >> 48);
     out_buf[7] = (uint8_t)(val >> 56);
-    *out_size = 8;
+    *out_size = SSZ_BYTE_SIZE_OF_UINT64;
     return SSZ_SUCCESS;
 }
 
@@ -112,7 +112,7 @@ ssz_error_t ssz_serialize_uint128(
     uint8_t *restrict out_buf,
     size_t *restrict out_size)
 {
-    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 16)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_UINT128)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -130,7 +130,7 @@ ssz_error_t ssz_serialize_uint128(
             out_buf[i] = src[15 - i];
         }
     }
-    *out_size = 16;
+    *out_size = SSZ_BYTE_SIZE_OF_UINT128;
     return SSZ_SUCCESS;
 }
 
@@ -147,7 +147,7 @@ ssz_error_t ssz_serialize_uint256(
     uint8_t *restrict out_buf,
     size_t *restrict out_size)
 {
-    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < 32)
+    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_UINT256)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
@@ -165,7 +165,7 @@ ssz_error_t ssz_serialize_uint256(
             out_buf[i] = src[31 - i];
         }
     }
-    *out_size = 32;
+    *out_size = SSZ_BYTE_SIZE_OF_UINT256;
     return SSZ_SUCCESS;
 }
 
@@ -179,12 +179,12 @@ ssz_error_t ssz_serialize_uint256(
  */
 ssz_error_t ssz_serialize_boolean(bool value, uint8_t *out_buf, size_t *out_size)
 {
-    if (out_buf == NULL || out_size == NULL || *out_size < 1)
+    if (out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_BOOL)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
     out_buf[0] = (uint8_t)value;
-    *out_size = 1;
+    *out_size = SSZ_BYTE_SIZE_OF_BOOL;
     return SSZ_SUCCESS;
 }
 
@@ -323,6 +323,10 @@ ssz_error_t ssz_serialize_union(const ssz_union_t *u, uint8_t *out_buf, size_t *
     size_t used = 1;
     if (u->data != NULL)
     {
+        if (u->serialize_fn == NULL)
+        {
+            return SSZ_ERROR_SERIALIZATION;
+        }
         size_t space_remaining = *out_size - used;
         ssz_error_t ret = u->serialize_fn(u->data, &out_buf[used], &space_remaining);
         if (ret != SSZ_SUCCESS)

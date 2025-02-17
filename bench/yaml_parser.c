@@ -461,7 +461,6 @@ uint8_t *read_yaml_field(const char *file_path, const char *field_name, size_t *
                         char *additional = trim_left(line);
                         size_t alen = strlen(additional);
 
-
                         while (buffer_len + alen + 1 >= buffer_capacity)
                         {
                             size_t new_capacity = buffer_capacity * 2;

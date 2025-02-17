@@ -210,7 +210,7 @@ void process_serialized_file(const char *folder_name, const char *folder_path, c
     }
     valid_passed++;
     size_t limit_chunks = (max_bits + 255) / 256;
-    uint8_t *packed_chunks = malloc(limit_chunks * BYTES_PER_CHUNK);
+    uint8_t *packed_chunks = malloc(limit_chunks * SSZ_BYTES_PER_CHUNK);
     if (!packed_chunks)
     {
         valid_failed++;
@@ -234,7 +234,7 @@ void process_serialized_file(const char *folder_name, const char *folder_path, c
         free(in_mem);
         return;
     }
-    uint8_t merkle_root[BYTES_PER_CHUNK];
+    uint8_t merkle_root[SSZ_BYTES_PER_CHUNK];
     ssz_error_t merkle_err = ssz_merkleize(packed_chunks, packed_chunk_count, limit_chunks, merkle_root);
     if (merkle_err != SSZ_SUCCESS)
     {
@@ -270,11 +270,11 @@ void process_serialized_file(const char *folder_name, const char *folder_path, c
         free(in_mem);
         return;
     }
-    if (yaml_size != BYTES_PER_CHUNK)
+    if (yaml_size != SSZ_BYTES_PER_CHUNK)
     {
         valid_failed++;
         char msg[256];
-        snprintf(msg, sizeof(msg), "Meta.yaml 'root' field size mismatch for folder %s: expected %d, got %zu", folder_name, BYTES_PER_CHUNK, yaml_size);
+        snprintf(msg, sizeof(msg), "Meta.yaml 'root' field size mismatch for folder %s: expected %d, got %zu", folder_name, SSZ_BYTES_PER_CHUNK, yaml_size);
         record_failure(folder_name, folder_path, msg);
         free(yaml_data);
         free(out_buf);
@@ -282,7 +282,7 @@ void process_serialized_file(const char *folder_name, const char *folder_path, c
         free(in_mem);
         return;
     }
-    if (memcmp(yaml_data, merkle_root, BYTES_PER_CHUNK) != 0)
+    if (memcmp(yaml_data, merkle_root, SSZ_BYTES_PER_CHUNK) != 0)
     {
         valid_failed++;
         char msg[256];
