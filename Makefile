@@ -1,3 +1,5 @@
+.DEFAULT_GOAL := all
+
 ###############################################################################
 # Compiler and OS settings
 ###############################################################################
@@ -40,8 +42,7 @@ LIB_SOURCES = \
 	$(SRC_DIR)/ssz_utils.c \
 	$(SRC_DIR)/ssz_merkle.c \
 	$(SRC_DIR)/ssz_constants.c \
-	$(SRC_DIR)/crypto/mincrypt/sha256.c \
-	$(BENCH_DIR)/yaml_parser.c
+	$(SRC_DIR)/crypto/mincrypt/sha256.c
 
 LIB_OBJECTS = \
 	$(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(filter $(SRC_DIR)/%.c, $(LIB_SOURCES))) \
@@ -64,6 +65,16 @@ BENCH_COMMON_OBJECTS = $(patsubst $(BENCH_DIR)/%.c, $(OBJ_DIR)/bench/%.o, $(BENC
 
 BENCH_BASENAMES := $(patsubst bench_ssz_%.c, %, $(notdir $(BENCH_SOURCES)))
 SUB_BENCHES := $(BENCH_BASENAMES)
+
+###############################################################################
+# YAML parser (for tests only; do not include in libssz.a)
+###############################################################################
+YAMLPARSER_SRC = $(BENCH_DIR)/yaml_parser.c
+YAMLPARSER_OBJ = $(OBJ_DIR)/bench/yaml_parser.o
+
+$(YAMLPARSER_OBJ): $(YAMLPARSER_SRC)
+	@$(call MKDIR_P,$(dir $@))
+	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) -MMD -MP -c $< -o $@
 
 ###############################################################################
 # Additional detection for bench target
@@ -94,7 +105,7 @@ SNAPPY_DECODE_OBJ = $(OBJ_DIR)/tests/snappy_decode.o
 ###############################################################################
 # Default target
 ###############################################################################
-all: $(STATIC_LIB) $(TEST_BINARIES) $(BIN_DIR)/snappy_decode$(EXE_EXT)
+all: $(STATIC_LIB)
 
 ###############################################################################
 # Build rules for library objects
@@ -120,11 +131,11 @@ $(OBJ_DIR)/tests/snappy_decode.o: $(SNAPPY_DECODE_SRC)
 -include $(OBJ_DIR)/tests/*.d
 
 ###############################################################################
-# Test build rule
+# Generic test build rule for tests
 ###############################################################################
-$(BIN_DIR)/test_ssz_%$(EXE_EXT): $(TEST_DIR)/test_ssz_%.c $(STATIC_LIB) $(SNAPPY_DECODE_OBJ)
+$(BIN_DIR)/test_ssz_%$(EXE_EXT): $(TEST_DIR)/test_ssz_%.c $(STATIC_LIB) $(SNAPPY_DECODE_OBJ) $(YAMLPARSER_OBJ)
 	@$(call MKDIR_P,$(BIN_DIR))
-	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< $(STATIC_LIB) $(SNAPPY_DECODE_OBJ) -o $@ $(LDFLAGS) $(SSZ_LDFLAGS)
+	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< $(STATIC_LIB) $(SNAPPY_DECODE_OBJ) $(YAMLPARSER_OBJ) -o $@ $(LDFLAGS) $(SSZ_LDFLAGS)
 
 ###############################################################################
 # Snappy decode binary
@@ -185,9 +196,9 @@ endif
 ###############################################################################
 # Bench build rule
 ###############################################################################
-$(BIN_DIR)/bench_ssz_%$(EXE_EXT): $(BENCH_DIR)/bench_ssz_%.c $(STATIC_LIB) $(BENCH_COMMON_OBJECTS)
+$(BIN_DIR)/bench_ssz_%$(EXE_EXT): $(BENCH_DIR)/bench_ssz_%.c $(STATIC_LIB) $(BENCH_COMMON_OBJECTS) $(YAMLPARSER_OBJ)
 	@$(call MKDIR_P,$(BIN_DIR))
-	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< $(BENCH_COMMON_OBJECTS) -o $@ $(LDFLAGS) $(SSZ_LDFLAGS)
+	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< $(BENCH_COMMON_OBJECTS) $(YAMLPARSER_OBJ) -o $@ $(LDFLAGS) $(SSZ_LDFLAGS)
 
 ###############################################################################
 # Bench target
@@ -200,7 +211,7 @@ bench: $(STATIC_LIB) $(BENCH_COMMON_OBJECTS)
 	    echo Building bench_ssz_%%b... & \
 	    $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_%%b$(EXE_EXT) & \
 	    echo Running bench_ssz_%%b... & \
-	    "%%b" \
+	    cmd /c "$(subst /,\,$(BIN_DIR)/bench_ssz_%%b$(EXE_EXT))" \
 	  ) \
 	) else ( \
 	  echo Building only bench_ssz_$(EXTRA_BENCH)... & \
