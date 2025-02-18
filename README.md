@@ -6,7 +6,7 @@ SimpleSerializeC is a C library implementing the Simple Serialize (SSZ) [specifi
 
 ### Supported SSZ Types
 
-The following table lists the SSZ types currently supported by the library for both serialization and deserialization.
+The following table lists the types currently supported for both serialization and deserialization:
 
 | Type        | Serialization Support | Deserialization Support |
 |-------------|-----------------------|-------------------------|
@@ -22,15 +22,17 @@ The following table lists the SSZ types currently supported by the library for b
 | `vector`    | ✅                    | ✅                      |
 | `list`      | ✅                    | ✅                      |
 
-## Merklelization
+For further details regarding the public API, please refer to the header files [`ssz_serialize.h`](include/ssz_serialize.h) and [`ssz_deserialize.h`](include/ssz_deserialize.h).
 
-The library includes functions to compute Merkle roots for SSZ serialized data. For detailed usage, please refer to the API in the header file [`include/ssz_merkle.h`](include/ssz_merkle.h).
+### Merklelization
+
+The library includes functions to compute Merkle roots for SSZ serialized data. For detailed usage, please refer to the API in the header file [`ssz_merkle.h`](include/ssz_merkle.h).
 
 ## Getting Started
 
 ### Prerequisites
 - A C compiler (e.g., GCC, Clang) supporting C99 or later. (Note: The library is written in C99 and should compile on any platform with a C99 compiler; it has been tested on MacOS, Linux, and Windows.)
-- `make` (optional, for building tests, benchmarks, and examples).
+- `make` (for building the library, tests and benchmarks).
 
 ### Building the Library
 The project includes a `Makefile` to simplify the build process. The `Makefile` provides the following targets:
@@ -41,17 +43,30 @@ The project includes a `Makefile` to simplify the build process. The `Makefile` 
 - **`clean`**: Removes all build artifacts, including object files, binaries, and the static library.
 
 ### Running Benchmarks
-The library includes benchmarks to evaluate the performance of SSZ serialization and deserialization.
+The library includes benchmarks to evaluate the performance of SSZ serialization and deserialization. Here are the commands supported for benchmarking:
 
-To run benchmarks:
 1. Run all benchmarks:
-   ```bash
-   make bench
-   ```
+```bash
+make bench
+```
+
 2. Run a specific benchmark (e.g., `attestation`):
-   ```bash
-   make bench attestation
-   ```
+```bash
+make bench attestation
+```
+
+### Running Tests
+The library includes test binaries that verify the functionality of SSZ serialization and deserialization. To ensure compliance with the [SSZ specification](https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md), it implements all the [generic test vectors](https://github.com/ethereum/consensus-specs/tree/dev/tests/generators/ssz_generic). Below are the commands supported for testing:
+
+1. Run all tests:
+```bash
+make test
+```
+
+2. Run a specific test (e.g., `ssz_serialize`):
+```bash
+make test ssz_serialize
+``` 
 
 ## Attributions
 
