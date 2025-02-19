@@ -12,8 +12,10 @@
 #include "ssz_merkle.h"
 #include "ssz_utils.h"
 
-#define YAML_FILE_PATH "./bench/data/indexed_attestation.yaml"
+#define YAML_FILE_PATH "./bench/data/IndexedAttestation/ssz_random/case_0/indexed_attestation.yaml"
 #define MAX_VALIDATORS_PER_COMMITTEE 2048
+#define BENCH_ITER_WARMUP 500
+#define BENCH_ITER_MEASURED 1000
 
 typedef struct
 {
@@ -731,18 +733,16 @@ static void print_indexed_attestation_tree(const IndexedAttestation *att)
 int main(void)
 {
     init_attestation_data_from_yaml();
-    unsigned long warmup_iterations = 0;
-    unsigned long measured_iterations = 1;
     bench_stats_t stats_serialize = bench_run_benchmark(
         attestation_bench_test_func_serialize,
         NULL,
-        warmup_iterations,
-        measured_iterations);
+        BENCH_ITER_WARMUP,
+        BENCH_ITER_MEASURED);
     bench_stats_t stats_deserialize = bench_run_benchmark(
         attestation_bench_test_func_deserialize,
         NULL,
-        warmup_iterations,
-        measured_iterations);
+        BENCH_ITER_WARMUP,
+        BENCH_ITER_MEASURED);
     print_attestation(&g_original);
     uint8_t merkle_root[32];
     if (hash_tree_root_indexed_attestation(&g_original, merkle_root) == SSZ_SUCCESS)
@@ -758,6 +758,5 @@ int main(void)
     print_hex(g_serialized, g_serialized_size);
     bench_print_stats("SSZ Indexed Attestation serialization", &stats_serialize);
     bench_print_stats("SSZ Indexed Attestation deserialization", &stats_deserialize);
-
     return 0;
 }

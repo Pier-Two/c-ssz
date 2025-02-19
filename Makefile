@@ -17,7 +17,7 @@ MKDIR_P = mkdir -p $1
 endif
 
 CFLAGS = -Wall -Wextra -O3 -g
-INCLUDE_FLAGS = -Iinclude -Ibench
+INCLUDE_FLAGS = -Iinclude -Ibench -Itests
 LDFLAGS =
 
 AR = ar
@@ -196,9 +196,9 @@ endif
 ###############################################################################
 # Bench build rule
 ###############################################################################
-$(BIN_DIR)/bench_ssz_%$(EXE_EXT): $(BENCH_DIR)/bench_ssz_%.c $(STATIC_LIB) $(BENCH_COMMON_OBJECTS) $(YAMLPARSER_OBJ)
+$(BIN_DIR)/bench_ssz_%$(EXE_EXT): $(BENCH_DIR)/bench_ssz_%.c $(STATIC_LIB) $(SNAPPY_DECODE_OBJ) $(BENCH_COMMON_OBJECTS) $(YAMLPARSER_OBJ)
 	@$(call MKDIR_P,$(BIN_DIR))
-	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< $(BENCH_COMMON_OBJECTS) $(YAMLPARSER_OBJ) -o $@ $(LDFLAGS) $(SSZ_LDFLAGS)
+	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< $(BENCH_COMMON_OBJECTS) $(SNAPPY_DECODE_OBJ) $(YAMLPARSER_OBJ) -o $@ $(LDFLAGS) $(SSZ_LDFLAGS)
 
 ###############################################################################
 # Bench target

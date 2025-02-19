@@ -1,18 +1,3 @@
-/*
- * Minimal implementation of Snappy decompression.
- *
- * This file implements two functions:
- *
- *   snappy_status snappy_uncompressed_length(const char* compressed,
- *                                              size_t compressed_length,
- *                                              size_t* result);
- *
- *   snappy_status snappy_uncompress(const char* compressed,
- *                                   size_t compressed_length,
- *                                   char* uncompressed,
- *                                   size_t* uncompressed_length);
- */
-
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
