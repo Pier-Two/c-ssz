@@ -21,6 +21,7 @@ The following table lists the types currently supported for both serialization a
 | `bitlist`   | ✅                    | ✅                      |
 | `vector`    | ✅                    | ✅                      |
 | `list`      | ✅                    | ✅                      |
+| `unions`    | 🧪 (Experimental)     | 🧪 (Experimental)       |
 
 For further details regarding the public API, please refer to the header files [`ssz_serialize.h`](include/ssz_serialize.h) and [`ssz_deserialize.h`](include/ssz_deserialize.h).
 
@@ -70,10 +71,16 @@ make test ssz_serialize
 
 ## Attributions
 
-This project incorporates a SHA-256 implementation sourced from [mincrypt](https://android.googlesource.com/platform/system/core/+/669ecc2f5e80ff924fa20ce7445354a7c5bcfd98/libmincrypt), which is originally part of the Android Open Source Project. The mincrypt code is licensed under a BSD 3-Clause License by Google Inc. 
+This project incorporates a SHA-256 implementation sourced from [libmincrypt](https://android.googlesource.com/platform/system/core/+/669ecc2f5e80ff924fa20ce7445354a7c5bcfd98/libmincrypt), which is originally part of the Android Open Source Project. 
 
 ## License
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+This project includes code from external sources, which are covered by their respective licenses. 
+
+### MIT License 
+This project is licensed under the MIT License. See the [`LICENSE-MIT`](LICENSE-MIT) file for details.
+
+### BSD-3-Clause Licensed Code
+Some portions of this project are based on code from [libmincrypt](https://android.googlesource.com/platform/system/core/+/669ecc2f5e80ff924fa20ce7445354a7c5bcfd98/libmincrypt), which is licensed under the BSD-3-Clause License. See the [`LICENSE-BSD`](LICENSE-BSD) file for details.
 
 ## Contributing
 Contributions are welcome! Please open an issue or submit a pull request for any improvements, bug fixes, or additional benchmarks.

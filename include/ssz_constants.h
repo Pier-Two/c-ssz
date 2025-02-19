@@ -13,6 +13,7 @@
 #define SSZ_BYTE_SIZE_OF_UINT128    16
 #define SSZ_BYTE_SIZE_OF_UINT256    32
 #define SSZ_BYTE_SIZE_OF_BOOL       1
+#define SSZ_SMALL_BUFFER_SIZE       256
 
 /**
  * Provides a lookup table to find the highest set bit for each byte value (0-255).

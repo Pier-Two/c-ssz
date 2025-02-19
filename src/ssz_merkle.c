@@ -18,47 +18,39 @@
  * @param out_root Output buffer to write the resulting Merkle root (at least SSZ_BYTES_PER_CHUNK bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_merkleize(
-    const uint8_t *chunks,
-    size_t chunk_count,
-    size_t limit,
-    uint8_t *out_root)
-{
-    size_t effective_count = chunk_count;
-    if (limit != 0)
+ssz_error_t ssz_merkleize(const uint8_t *restrict chunks, size_t chunk_count, size_t limit, uint8_t *restrict out_root) {
+    size_t effective = chunk_count;
+    if (limit != 0) 
     {
-        if (chunk_count > limit)
+        if (chunk_count > limit) 
         {
             return SSZ_ERROR_SERIALIZATION;
         }
-        effective_count = limit;
+        effective = limit;
     }
-    size_t padded_leaves = next_pow_of_two(effective_count);
-    size_t num_leaves = padded_leaves;
-    uint8_t *nodes = malloc(num_leaves * SSZ_BYTES_PER_CHUNK);
-    if (!nodes)
+    size_t padded = next_pow_of_two(effective);
+    uint8_t *restrict nodes = malloc(padded * SSZ_BYTES_PER_CHUNK);
+    if (!nodes) 
     {
         return SSZ_ERROR_MERKLEIZATION;
     }
-    if (chunk_count > 0)
+    if (chunk_count) 
     {
         memcpy(nodes, chunks, chunk_count * SSZ_BYTES_PER_CHUNK);
     }
-    for (size_t i = chunk_count; i < num_leaves; i++)
+    if (chunk_count < padded) 
     {
-        memset(nodes + i * SSZ_BYTES_PER_CHUNK, 0, SSZ_BYTES_PER_CHUNK);
+        memset(nodes + chunk_count * SSZ_BYTES_PER_CHUNK, 0, (padded - chunk_count) * SSZ_BYTES_PER_CHUNK);
     }
-    while (num_leaves > 1)
+    size_t num = padded;
+    while (num > 1) 
     {
-        size_t parent_count = num_leaves / 2;
-        for (size_t i = 0; i < parent_count; i++)
+        size_t parent = num >> 1;
+        for (size_t i = 0; i < parent; i++) 
         {
-            uint8_t concat[64];
-            memcpy(concat, nodes + 2 * i * SSZ_BYTES_PER_CHUNK, SSZ_BYTES_PER_CHUNK);
-            memcpy(concat + SSZ_BYTES_PER_CHUNK, nodes + (2 * i + 1) * SSZ_BYTES_PER_CHUNK, SSZ_BYTES_PER_CHUNK);
-            SHA256_hash(concat, 64, nodes + i * SSZ_BYTES_PER_CHUNK);
+            SHA256_hash(nodes + (2 * i) * SSZ_BYTES_PER_CHUNK, 2 * SSZ_BYTES_PER_CHUNK, nodes + i * SSZ_BYTES_PER_CHUNK);
         }
-        num_leaves = parent_count;
+        num = parent;
     }
     memcpy(out_root, nodes, SSZ_BYTES_PER_CHUNK);
     free(nodes);
@@ -118,43 +110,42 @@ ssz_error_t ssz_pack(
  * @param out_chunk_count Pointer to store the number of chunks written.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_pack_bits(
-    const bool *bits,
-    size_t bit_count,
-    uint8_t *out_chunks,
-    size_t *out_chunk_count)
-{
-    size_t bitfield_len;
-    uint8_t *bitfield_bytes;
-    if (bit_count == 0)
+ssz_error_t ssz_pack_bits(const bool *bits, size_t bit_count, uint8_t *out_chunks, size_t *out_chunk_count) {
+    size_t bitfield_len = bit_count ? (bit_count + 7) >> 3 : 1;
+    uint8_t small_buf[SSZ_SMALL_BUFFER_SIZE];
+    uint8_t *bitfield_bytes = bitfield_len <= SSZ_SMALL_BUFFER_SIZE ? small_buf : malloc(bitfield_len);
+    if (!bitfield_bytes) 
     {
-        bitfield_len = 1;
-        bitfield_bytes = malloc(bitfield_len);
-        if (!bitfield_bytes)
-        {
-            return SSZ_ERROR_MERKLEIZATION;
-        }
+        return SSZ_ERROR_MERKLEIZATION;
+    }
+    if (!bit_count) 
+    {
         bitfield_bytes[0] = 0x01;
     }
-    else
+    else 
     {
-        bitfield_len = (bit_count + 7) / 8;
-        bitfield_bytes = malloc(bitfield_len);
-        if (!bitfield_bytes)
-        {
-            return SSZ_ERROR_MERKLEIZATION;
-        }
         memset(bitfield_bytes, 0, bitfield_len);
-        for (size_t i = 0; i < bit_count; i++)
+        size_t full_bytes = bit_count >> 3, rem = bit_count & 7;
+        for (size_t i = 0; i < full_bytes; i++) 
         {
-            if (bits[i])
-            {
-                bitfield_bytes[i / 8] |= (1 << (i % 8));
-            }
+            size_t base = i << 3;
+            bitfield_bytes[i] = (uint8_t)bits[base] | (uint8_t)bits[base+1] << 1 |
+                (uint8_t)bits[base+2] << 2 | (uint8_t)bits[base+3] << 3 |
+                (uint8_t)bits[base+4] << 4 | (uint8_t)bits[base+5] << 5 |
+                (uint8_t)bits[base+6] << 6 | (uint8_t)bits[base+7] << 7;
+        }
+        if (rem) 
+        {
+            uint8_t byte = 0;
+            for (size_t j = 0, base = full_bytes << 3; j < rem; j++) byte |= (uint8_t)bits[base + j] << j;
+            bitfield_bytes[full_bytes] = byte;
         }
     }
     ssz_error_t err = ssz_pack(bitfield_bytes, 1, bitfield_len, out_chunks, out_chunk_count);
-    free(bitfield_bytes);
+    if (bitfield_bytes != small_buf)
+    {
+        free(bitfield_bytes);
+    }
     return err;
 }
 
@@ -169,24 +160,18 @@ ssz_error_t ssz_pack_bits(
  * @param out_root Output buffer to write the new Merkle root (32 bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_mix_in_length(
-    const uint8_t *root,
-    uint64_t length,
-    uint8_t *out_root)
-{
+ssz_error_t ssz_mix_in_length(const uint8_t *root, uint64_t length, uint8_t *out_root) {
     uint8_t buf[64];
     memcpy(buf, root, 32);
-    for (size_t i = 0; i < 32; i++)
-    {
-        if (i < 8)
-        {
-            buf[32 + i] = (uint8_t)((length >> (8 * i)) & 0xFF);
-        }
-        else
-        {
-            buf[32 + i] = 0;
-        }
-    }
+    buf[32] = (uint8_t)length;
+    buf[33] = (uint8_t)(length >> 8);
+    buf[34] = (uint8_t)(length >> 16);
+    buf[35] = (uint8_t)(length >> 24);
+    buf[36] = (uint8_t)(length >> 32);
+    buf[37] = (uint8_t)(length >> 40);
+    buf[38] = (uint8_t)(length >> 48);
+    buf[39] = (uint8_t)(length >> 56);
+    memset(buf + 40, 0, 24);
     SHA256_hash(buf, 64, out_root);
     return SSZ_SUCCESS;
 }
@@ -207,9 +192,8 @@ ssz_error_t ssz_mix_in_selector(
     uint8_t selector,
     uint8_t *out_root)
 {
-    uint8_t buf[64];
+    uint8_t buf[64] = {0};
     memcpy(buf, root, 32);
-    memset(buf + 32, 0, 32);
     buf[32] = selector;
     SHA256_hash(buf, 64, out_root);
     return SSZ_SUCCESS;
