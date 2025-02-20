@@ -68,9 +68,9 @@ The library includes test binaries that verify the functionality of SSZ serializ
 make test
 ```
 
-2. Run a specific test (e.g., `ssz_serialize`):
+2. Run a specific test (e.g., `serialize`):
 ```bash
-make test ssz_serialize
+make test serialize
 ``` 
 
 ## Attributions
