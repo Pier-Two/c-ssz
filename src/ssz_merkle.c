@@ -18,7 +18,8 @@
  * @param out_root Output buffer to write the resulting Merkle root (at least SSZ_BYTES_PER_CHUNK bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_merkleize(const uint8_t *restrict chunks, size_t chunk_count, size_t limit, uint8_t *restrict out_root) {
+ssz_error_t ssz_merkleize(const uint8_t *restrict chunks, size_t chunk_count, size_t limit, uint8_t *restrict out_root) 
+{
     size_t effective = chunk_count;
     if (limit != 0) 
     {
@@ -28,7 +29,23 @@ ssz_error_t ssz_merkleize(const uint8_t *restrict chunks, size_t chunk_count, si
         }
         effective = limit;
     }
+    if (effective == 0) 
+    {
+        memset(out_root, 0, SSZ_BYTES_PER_CHUNK);
+        return SSZ_SUCCESS;
+    }
     size_t padded = next_pow_of_two(effective);
+    if (padded == 1) 
+    {
+        if (chunk_count >= 1) 
+        {
+            memcpy(out_root, chunks, SSZ_BYTES_PER_CHUNK);
+        } else 
+        {
+            memset(out_root, 0, SSZ_BYTES_PER_CHUNK);
+        }
+        return SSZ_SUCCESS;
+    }
     uint8_t *restrict nodes = malloc(padded * SSZ_BYTES_PER_CHUNK);
     if (!nodes) 
     {

@@ -21,368 +21,555 @@
 typedef struct
 {
     size_t bit_size;
-    uint8_t buffer[32];
-    size_t buffer_size;
-} ssz_uintN_deserialize_test_t;
+    uint8_t value[32];
+} ssz_uintN_test_t;
 
 typedef struct
 {
-    uint8_t buffer[1];
-    size_t buffer_size;
-} ssz_boolean_deserialize_test_t;
-
-typedef struct
-{
+    bool bits[262144];
     size_t num_bits;
-    uint8_t buffer[32768];
-    size_t buffer_size;
-} ssz_bitvector_deserialize_test_t;
+} ssz_bitvector_test_t;
 
 typedef struct
 {
-    size_t max_bits;
-    uint8_t buffer[65537];
-    size_t buffer_size;
-} ssz_bitlist_deserialize_test_t;
+    bool bits[524288];
+    size_t num_bits;
+} ssz_bitlist_test_t;
 
 typedef struct
 {
-    size_t bit_size;
-    uint8_t buffer[524288];
-    size_t buffer_size;
+    uint8_t items[16384];
     size_t element_count;
-} ssz_vector_deserialize_test_t;
+} ssz_vector_test_uint8;
 
 typedef struct
 {
-    size_t bit_size;
-    uint8_t buffer[524292];
-    size_t buffer_size;
-    size_t max_length;
-} ssz_list_deserialize_test_t;
+    uint16_t items[16384];
+    size_t element_count;
+} ssz_vector_test_uint16;
 
-static void test_uintN_deserialize(void *user_data)
+typedef struct
 {
-    ssz_uintN_deserialize_test_t *test_data = (ssz_uintN_deserialize_test_t *)user_data;
-    switch (test_data->bit_size)
-    {
-    case 8:
-    {
-        uint8_t out_value = 0;
-        ssz_deserialize_uint8(test_data->buffer, test_data->buffer_size, &out_value);
-        break;
-    }
-    case 16:
-    {
-        uint16_t out_value = 0;
-        ssz_deserialize_uint16(test_data->buffer, test_data->buffer_size, &out_value);
-        break;
-    }
-    case 32:
-    {
-        uint32_t out_value = 0;
-        ssz_deserialize_uint32(test_data->buffer, test_data->buffer_size, &out_value);
-        break;
-    }
-    case 64:
-    {
-        uint64_t out_value = 0;
-        ssz_deserialize_uint64(test_data->buffer, test_data->buffer_size, &out_value);
-        break;
-    }
-    case 128:
-    {
-        uint8_t out_value[16] = {0};
-        ssz_deserialize_uint128(test_data->buffer, test_data->buffer_size, out_value);
-        break;
-    }
-    case 256:
-    {
-        uint8_t out_value[32] = {0};
-        ssz_deserialize_uint256(test_data->buffer, test_data->buffer_size, out_value);
-        break;
-    }
-    default:
-        break;
-    }
+    uint32_t items[16384];
+    size_t element_count;
+} ssz_vector_test_uint32;
+
+typedef struct
+{
+    uint64_t items[16384];
+    size_t element_count;
+} ssz_vector_test_uint64;
+
+typedef struct
+{
+    uint8_t items[16384 * 16];
+    size_t element_count;
+} ssz_vector_test_uint128;
+
+typedef struct
+{
+    uint8_t items[8192 * 32];
+    size_t element_count;
+} ssz_vector_test_uint256;
+
+typedef struct
+{
+    bool items[65536];
+    size_t element_count;
+} ssz_vector_test_bool;
+
+typedef struct
+{
+    uint8_t items[16384];
+    size_t element_count;
+} ssz_list_test_uint8;
+
+typedef struct
+{
+    uint16_t items[16384];
+    size_t element_count;
+} ssz_list_test_uint16;
+
+typedef struct
+{
+    uint32_t items[16384];
+    size_t element_count;
+} ssz_list_test_uint32;
+
+typedef struct
+{
+    uint64_t items[8192];
+    size_t element_count;
+} ssz_list_test_uint64;
+
+typedef struct
+{
+    uint8_t items[16384 * 16];
+    size_t element_count;
+} ssz_list_test_uint128;
+
+typedef struct
+{
+    uint8_t items[8192 * 32];
+    size_t element_count;
+} ssz_list_test_uint256;
+
+typedef struct
+{
+    bool items[65536];
+    size_t element_count;
+} ssz_list_test_bool;
+
+static void test_uint8_deserialize(void *user_data)
+{
+    ssz_uintN_test_t *test_data = (ssz_uintN_test_t *)user_data;
+    uint8_t out_val;
+    ssz_deserialize_uint8(test_data->value, test_data->bit_size / 8, &out_val);
+}
+
+static void test_uint16_deserialize(void *user_data)
+{
+    ssz_uintN_test_t *test_data = (ssz_uintN_test_t *)user_data;
+    uint16_t out_val;
+    ssz_deserialize_uint16(test_data->value, test_data->bit_size / 8, &out_val);
+}
+
+static void test_uint32_deserialize(void *user_data)
+{
+    ssz_uintN_test_t *test_data = (ssz_uintN_test_t *)user_data;
+    uint32_t out_val;
+    ssz_deserialize_uint32(test_data->value, test_data->bit_size / 8, &out_val);
+}
+
+static void test_uint64_deserialize(void *user_data)
+{
+    ssz_uintN_test_t *test_data = (ssz_uintN_test_t *)user_data;
+    uint64_t out_val;
+    ssz_deserialize_uint64(test_data->value, test_data->bit_size / 8, &out_val);
+}
+
+static void test_uint128_deserialize(void *user_data)
+{
+    ssz_uintN_test_t *test_data = (ssz_uintN_test_t *)user_data;
+    uint8_t out_val[16];
+    ssz_deserialize_uint128(test_data->value, test_data->bit_size / 8, out_val);
+}
+
+static void test_uint256_deserialize(void *user_data)
+{
+    ssz_uintN_test_t *test_data = (ssz_uintN_test_t *)user_data;
+    uint8_t out_val[32];
+    ssz_deserialize_uint256(test_data->value, test_data->bit_size / 8, out_val);
 }
 
 static void test_boolean_deserialize(void *user_data)
 {
-    ssz_boolean_deserialize_test_t *test_data = (ssz_boolean_deserialize_test_t *)user_data;
-    bool out_value = false;
-    ssz_deserialize_boolean(test_data->buffer, test_data->buffer_size, &out_value);
+    bool value = *(bool *)user_data;
+    uint8_t in_buf[1];
+    in_buf[0] = value ? 1 : 0;
+    bool out_val;
+    ssz_deserialize_boolean(in_buf, sizeof(in_buf), &out_val);
 }
 
 static void test_bitvector_deserialize(void *user_data)
 {
-    ssz_bitvector_deserialize_test_t *test_data = (ssz_bitvector_deserialize_test_t *)user_data;
+    ssz_bitvector_test_t *test_data = (ssz_bitvector_test_t *)user_data;
+    uint8_t in_buf[32768];
+    memset(in_buf, 0xFF, sizeof(in_buf));
     bool out_bits[262144];
-    ssz_deserialize_bitvector(test_data->buffer, test_data->buffer_size, test_data->num_bits, out_bits);
+    ssz_deserialize_bitvector(in_buf, sizeof(in_buf), test_data->num_bits, out_bits);
 }
 
 static void test_bitlist_deserialize(void *user_data)
 {
-    ssz_bitlist_deserialize_test_t *test_data = (ssz_bitlist_deserialize_test_t *)user_data;
+    ssz_bitlist_test_t *test_data = (ssz_bitlist_test_t *)user_data;
+    uint8_t in_buf[65537];
+    memset(in_buf, 0xFF, sizeof(in_buf));
     bool out_bits[524288];
-    size_t out_actual_bits = 0;
-    ssz_deserialize_bitlist(test_data->buffer, test_data->buffer_size, test_data->max_bits, out_bits, &out_actual_bits);
+    size_t actual_bits;
+    ssz_deserialize_bitlist(in_buf, sizeof(in_buf), test_data->num_bits, out_bits, &actual_bits);
 }
 
-static void test_vector_deserialize(void *user_data)
+static void test_vector_uint8_deserialize(void *user_data)
 {
-    ssz_vector_deserialize_test_t *test_data = (ssz_vector_deserialize_test_t *)user_data;
-    switch (test_data->bit_size)
+    ssz_vector_test_uint8 *test_data = (ssz_vector_test_uint8 *)user_data;
+    uint8_t in_buf[65536];
+    memcpy(in_buf, test_data->items, test_data->element_count * sizeof(uint8_t));
+    uint8_t out_elements[16384];
+    ssz_deserialize_vector_uint8(in_buf, sizeof(in_buf), test_data->element_count, out_elements);
+}
+
+static void test_vector_uint16_deserialize(void *user_data)
+{
+    ssz_vector_test_uint16 *test_data = (ssz_vector_test_uint16 *)user_data;
+    uint8_t in_buf[65536];
+    memcpy(in_buf, test_data->items, test_data->element_count * sizeof(uint16_t));
+    uint16_t out_elements[16384];
+    ssz_deserialize_vector_uint16(in_buf, sizeof(in_buf), test_data->element_count, out_elements);
+}
+
+static void test_vector_uint32_deserialize(void *user_data)
+{
+    ssz_vector_test_uint32 *test_data = (ssz_vector_test_uint32 *)user_data;
+    uint8_t in_buf[65536];
+    memcpy(in_buf, test_data->items, test_data->element_count * sizeof(uint32_t));
+    uint32_t out_elements[16384];
+    ssz_deserialize_vector_uint32(in_buf, sizeof(in_buf), test_data->element_count, out_elements);
+}
+
+static void test_vector_uint64_deserialize(void *user_data)
+{
+    ssz_vector_test_uint64 *test_data = (ssz_vector_test_uint64 *)user_data;
+    uint8_t in_buf[131072];
+    memcpy(in_buf, test_data->items, test_data->element_count * sizeof(uint64_t));
+    uint64_t out_elements[16384];
+    ssz_deserialize_vector_uint64(in_buf, sizeof(in_buf), test_data->element_count, out_elements);
+}
+
+static void test_vector_uint128_deserialize(void *user_data)
+{
+    ssz_vector_test_uint128 *test_data = (ssz_vector_test_uint128 *)user_data;
+    uint8_t in_buf[262144];
+    memcpy(in_buf, test_data->items, test_data->element_count * 16);
+    uint8_t out_elements[16384 * 16];
+    ssz_deserialize_vector_uint128(in_buf, sizeof(in_buf), test_data->element_count, out_elements);
+}
+
+static void test_vector_uint256_deserialize(void *user_data)
+{
+    ssz_vector_test_uint256 *test_data = (ssz_vector_test_uint256 *)user_data;
+    uint8_t in_buf[262144];
+    memcpy(in_buf, test_data->items, test_data->element_count * 32);
+    uint8_t out_elements[8192 * 32];
+    ssz_deserialize_vector_uint256(in_buf, sizeof(in_buf), test_data->element_count, out_elements);
+}
+
+static void test_vector_bool_deserialize(void *user_data)
+{
+    ssz_vector_test_bool *test_data = (ssz_vector_test_bool *)user_data;
+    uint8_t in_buf[65536];
+    for (size_t i = 0; i < test_data->element_count; i++)
     {
-    case 1:
-    {
-        bool out_elements[16384];
-        ssz_deserialize_vector_bool(test_data->buffer, test_data->buffer_size, test_data->element_count, out_elements);
-        break;
+        in_buf[i] = test_data->items[i] ? 1 : 0;
     }
-    case 8:
+    bool out_elements[65536];
+    ssz_deserialize_vector_bool(in_buf, sizeof(in_buf), test_data->element_count, out_elements);
+}
+
+static void test_list_uint8_deserialize(void *user_data)
+{
+    ssz_list_test_uint8 *test_data = (ssz_list_test_uint8 *)user_data;
+    uint8_t in_buf[65536];
+    memcpy(in_buf, test_data->items, test_data->element_count * sizeof(uint8_t));
+    uint8_t out_elements[16384];
+    size_t actual_count;
+    ssz_deserialize_list_uint8(in_buf, sizeof(in_buf), test_data->element_count, out_elements, &actual_count);
+}
+
+static void test_list_uint16_deserialize(void *user_data)
+{
+    ssz_list_test_uint16 *test_data = (ssz_list_test_uint16 *)user_data;
+    uint8_t in_buf[65536];
+    memcpy(in_buf, test_data->items, test_data->element_count * sizeof(uint16_t));
+    uint16_t out_elements[16384];
+    size_t actual_count;
+    ssz_deserialize_list_uint16(in_buf, sizeof(in_buf), test_data->element_count, out_elements, &actual_count);
+}
+
+static void test_list_uint32_deserialize(void *user_data)
+{
+    ssz_list_test_uint32 *test_data = (ssz_list_test_uint32 *)user_data;
+    uint8_t in_buf[65536];
+    memcpy(in_buf, test_data->items, test_data->element_count * sizeof(uint32_t));
+    uint32_t out_elements[16384];
+    size_t actual_count;
+    ssz_deserialize_list_uint32(in_buf, sizeof(in_buf), test_data->element_count, out_elements, &actual_count);
+}
+
+static void test_list_uint64_deserialize(void *user_data)
+{
+    ssz_list_test_uint64 *test_data = (ssz_list_test_uint64 *)user_data;
+    uint8_t in_buf[65536];
+    memcpy(in_buf, test_data->items, test_data->element_count * sizeof(uint64_t));
+    uint64_t out_elements[8192];
+    size_t actual_count;
+    ssz_deserialize_list_uint64(in_buf, sizeof(in_buf), test_data->element_count, out_elements, &actual_count);
+}
+
+static void test_list_uint128_deserialize(void *user_data)
+{
+    ssz_list_test_uint128 *test_data = (ssz_list_test_uint128 *)user_data;
+    uint8_t in_buf[262144];
+    memcpy(in_buf, test_data->items, test_data->element_count * 16);
+    uint8_t out_elements[16384 * 16];
+    size_t actual_count;
+    ssz_deserialize_list_uint128(in_buf, sizeof(in_buf), test_data->element_count, out_elements, &actual_count);
+}
+
+static void test_list_uint256_deserialize(void *user_data)
+{
+    ssz_list_test_uint256 *test_data = (ssz_list_test_uint256 *)user_data;
+    uint8_t in_buf[262144];
+    memcpy(in_buf, test_data->items, test_data->element_count * 32);
+    uint8_t out_elements[8192 * 32];
+    size_t actual_count;
+    ssz_deserialize_list_uint256(in_buf, sizeof(in_buf), test_data->element_count, out_elements, &actual_count);
+}
+
+static void test_list_bool_deserialize(void *user_data)
+{
+    ssz_list_test_bool *test_data = (ssz_list_test_bool *)user_data;
+    uint8_t in_buf[65536];
+    for (size_t i = 0; i < test_data->element_count; i++)
     {
-        uint8_t out_elements[16384];
-        ssz_deserialize_vector_uint8(test_data->buffer, test_data->buffer_size, test_data->element_count, out_elements);
-        break;
+        in_buf[i] = test_data->items[i] ? 1 : 0;
     }
-    case 16:
+    bool out_elements[65536];
+    size_t actual_count;
+    ssz_deserialize_list_bool(in_buf, sizeof(in_buf), test_data->element_count, out_elements, &actual_count);
+}
+
+static void run_uintN_benchmarks(void)
+{
+    ssz_uintN_test_t test_data;
+    test_data.bit_size = 8;
+    memset(test_data.value, 0xFF, 1);
     {
-        uint16_t out_elements[16384];
-        ssz_deserialize_vector_uint16(test_data->buffer, test_data->buffer_size, test_data->element_count, out_elements);
-        break;
+        bench_stats_t stats = bench_run_benchmark(test_uint8_deserialize, &test_data, BENCH_ITER_WARMUP_UINTN, BENCH_ITER_MEASURED_UINTN);
+        bench_print_stats("Benchmark ssz_deserialize_uint8", &stats);
     }
-    case 32:
+    test_data.bit_size = 16;
+    memset(test_data.value, 0xFF, 2);
     {
-        uint32_t out_elements[16384];
-        ssz_deserialize_vector_uint32(test_data->buffer, test_data->buffer_size, test_data->element_count, out_elements);
-        break;
+        bench_stats_t stats = bench_run_benchmark(test_uint16_deserialize, &test_data, BENCH_ITER_WARMUP_UINTN, BENCH_ITER_MEASURED_UINTN);
+        bench_print_stats("Benchmark ssz_deserialize_uint16", &stats);
     }
-    case 64:
+    test_data.bit_size = 32;
+    memset(test_data.value, 0xFF, 4);
     {
-        uint64_t out_elements[16384];
-        ssz_deserialize_vector_uint64(test_data->buffer, test_data->buffer_size, test_data->element_count, out_elements);
-        break;
+        bench_stats_t stats = bench_run_benchmark(test_uint32_deserialize, &test_data, BENCH_ITER_WARMUP_UINTN, BENCH_ITER_MEASURED_UINTN);
+        bench_print_stats("Benchmark ssz_deserialize_uint32", &stats);
     }
-    case 128:
+    test_data.bit_size = 64;
+    memset(test_data.value, 0xFF, 8);
     {
-        uint8_t out_elements[16 * 16384];
-        ssz_deserialize_vector_uint128(test_data->buffer, test_data->buffer_size, test_data->element_count, out_elements);
-        break;
+        bench_stats_t stats = bench_run_benchmark(test_uint64_deserialize, &test_data, BENCH_ITER_WARMUP_UINTN, BENCH_ITER_MEASURED_UINTN);
+        bench_print_stats("Benchmark ssz_deserialize_uint64", &stats);
     }
-    case 256:
+    test_data.bit_size = 128;
+    memset(test_data.value, 0xFF, 16);
     {
-        uint8_t out_elements[32 * 16384];
-        ssz_deserialize_vector_uint256(test_data->buffer, test_data->buffer_size, test_data->element_count, out_elements);
-        break;
+        bench_stats_t stats = bench_run_benchmark(test_uint128_deserialize, &test_data, BENCH_ITER_WARMUP_UINTN, BENCH_ITER_MEASURED_UINTN);
+        bench_print_stats("Benchmark ssz_deserialize_uint128", &stats);
     }
-    default:
-        break;
+    test_data.bit_size = 256;
+    memset(test_data.value, 0xFF, 32);
+    {
+        bench_stats_t stats = bench_run_benchmark(test_uint256_deserialize, &test_data, BENCH_ITER_WARMUP_UINTN, BENCH_ITER_MEASURED_UINTN);
+        bench_print_stats("Benchmark ssz_deserialize_uint256", &stats);
     }
 }
 
-static void test_list_deserialize(void *user_data)
+static void run_boolean_benchmarks(void)
 {
-    ssz_list_deserialize_test_t *test_data = (ssz_list_deserialize_test_t *)user_data;
-    switch (test_data->bit_size)
-    {
-    case 1:
-    {
-        bool out_elements[16384];
-        size_t out_actual_count = 0;
-        ssz_deserialize_list_bool(test_data->buffer, test_data->buffer_size, test_data->max_length, out_elements, &out_actual_count);
-        break;
-    }
-    case 8:
-    {
-        uint8_t out_elements[16384];
-        size_t out_actual_count = 0;
-        ssz_deserialize_list_uint8(test_data->buffer, test_data->buffer_size, test_data->max_length, out_elements, &out_actual_count);
-        break;
-    }
-    case 16:
-    {
-        uint16_t out_elements[16384];
-        size_t out_actual_count = 0;
-        ssz_deserialize_list_uint16(test_data->buffer, test_data->buffer_size, test_data->max_length, out_elements, &out_actual_count);
-        break;
-    }
-    case 32:
-    {
-        uint32_t out_elements[16384];
-        size_t out_actual_count = 0;
-        ssz_deserialize_list_uint32(test_data->buffer, test_data->buffer_size, test_data->max_length, out_elements, &out_actual_count);
-        break;
-    }
-    case 64:
-    {
-        uint64_t out_elements[16384];
-        size_t out_actual_count = 0;
-        ssz_deserialize_list_uint64(test_data->buffer, test_data->buffer_size, test_data->max_length, out_elements, &out_actual_count);
-        break;
-    }
-    case 128:
-    {
-        uint8_t out_elements[16 * 16384];
-        size_t out_actual_count = 0;
-        ssz_deserialize_list_uint128(test_data->buffer, test_data->buffer_size, test_data->max_length, out_elements, &out_actual_count);
-        break;
-    }
-    case 256:
-    {
-        uint8_t out_elements[32 * 16384];
-        size_t out_actual_count = 0;
-        ssz_deserialize_list_uint256(test_data->buffer, test_data->buffer_size, test_data->max_length, out_elements, &out_actual_count);
-        break;
-    }
-    default:
-        break;
-    }
-}
-
-static void run_uintN_deserialize_benchmarks(void)
-{
-    ssz_uintN_deserialize_test_t tests[] = {
-        {8, {0}, 1},
-        {16, {0}, 2},
-        {32, {0}, 4},
-        {64, {0}, 8},
-        {128, {0}, 16},
-        {256, {0}, 32}};
-    for (int i = 0; i < (int)(sizeof(tests) / sizeof(tests[0])); i++)
-    {
-        memset(tests[i].buffer, 0xFF, tests[i].buffer_size);
-        bench_stats_t stats = bench_run_benchmark(test_uintN_deserialize, &tests[i], BENCH_ITER_WARMUP_UINTN, BENCH_ITER_MEASURED_UINTN);
-        char label[64];
-        snprintf(label, sizeof(label), "Benchmark ssz_deserialize_uint%zu", tests[i].bit_size);
-        bench_print_stats(label, &stats);
-    }
-}
-
-static void run_boolean_deserialize_benchmarks(void)
-{
-    ssz_boolean_deserialize_test_t tests[] = {
-        {{0x00}, 1},
-        {{0x01}, 1}};
+    bool booleans[] = {false, true};
     for (int i = 0; i < 2; i++)
     {
-        bench_stats_t stats = bench_run_benchmark(test_boolean_deserialize, &tests[i], BENCH_ITER_WARMUP_BOOLEAN, BENCH_ITER_MEASURED_BOOLEAN);
+        bench_stats_t stats = bench_run_benchmark(test_boolean_deserialize, &booleans[i], BENCH_ITER_WARMUP_BOOLEAN, BENCH_ITER_MEASURED_BOOLEAN);
         char label[64];
-        snprintf(label, sizeof(label), "Benchmark ssz_deserialize_boolean %s", tests[i].buffer[0] ? "true" : "false");
+        snprintf(label, sizeof(label), "Benchmark ssz_deserialize_boolean %s", booleans[i] ? "true" : "false");
         bench_print_stats(label, &stats);
     }
 }
 
-static void run_bitvector_deserialize_benchmarks(void)
+static void run_bitvector_benchmarks(void)
 {
-    ssz_bitvector_deserialize_test_t test_data;
+    ssz_bitvector_test_t test_data;
     test_data.num_bits = 262144;
-    test_data.buffer_size = 262144 / 8;
-    memset(test_data.buffer, 0xFF, test_data.buffer_size);
+    for (size_t i = 0; i < test_data.num_bits; i++)
+    {
+        test_data.bits[i] = true;
+    }
     bench_stats_t stats = bench_run_benchmark(test_bitvector_deserialize, &test_data, BENCH_ITER_WARMUP_BITVECTOR, BENCH_ITER_MEASURED_BITVECTOR);
     bench_print_stats("Benchmark ssz_deserialize_bitvector", &stats);
 }
 
-static void run_bitlist_deserialize_benchmarks(void)
+static void run_bitlist_benchmarks(void)
 {
-    ssz_bitlist_deserialize_test_t test_data;
-    test_data.max_bits = 524288;
-    test_data.buffer_size = (524288 / 8) + 1;
-    memset(test_data.buffer, 0xFF, test_data.buffer_size);
-    test_data.buffer[test_data.buffer_size - 1] = 0x01;
+    ssz_bitlist_test_t test_data;
+    test_data.num_bits = 524288;
+    for (size_t i = 0; i < test_data.num_bits; i++)
+    {
+        test_data.bits[i] = true;
+    }
     bench_stats_t stats = bench_run_benchmark(test_bitlist_deserialize, &test_data, BENCH_ITER_WARMUP_BITLIST, BENCH_ITER_MEASURED_BITLIST);
     bench_print_stats("Benchmark ssz_deserialize_bitlist", &stats);
 }
 
-static void run_vector_deserialize_benchmarks(void)
+static void run_vector_benchmarks(void)
 {
-    ssz_vector_deserialize_test_t tests[] = {
-        {1, {0}, 0, 16384},
-        {8, {0}, 0, 16384},
-        {16, {0}, 0, 16384},
-        {32, {0}, 0, 16384},
-        {64, {0}, 0, 16384},
-        {128, {0}, 0, 16384},
-        {256, {0}, 0, 16384}};
-    for (int i = 0; i < (int)(sizeof(tests) / sizeof(tests[0])); i++)
+    ssz_vector_test_uint8 test_u8;
+    test_u8.element_count = 16384;
+    for (size_t i = 0; i < test_u8.element_count; i++)
     {
-        if (tests[i].bit_size == 1)
-        {
-            tests[i].buffer_size = (tests[i].element_count + 7) / 8;
-        }
-        else
-        {
-            tests[i].buffer_size = (tests[i].bit_size / 8) * tests[i].element_count;
-        }
-        memset(tests[i].buffer, 0xFF, tests[i].buffer_size);
-        bench_stats_t stats = bench_run_benchmark(test_vector_deserialize, &tests[i], BENCH_ITER_WARMUP_VECTOR, BENCH_ITER_MEASURED_VECTOR);
-        char label[64];
-        if (tests[i].bit_size == 1)
-        {
-            snprintf(label, sizeof(label), "Benchmark ssz_deserialize_vector_bool");
-        }
-        else
-        {
-            snprintf(label, sizeof(label), "Benchmark ssz_deserialize_vector_uint%zu", tests[i].bit_size);
-        }
-        bench_print_stats(label, &stats);
+        test_u8.items[i] = (uint8_t)(i & 0xFF);
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_vector_uint8_deserialize, &test_u8, BENCH_ITER_WARMUP_VECTOR, BENCH_ITER_MEASURED_VECTOR);
+        bench_print_stats("Benchmark ssz_deserialize_vector_uint8", &stats);
+    }
+    ssz_vector_test_uint16 test_u16;
+    test_u16.element_count = 16384;
+    for (size_t i = 0; i < test_u16.element_count; i++)
+    {
+        test_u16.items[i] = (uint16_t)(i & 0xFFFF);
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_vector_uint16_deserialize, &test_u16, BENCH_ITER_WARMUP_VECTOR, BENCH_ITER_MEASURED_VECTOR);
+        bench_print_stats("Benchmark ssz_deserialize_vector_uint16", &stats);
+    }
+    ssz_vector_test_uint32 test_u32;
+    test_u32.element_count = 16384;
+    for (size_t i = 0; i < test_u32.element_count; i++)
+    {
+        test_u32.items[i] = (uint32_t)(i * 1234567U);
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_vector_uint32_deserialize, &test_u32, BENCH_ITER_WARMUP_VECTOR, BENCH_ITER_MEASURED_VECTOR);
+        bench_print_stats("Benchmark ssz_deserialize_vector_uint32", &stats);
+    }
+    ssz_vector_test_uint64 test_u64;
+    test_u64.element_count = 16384;
+    for (size_t i = 0; i < test_u64.element_count; i++)
+    {
+        test_u64.items[i] = 0xFFFFFFFFFFFFFFFFULL;
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_vector_uint64_deserialize, &test_u64, BENCH_ITER_WARMUP_VECTOR, BENCH_ITER_MEASURED_VECTOR);
+        bench_print_stats("Benchmark ssz_deserialize_vector_uint64", &stats);
+    }
+    ssz_vector_test_uint128 test_u128;
+    test_u128.element_count = 16384;
+    for (size_t i = 0; i < test_u128.element_count; i++)
+    {
+        uint8_t *ptr = &test_u128.items[i * 16];
+        memset(ptr, (int)(i & 0xFF), 16);
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_vector_uint128_deserialize, &test_u128, BENCH_ITER_WARMUP_VECTOR, BENCH_ITER_MEASURED_VECTOR);
+        bench_print_stats("Benchmark ssz_deserialize_vector_uint128", &stats);
+    }
+    ssz_vector_test_uint256 test_u256;
+    test_u256.element_count = 8192;
+    for (size_t i = 0; i < test_u256.element_count; i++)
+    {
+        uint8_t *ptr = &test_u256.items[i * 32];
+        memset(ptr, (int)(i & 0xFF), 32);
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_vector_uint256_deserialize, &test_u256, BENCH_ITER_WARMUP_VECTOR, BENCH_ITER_MEASURED_VECTOR);
+        bench_print_stats("Benchmark ssz_deserialize_vector_uint256", &stats);
+    }
+    ssz_vector_test_bool test_bool;
+    test_bool.element_count = 65536;
+    for (size_t i = 0; i < test_bool.element_count; i++)
+    {
+        test_bool.items[i] = (i % 2 == 0);
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_vector_bool_deserialize, &test_bool, BENCH_ITER_WARMUP_VECTOR, BENCH_ITER_MEASURED_VECTOR);
+        bench_print_stats("Benchmark ssz_deserialize_vector_bool", &stats);
     }
 }
 
-static void run_list_deserialize_benchmarks(void)
+static void run_list_benchmarks(void)
 {
-    ssz_list_deserialize_test_t tests[] = {
-        {1, {0}, 0, 16384},
-        {8, {0}, 0, 16384},
-        {16, {0}, 0, 16384},
-        {32, {0}, 0, 16384},
-        {64, {0}, 0, 16384},
-        {128, {0}, 0, 16384},
-        {256, {0}, 0, 16384}};
-    for (int i = 0; i < (int)(sizeof(tests) / sizeof(tests[0])); i++)
+    ssz_list_test_uint8 test_u8;
+    test_u8.element_count = 16384;
+    for (size_t i = 0; i < test_u8.element_count; i++)
     {
-        size_t element_size = 0;
-        if (tests[i].bit_size == 1)
-        {
-            element_size = (tests[i].max_length + 7) / 8;
-        }
-        else
-        {
-            element_size = (tests[i].bit_size / 8) * tests[i].max_length;
-        }
-        tests[i].buffer_size = 4 + element_size;
-        memset(tests[i].buffer, 0xFF, tests[i].buffer_size);
-        uint32_t data_size = (uint32_t)element_size;
-        tests[i].buffer[0] = (uint8_t)(data_size & 0xFF);
-        tests[i].buffer[1] = (uint8_t)((data_size >> 8) & 0xFF);
-        tests[i].buffer[2] = (uint8_t)((data_size >> 16) & 0xFF);
-        tests[i].buffer[3] = (uint8_t)((data_size >> 24) & 0xFF);
-        bench_stats_t stats = bench_run_benchmark(test_list_deserialize, &tests[i], BENCH_ITER_WARMUP_LIST, BENCH_ITER_MEASURED_LIST);
-        char label[64];
-        if (tests[i].bit_size == 1)
-        {
-            snprintf(label, sizeof(label), "Benchmark ssz_deserialize_list_bool");
-        }
-        else
-        {
-            snprintf(label, sizeof(label), "Benchmark ssz_deserialize_list_uint%zu", tests[i].bit_size);
-        }
-        bench_print_stats(label, &stats);
+        test_u8.items[i] = (uint8_t)(i & 0xFF);
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_list_uint8_deserialize, &test_u8, BENCH_ITER_WARMUP_LIST, BENCH_ITER_MEASURED_LIST);
+        bench_print_stats("Benchmark ssz_deserialize_list_uint8", &stats);
+    }
+    ssz_list_test_uint16 test_u16;
+    test_u16.element_count = 16384;
+    for (size_t i = 0; i < test_u16.element_count; i++)
+    {
+        test_u16.items[i] = (uint16_t)(i & 0xFFFF);
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_list_uint16_deserialize, &test_u16, BENCH_ITER_WARMUP_LIST, BENCH_ITER_MEASURED_LIST);
+        bench_print_stats("Benchmark ssz_deserialize_list_uint16", &stats);
+    }
+    ssz_list_test_uint32 test_u32;
+    test_u32.element_count = 16384;
+    for (size_t i = 0; i < test_u32.element_count; i++)
+    {
+        test_u32.items[i] = (uint32_t)(i * 1234567U);
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_list_uint32_deserialize, &test_u32, BENCH_ITER_WARMUP_LIST, BENCH_ITER_MEASURED_LIST);
+        bench_print_stats("Benchmark ssz_deserialize_list_uint32", &stats);
+    }
+    ssz_list_test_uint64 test_u64;
+    test_u64.element_count = 8192;
+    for (size_t i = 0; i < test_u64.element_count; i++)
+    {
+        test_u64.items[i] = 0xFFFFFFFFFFFFFFFFULL;
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_list_uint64_deserialize, &test_u64, BENCH_ITER_WARMUP_LIST, BENCH_ITER_MEASURED_LIST);
+        bench_print_stats("Benchmark ssz_deserialize_list_uint64", &stats);
+    }
+    ssz_list_test_uint128 test_u128;
+    test_u128.element_count = 16384;
+    for (size_t i = 0; i < test_u128.element_count; i++)
+    {
+        uint8_t *ptr = &test_u128.items[i * 16];
+        memset(ptr, (int)(i & 0xFF), 16);
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_list_uint128_deserialize, &test_u128, BENCH_ITER_WARMUP_LIST, BENCH_ITER_MEASURED_LIST);
+        bench_print_stats("Benchmark ssz_deserialize_list_uint128", &stats);
+    }
+    ssz_list_test_uint256 test_u256;
+    test_u256.element_count = 8192;
+    for (size_t i = 0; i < test_u256.element_count; i++)
+    {
+        uint8_t *ptr = &test_u256.items[i * 32];
+        memset(ptr, (int)(i & 0xFF), 32);
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_list_uint256_deserialize, &test_u256, BENCH_ITER_WARMUP_LIST, BENCH_ITER_MEASURED_LIST);
+        bench_print_stats("Benchmark ssz_deserialize_list_uint256", &stats);
+    }
+    ssz_list_test_bool test_bool;
+    test_bool.element_count = 65536;
+    for (size_t i = 0; i < test_bool.element_count; i++)
+    {
+        test_bool.items[i] = (i % 2 == 0);
+    }
+    {
+        bench_stats_t stats = bench_run_benchmark(test_list_bool_deserialize, &test_bool, BENCH_ITER_WARMUP_LIST, BENCH_ITER_MEASURED_LIST);
+        bench_print_stats("Benchmark ssz_deserialize_list_bool", &stats);
     }
 }
 
-static void run_all_deserialization_benchmarks(void)
+static void run_all_benchmarks(void)
 {
-    run_uintN_deserialize_benchmarks();
-    run_boolean_deserialize_benchmarks();
-    run_bitvector_deserialize_benchmarks();
-    run_bitlist_deserialize_benchmarks();
-    run_vector_deserialize_benchmarks();
-    run_list_deserialize_benchmarks();
+    run_uintN_benchmarks();
+    run_boolean_benchmarks();
+    run_bitvector_benchmarks();
+    run_bitlist_benchmarks();
+    run_vector_benchmarks();
+    run_list_benchmarks();
 }
 
 int main(void)
 {
-    run_all_deserialization_benchmarks();
+    run_all_benchmarks();
     return 0;
 }

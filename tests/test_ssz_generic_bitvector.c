@@ -106,13 +106,6 @@ unsigned char *read_file(const char *filepath, size_t *size_out)
     return buffer;
 }
 
-void print_hex(const unsigned char *data, size_t size)
-{
-    for (size_t i = 0; i < size; i++)
-        printf("%02x", data[i]);
-    printf("\n");
-}
-
 void process_serialized_file(const char *folder_name, const char *folder_path, const char *serialized_file_path)
 {
     total_valid_tests++;

@@ -27,7 +27,11 @@ For further details regarding the public API, please refer to the header files [
 
 ### Merklelization
 
-The library includes functions to compute Merkle roots for SSZ serialized data. For detailed usage, please refer to the API in the header file [`ssz_merkle.h`](include/ssz_merkle.h).
+The library includes functions for computing a Merkle root over contiguous chunks of data. For detailed usage, please refer to the API in the header file [`ssz_merkle.h`](include/ssz_merkle.h).
+
+### Performance
+
+The necessary public functions in this library have been benchmarked where the detailed results can be found in this project's [wiki section](https://github.com/Pier-Two/SimpleSerializeC/wiki/Performance). These results can be replicated by using commands listed in the [Running Benchmarks](#running-benchmarks) section. 
 
 ## Getting Started
 
@@ -51,9 +55,9 @@ The library includes benchmarks to evaluate the performance of SSZ serialization
 make bench
 ```
 
-2. Run a specific benchmark (e.g., `attestation`):
+2. Run a specific benchmark (e.g., `serialize`):
 ```bash
-make bench attestation
+make bench serialize
 ```
 
 ### Running Tests
