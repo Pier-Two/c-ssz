@@ -84,7 +84,7 @@ This project includes code from an external source, which is covered by its resp
 This project is licensed under the MIT License. See the [`LICENSE-MIT`](LICENSE-MIT) file for details.
 
 ### BSD-3-Clause Licensed Code
-This project uses the SHA256 implementation from [libmincrypt](https://android.googlesource.com/platform/system/core/+/669ecc2f5e80ff924fa20ce7445354a7c5bcfd98/libmincrypt), which is licensed under the BSD-3-Clause License. See the [`LICENSE-BSD`](LICENSE-BSD) file for details.
+This project implements the SHA256 implementation from [libmincrypt](https://android.googlesource.com/platform/system/core/+/669ecc2f5e80ff924fa20ce7445354a7c5bcfd98/libmincrypt), which is licensed under the BSD-3-Clause License. See the [`LICENSE-BSD`](LICENSE-BSD) file for details.
 
 ## Contributing
 Contributions are welcome! Please open an issue or submit a pull request for any improvements, bug fixes, or additional benchmarks.
