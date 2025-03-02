@@ -508,7 +508,7 @@ static void init_attestation_data_from_yaml(void)
     }
 }
 
-static void attestation_bench_test_func_serialize(void *user_data)
+static void attestation_bench_func_name_serialize(void *user_data)
 {
     (void)user_data;
     memset(g_serialized, 0, sizeof(g_serialized));
@@ -525,7 +525,7 @@ static void attestation_bench_test_func_serialize(void *user_data)
     }
 }
 
-static void attestation_bench_test_func_deserialize(void *user_data)
+static void attestation_bench_func_name_deserialize(void *user_data)
 {
     (void)user_data;
     IndexedAttestation tmp;
@@ -734,12 +734,12 @@ int main(void)
 {
     init_attestation_data_from_yaml();
     bench_stats_t stats_serialize = bench_run_benchmark(
-        attestation_bench_test_func_serialize,
+        attestation_bench_func_name_serialize,
         NULL,
         BENCH_ITER_WARMUP,
         BENCH_ITER_MEASURED);
     bench_stats_t stats_deserialize = bench_run_benchmark(
-        attestation_bench_test_func_deserialize,
+        attestation_bench_func_name_deserialize,
         NULL,
         BENCH_ITER_WARMUP,
         BENCH_ITER_MEASURED);

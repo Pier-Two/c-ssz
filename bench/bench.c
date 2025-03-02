@@ -41,7 +41,7 @@ static double bench_get_time_in_nanoseconds(void)
 #endif
 
 bench_stats_t bench_run_benchmark(
-    bench_test_func_t test_func,
+    bench_func_t func_name,
     void *user_data,
     unsigned long warmup_iterations,
     unsigned long measured_iterations)
@@ -51,7 +51,7 @@ bench_stats_t bench_run_benchmark(
 
     for (unsigned long i = 0; i < warmup_iterations; i++)
     {
-        test_func(user_data);
+        func_name(user_data);
     }
 
     if (measured_iterations == 0)
@@ -68,7 +68,7 @@ bench_stats_t bench_run_benchmark(
     for (unsigned long i = 0; i < measured_iterations; i++)
     {
         double start = bench_get_time_in_nanoseconds();
-        test_func(user_data);
+        func_name(user_data);
         double end = bench_get_time_in_nanoseconds();
         durations[i] = end - start;
     }

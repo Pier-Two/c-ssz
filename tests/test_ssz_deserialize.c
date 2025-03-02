@@ -1266,5 +1266,6 @@ int main(void)
     test_deserialize_list_uint128();
     test_deserialize_list_uint256();
     test_deserialize_list_bool();
+    
     return 0;
 }

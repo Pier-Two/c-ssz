@@ -361,8 +361,6 @@ void process_invalid_serialized_file(const char *folder_name, const char *folder
         return;
     }
 
-    // Try to parse the folder name using the expected pattern.
-    // If it does not match (as in the no_delimiter cases), default to a safe max_allowed.
     int max_allowed = 1024;
     int dummy;
     if (sscanf(folder_name, "bitlist_%d_but_%d", &max_allowed, &dummy) != 2)

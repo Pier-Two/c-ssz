@@ -445,7 +445,7 @@ static void init_attestation_data_from_yaml(void)
     }
 }
 
-static void attestation_bench_test_func_serialize(void *user_data)
+static void attestation_bench_func_name_serialize(void *user_data)
 {
     (void)user_data;
     memset(g_serialized, 0, sizeof(g_serialized));
@@ -458,7 +458,7 @@ static void attestation_bench_test_func_serialize(void *user_data)
     }
 }
 
-static void attestation_bench_test_func_deserialize(void *user_data)
+static void attestation_bench_func_name_deserialize(void *user_data)
 {
     (void)user_data;
     Attestation tmp;
@@ -662,8 +662,8 @@ static void print_attestation_tree(const Attestation *att)
 int main(void)
 {
     init_attestation_data_from_yaml();
-    bench_stats_t stats_serialize = bench_run_benchmark(attestation_bench_test_func_serialize, NULL, BENCH_ITER_WARMUP, BENCH_ITER_MEASURED);
-    bench_stats_t stats_deserialize = bench_run_benchmark(attestation_bench_test_func_deserialize, NULL, BENCH_ITER_WARMUP, BENCH_ITER_MEASURED);
+    bench_stats_t stats_serialize = bench_run_benchmark(attestation_bench_func_name_serialize, NULL, BENCH_ITER_WARMUP, BENCH_ITER_MEASURED);
+    bench_stats_t stats_deserialize = bench_run_benchmark(attestation_bench_func_name_deserialize, NULL, BENCH_ITER_WARMUP, BENCH_ITER_MEASURED);
     print_attestation(&g_original);
     uint8_t merkle_root[32];
     if (hash_tree_root_attestation(&g_original, merkle_root) == SSZ_SUCCESS)

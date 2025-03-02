@@ -1,7 +1,7 @@
 #ifndef BENCH_H
 #define BENCH_H
 
-typedef void (*bench_test_func_t)(void *user_data);
+typedef void (*bench_func_t)(void *user_data);
 
 typedef struct
 {
@@ -15,7 +15,7 @@ typedef struct
 } bench_stats_t;
 
 bench_stats_t bench_run_benchmark(
-    bench_test_func_t test_func,
+    bench_func_t func_name,
     void *user_data,
     unsigned long warmup_iterations,
     unsigned long measured_iterations);
