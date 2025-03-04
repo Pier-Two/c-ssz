@@ -173,7 +173,7 @@ static void test_boolean_serialize(void *user_data)
     bool value = *(bool *)user_data;
     uint8_t out_buf[1];
     size_t out_size = sizeof(out_buf);
-    ssz_serialize_boolean(value, out_buf, &out_size);
+    ssz_serialize_boolean(&value, out_buf, &out_size);
 }
 
 static void test_bitvector_serialize(void *user_data)

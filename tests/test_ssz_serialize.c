@@ -260,8 +260,9 @@ static void test_serialize_boolean(void)
 
     printf("Testing false serialization...\n");
     {
+        bool val = false;
         out_size = sizeof(buffer);
-        err = ssz_serialize_boolean(false, buffer, &out_size);
+        err = ssz_serialize_boolean(&val, buffer, &out_size);
         if (err == SSZ_SUCCESS && out_size == 1 && buffer[0] == 0x00)
         {
             printf("  OK: False boolean serialized correctly.\n");
@@ -274,9 +275,10 @@ static void test_serialize_boolean(void)
 
     printf("Testing true serialization...\n");
     {
+        bool val = true;
         memset(buffer, 0xAB, sizeof(buffer));
         out_size = sizeof(buffer);
-        err = ssz_serialize_boolean(true, buffer, &out_size);
+        err = ssz_serialize_boolean(&val, buffer, &out_size);
         if (err == SSZ_SUCCESS && out_size == 1 && buffer[0] == 0x01)
         {
             printf("  OK: True boolean serialized correctly.\n");
@@ -291,7 +293,7 @@ static void test_serialize_boolean(void)
     {
         bool val = true;
         out_size = 0;
-        err = ssz_serialize_boolean(val, buffer, &out_size);
+        err = ssz_serialize_boolean(&val, buffer, &out_size);
         if (err == SSZ_ERROR_SERIALIZATION)
         {
             printf("  OK: Rejected zero out_size.\n");
@@ -300,7 +302,7 @@ static void test_serialize_boolean(void)
         {
             printf("  FAIL: Did not reject zero out_size.\n");
         }
-        err = ssz_serialize_boolean(val, NULL, &out_size);
+        err = ssz_serialize_boolean(&val, NULL, &out_size);
         if (err == SSZ_ERROR_SERIALIZATION)
         {
             printf("  OK: Rejected null output buffer.\n");

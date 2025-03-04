@@ -75,7 +75,7 @@ ssz_error_t ssz_serialize_uint256(const void *value, uint8_t *out_buf, size_t *o
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_serialize_boolean(
-    bool value,
+    const bool *value,
     uint8_t *out_buf,
     size_t *out_size
 );

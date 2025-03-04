@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include "ssz_serialize.h"
 #include "ssz_constants.h"
 #include "ssz_types.h"
@@ -177,13 +178,13 @@ ssz_error_t ssz_serialize_uint256(
  * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_serialize_boolean(bool value, uint8_t *out_buf, size_t *out_size)
+ssz_error_t ssz_serialize_boolean(const bool *value, uint8_t *out_buf, size_t *out_size)
 {
     if (out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_BOOL)
     {
         return SSZ_ERROR_SERIALIZATION;
     }
-    out_buf[0] = (uint8_t)value;
+    out_buf[0] = (uint8_t)(*value);
     *out_size = SSZ_BYTE_SIZE_OF_BOOL;
     return SSZ_SUCCESS;
 }

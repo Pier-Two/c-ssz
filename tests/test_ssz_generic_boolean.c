@@ -148,7 +148,8 @@ void process_serialized_file(const char *folder_name, const char *folder_path, c
         return;
     }
     size_t ser_size = 1;
-    ssz_error_t ser_err = ssz_serialize_boolean(value, out_buf, &ser_size);
+    /* Note the change here: passing the address of value */
+    ssz_error_t ser_err = ssz_serialize_boolean(&value, out_buf, &ser_size);
     if (ser_err != SSZ_SUCCESS)
     {
         valid_failed++;
