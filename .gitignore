@@ -1,3 +1,6 @@
+# Build directory (out-of-source build folder)
+build/
+
 # Prerequisites
 *.d
 

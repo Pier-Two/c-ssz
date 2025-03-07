@@ -303,7 +303,7 @@ DEFINE_DESERIALIZE_CONTAINER(AttestationData, DESERIALIZE_ATTESTATION_DATA_FIELD
         uint32_t variable_offset = (uint32_t)SIZE_PENDING_ATTESTATION_FIXED;                                 \
         uint32_t agg_bits_offset;                                                                            \
         size_t agg_bits_size = ((obj->aggregation_bits.length) / SSZ_BITS_PER_BYTE) + 1;                     \
-        SERIALIZE_OFFSET_FIELD(agg_bits_offset, variable_offset, offset, "aggregation_bits", agg_bits_size); \
+        SERIALIZE_OFFSET_FIELD(agg_bits_offset, variable_offset, offset, agg_bits_size); \
         SERIALIZE_CONTAINER_FIELD(obj, offset, data, serialize_AttestationData, SIZE_ATTESTATION_DATA);      \
         SERIALIZE_BASIC_FIELD(obj, offset, inclusion_delay, SSZ_BYTE_SIZE_OF_UINT64, ssz_serialize_uint64);  \
         SERIALIZE_BASIC_FIELD(obj, offset, proposer_index, SSZ_BYTE_SIZE_OF_UINT64, ssz_serialize_uint64);   \
@@ -313,7 +313,7 @@ DEFINE_SERIALIZE_CONTAINER(PendingAttestation, SERIALIZE_PENDING_ATTESTATION_FIE
 
 #define DESERIALIZE_PENDING_ATTESTATION_FIELD                                                           \
     uint32_t agg_bits_offset = 0;                                                                       \
-    DESERIALIZE_OFFSET_FIELD(agg_bits_offset, offset, "aggregation_bits");                              \
+    DESERIALIZE_OFFSET_FIELD(agg_bits_offset, offset);                              \
     DESERIALIZE_CONTAINER_FIELD(obj, offset, data, deserialize_AttestationData, SIZE_ATTESTATION_DATA); \
     DESERIALIZE_BASIC_FIELD(obj, offset, inclusion_delay, ssz_deserialize_uint64);                      \
     DESERIALIZE_BASIC_FIELD(obj, offset, proposer_index, ssz_deserialize_uint64);                       \
@@ -444,25 +444,25 @@ ssz_error_t serialize_BeaconState_object(const BeaconState *state, unsigned char
 
     // Serialize historical_roots offset
     uint32_t historical_roots_offset;
-    SERIALIZE_OFFSET_FIELD(historical_roots_offset, variable_offset, offset, "historical_roots", state->historical_roots.length * SIZE_ROOT);
+    SERIALIZE_OFFSET_FIELD(historical_roots_offset, variable_offset, offset, state->historical_roots.length * SIZE_ROOT);
 
     // Serialize eth1_data
     SERIALIZE_CONTAINER_FIELD(state, offset, eth1_data, serialize_Eth1Data, SIZE_ETH1_DATA);
 
     // Serialize eth1_data_votes offset
     uint32_t eth1_data_votes_offset;
-    SERIALIZE_OFFSET_FIELD(eth1_data_votes_offset, variable_offset, offset, "eth1_data_votes", state->eth1_data_votes.length * SIZE_ETH1_DATA);
+    SERIALIZE_OFFSET_FIELD(eth1_data_votes_offset, variable_offset, offset, state->eth1_data_votes.length * SIZE_ETH1_DATA);
 
     // Serialize eth1_deposit_index
     SERIALIZE_BASIC_FIELD(state, offset, eth1_deposit_index, SSZ_BYTE_SIZE_OF_UINT64, ssz_serialize_uint64);
 
     // Serialize validators offset
     uint32_t validators_offset;
-    SERIALIZE_OFFSET_FIELD(validators_offset, variable_offset, offset, "validators", state->validators.length * SIZE_VALIDATOR);
+    SERIALIZE_OFFSET_FIELD(validators_offset, variable_offset, offset, state->validators.length * SIZE_VALIDATOR);
 
     // Serialize balances offset
     uint32_t balances_offset;
-    SERIALIZE_OFFSET_FIELD(balances_offset, variable_offset, offset, "balances", state->balances.length * SSZ_BYTE_SIZE_OF_UINT64);
+    SERIALIZE_OFFSET_FIELD(balances_offset, variable_offset, offset, state->balances.length * SSZ_BYTE_SIZE_OF_UINT64);
 
     // Serialize randao_mixes
     SERIALIZE_VECTOR_ARRAY_FIELD(state, offset, randao_mixes, SIZE_ROOT, EPOCHS_PER_HISTORICAL_VECTOR, ssz_serialize_vector_uint8);
@@ -539,25 +539,25 @@ ssz_error_t deserialize_BeaconState_object(const unsigned char *data, size_t dat
 
     // Deserialize historical_roots offset
     uint32_t historical_roots_offset;
-    DESERIALIZE_OFFSET_FIELD(historical_roots_offset, offset, "historical_roots");
+    DESERIALIZE_OFFSET_FIELD(historical_roots_offset, offset);
 
     // Deserialize eth1_data
     DESERIALIZE_CONTAINER_FIELD(state, offset, eth1_data, deserialize_Eth1Data, SIZE_ETH1_DATA);
 
     // Deserialize eth1_data_votes
     uint32_t eth1_data_votes_offset;
-    DESERIALIZE_OFFSET_FIELD(eth1_data_votes_offset, offset, "eth1_data_votes");
+    DESERIALIZE_OFFSET_FIELD(eth1_data_votes_offset, offset);
 
     // Deserialize eth1_deposit_index
     DESERIALIZE_BASIC_FIELD(state, offset, eth1_deposit_index, ssz_deserialize_uint64);
 
     // Deserialize validators offset
     uint32_t validators_offset;
-    DESERIALIZE_OFFSET_FIELD(validators_offset, offset, "validators");
+    DESERIALIZE_OFFSET_FIELD(validators_offset, offset);
 
     // Deserialize balances offset
     uint32_t balances_offset;
-    DESERIALIZE_OFFSET_FIELD(balances_offset, offset, "balances");
+    DESERIALIZE_OFFSET_FIELD(balances_offset, offset);
 
     // Deserialize randao_mixes
     DESERIALIZE_VECTOR_ARRAY_FIELD(state, offset, randao_mixes, SIZE_ROOT, EPOCHS_PER_HISTORICAL_VECTOR, ssz_deserialize_vector_uint8);
@@ -567,11 +567,11 @@ ssz_error_t deserialize_BeaconState_object(const unsigned char *data, size_t dat
 
     // Deserialize previous_epoch_attestations offset
     uint32_t previous_epoch_attestations_offset;
-    DESERIALIZE_OFFSET_FIELD(previous_epoch_attestations_offset, offset, "previous_epoch_attestations");
+    DESERIALIZE_OFFSET_FIELD(previous_epoch_attestations_offset, offset);
 
     // Deserialize current_epoch_attestations offset
     uint32_t current_epoch_attestations_offset;
-    DESERIALIZE_OFFSET_FIELD(current_epoch_attestations_offset, offset, "current_epoch_attestations");
+    DESERIALIZE_OFFSET_FIELD(current_epoch_attestations_offset, offset);
 
     // Deserialize justification_bits
     DESERIALIZE_BITVECTOR_FIELD(state, offset, justification_bits, JUSTIFICATION_BITS_LENGTH);
