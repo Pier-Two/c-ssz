@@ -114,7 +114,7 @@ SNAPPY_DECODE_OBJ = $(OBJ_DIR)/tests/snappy_decode.o
 # Build rules for library objects
 ###############################################################################
 $(STATIC_LIB): $(LIB_OBJECTS)
-	@$(call MKDIR_P,$(LIB_DIR))
+	@$(call MKDIR_P,$(BUILD_DIR))
 	$(AR) $(ARFLAGS) $@ $^
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
