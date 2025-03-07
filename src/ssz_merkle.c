@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
-#include "crypto/mincrypt/sha256.h"
+#include "mincrypt/sha256.h"
 #include "ssz_merkle.h"
 #include "ssz_utils.h"
 #include "ssz_constants.h"

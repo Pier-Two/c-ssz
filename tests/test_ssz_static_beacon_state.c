@@ -499,10 +499,10 @@ ssz_error_t serialize_BeaconState_object(const BeaconState *state, unsigned char
     SERIALIZE_LIST_FIELD(state, offset, balances, state->balances.length * SSZ_BYTE_SIZE_OF_UINT64);
 
     // Serialize previous_epoch_attestations
-    SERIALIZE_LIST_VARIABLE_CONTAINER_DATA(state, previous_epoch_attestations_offset, previous_epoch_attestations, serialize_PendingAttestation);
+    SERIALIZE_LIST_VARIABLE_CONTAINER_FIELD(state, previous_epoch_attestations_offset, previous_epoch_attestations, serialize_PendingAttestation);
 
     // Serialize current_epoch_attestations
-    SERIALIZE_LIST_VARIABLE_CONTAINER_DATA(state, current_epoch_attestations_offset, current_epoch_attestations, serialize_PendingAttestation);
+    SERIALIZE_LIST_VARIABLE_CONTAINER_FIELD(state, current_epoch_attestations_offset, current_epoch_attestations, serialize_PendingAttestation);
 
     *out_size = variable_offset;
     return SSZ_SUCCESS;
@@ -646,8 +646,12 @@ void process_serialized_file(const char *folder_name, const char *folder_path, c
         return;
     }
 
-    BeaconState state;
-    ssz_error_t err1 = deserialize_BeaconState_object(data, data_size, &state);
+    BeaconState *state = malloc(sizeof(BeaconState));
+    if (!state) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+    ssz_error_t err1 = deserialize_BeaconState_object(data, data_size, state);
 
     if (err1 != SSZ_SUCCESS)
     {
@@ -667,7 +671,7 @@ void process_serialized_file(const char *folder_name, const char *folder_path, c
     }
 
     size_t serialized_size;
-    ssz_error_t err2 = serialize_BeaconState_object(&state, serialized_data, &serialized_size);
+    ssz_error_t err2 = serialize_BeaconState_object(state, serialized_data, &serialized_size);
     if (err2 != SSZ_SUCCESS)
     {
         fprintf(stderr, "Failed to serialize BeaconState to file: %s\n", serialized_file_path);
@@ -679,7 +683,7 @@ void process_serialized_file(const char *folder_name, const char *folder_path, c
 
     if (memcmp(data, serialized_data, data_size) != 0)
     {
-        printf("The original data and the deserialized data are not the same for folder %s\n", folder_path);
+        printf("The original serialized data and computed serialized data are not the same for folder %s\n", folder_path);
 
         size_t first_diff = 0;
         while (first_diff < data_size && data[first_diff] == serialized_data[first_diff])
@@ -709,7 +713,7 @@ void process_serialized_file(const char *folder_name, const char *folder_path, c
     }
     else
     {
-        printf("The original data and the deserialized data are the same\n");
+        printf("The original serialized data and computed serialized data are the same for folder %s\n", folder_path);
     }
 
     free(data);

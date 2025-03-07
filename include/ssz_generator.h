@@ -184,17 +184,17 @@
         (offset) += _tmp_size;                                    \
     } while (0)
 
-#define SERIALIZE_LIST_CONTAINER_FIELD(obj, offset, size, field, container_ser_func)       \
-    do                                                                                     \
-    {                                                                                      \
-        size_t tmp_size = (size);                                                          \
-        ssz_error_t err_local = container_ser_func(&(obj)->field, out_buf + (offset),      \
-                                                   &tmp_size);                             \
-        if (err_local != SSZ_SUCCESS)                                                      \
-        {                                                                                  \
-            return SSZ_ERROR_SERIALIZATION;                                                \
-        }                                                                                  \
-        (offset) += tmp_size;                                                              \
+#define SERIALIZE_LIST_CONTAINER_FIELD(obj, offset, size, field, container_ser_func)  \
+    do                                                                                \
+    {                                                                                 \
+        size_t tmp_size = (size);                                                     \
+        ssz_error_t err_local = container_ser_func(&(obj)->field, out_buf + (offset), \
+                                                   &tmp_size);                        \
+        if (err_local != SSZ_SUCCESS)                                                 \
+        {                                                                             \
+            return SSZ_ERROR_SERIALIZATION;                                           \
+        }                                                                             \
+        (offset) += tmp_size;                                                         \
     } while (0)
 
 #define SERIALIZE_VARIABLE_FIELD_OFFSET(obj, fixed_var, fixed_offset, base, allocated_size, field, container_ser_func)                   \
@@ -271,43 +271,48 @@
         base = _current_sub_offset;                                                                                                      \
     } while (0)
 
-#define SERIALIZE_LIST_VARIABLE_CONTAINER_DATA(obj, var_offset, field, container_ser_func)           \
-    do {                                                                                           \
-        uint32_t _num_elements = (obj)->field.length;                                              \
-        size_t _offset_table_start = (var_offset);                                                 \
-        for (uint32_t _i = 0; _i < _num_elements; _i++) {                                            \
-            uint32_t zero_val = 0;                                                                   \
-            size_t _tmp_size = SSZ_BYTE_SIZE_OF_UINT32;                                             \
-            ssz_error_t _err = ssz_serialize_uint32(&zero_val,                                        \
-                                                   out_buf + _offset_table_start + (_i * SSZ_BYTE_SIZE_OF_UINT32), \
-                                                   &_tmp_size);                                              \
-            if (_err != SSZ_SUCCESS) {                                                               \
-                return SSZ_ERROR_SERIALIZATION;                                                      \
-            }                                                                                        \
-        }                                                                                            \
-        size_t _variable_start = _offset_table_start + _num_elements * SSZ_BYTE_SIZE_OF_UINT32;      \
-        size_t _cur_offset = _variable_start;                                                        \
-        for (uint32_t _i = 0; _i < _num_elements; _i++) {                                            \
-            size_t _elem_ser_size = 0;                                                               \
-            ssz_error_t _err = container_ser_func(&(obj)->field.data[_i],                            \
-                                                  out_buf + _cur_offset,                             \
-                                                  &_elem_ser_size);                                  \
-            if (_err != SSZ_SUCCESS) {                                                               \
-                return SSZ_ERROR_SERIALIZATION;                                                      \
-            }                                                                                        \
-            uint32_t _elem_offset = (uint32_t)(_cur_offset - _offset_table_start);                     \
-            size_t _tmp_size = SSZ_BYTE_SIZE_OF_UINT32;                                              \
-            _err = ssz_serialize_uint32(&_elem_offset,                                               \
-                                         out_buf + _offset_table_start + (_i * SSZ_BYTE_SIZE_OF_UINT32), \
-                                         &_tmp_size);                                              \
-            if (_err != SSZ_SUCCESS) {                                                               \
-                return SSZ_ERROR_SERIALIZATION;                                                      \
-            }                                                                                        \
-            _cur_offset += _elem_ser_size;                                                           \
-        }                                                                                            \
-        (var_offset) = _cur_offset;                                                                  \
+#define SERIALIZE_LIST_VARIABLE_CONTAINER_FIELD(obj, var_offset, field, container_ser_func)                         \
+    do                                                                                                              \
+    {                                                                                                               \
+        uint32_t _num_elements = (obj)->field.length;                                                               \
+        size_t _offset_table_start = (var_offset);                                                                  \
+        for (uint32_t _i = 0; _i < _num_elements; _i++)                                                             \
+        {                                                                                                           \
+            uint32_t zero_val = 0;                                                                                  \
+            size_t _tmp_size = SSZ_BYTE_SIZE_OF_UINT32;                                                             \
+            ssz_error_t _err = ssz_serialize_uint32(&zero_val,                                                      \
+                                                    out_buf + _offset_table_start + (_i * SSZ_BYTE_SIZE_OF_UINT32), \
+                                                    &_tmp_size);                                                    \
+            if (_err != SSZ_SUCCESS)                                                                                \
+            {                                                                                                       \
+                return SSZ_ERROR_SERIALIZATION;                                                                     \
+            }                                                                                                       \
+        }                                                                                                           \
+        size_t _variable_start = _offset_table_start + _num_elements * SSZ_BYTE_SIZE_OF_UINT32;                     \
+        size_t _cur_offset = _variable_start;                                                                       \
+        for (uint32_t _i = 0; _i < _num_elements; _i++)                                                             \
+        {                                                                                                           \
+            size_t _elem_ser_size = 0;                                                                              \
+            ssz_error_t _err = container_ser_func(&(obj)->field.data[_i],                                           \
+                                                  out_buf + _cur_offset,                                            \
+                                                  &_elem_ser_size);                                                 \
+            if (_err != SSZ_SUCCESS)                                                                                \
+            {                                                                                                       \
+                return SSZ_ERROR_SERIALIZATION;                                                                     \
+            }                                                                                                       \
+            uint32_t _elem_offset = (uint32_t)(_cur_offset - _offset_table_start);                                  \
+            size_t _tmp_size = SSZ_BYTE_SIZE_OF_UINT32;                                                             \
+            _err = ssz_serialize_uint32(&_elem_offset,                                                              \
+                                        out_buf + _offset_table_start + (_i * SSZ_BYTE_SIZE_OF_UINT32),             \
+                                        &_tmp_size);                                                                \
+            if (_err != SSZ_SUCCESS)                                                                                \
+            {                                                                                                       \
+                return SSZ_ERROR_SERIALIZATION;                                                                     \
+            }                                                                                                       \
+            _cur_offset += _elem_ser_size;                                                                          \
+        }                                                                                                           \
+        (var_offset) = _cur_offset;                                                                                 \
     } while (0)
-
 
 #define DEFINE_DESERIALIZE_CONTAINER(ContainerType, CONTAINER_FIELDS)                    \
     ssz_error_t deserialize_##ContainerType(const unsigned char *data, size_t data_size, \
@@ -446,23 +451,27 @@
         (offset) += byte_size;                                                                               \
     } while (0)
 
-#define DESERIALIZE_BITLIST_FIELD(obj, offset_start, field_size, field, max_bits)                                                           \
-    do                                                                                                                                      \
-    {                                                                                                                                       \
-        size_t actual_count = 0;                                                                                                            \
-        (obj)->field.data = malloc((field_size));                                                                                           \
-        if (!(obj)->field.data)                                                                                                             \
-        {                                                                                                                                   \
-            return SSZ_ERROR_DESERIALIZATION;                                                                                               \
-        }                                                                                                                                   \
-        ssz_error_t err_local = ssz_deserialize_bitlist(data + (offset_start), (field_size), (max_bits), (obj)->field.data, &actual_count); \
-        if (err_local != SSZ_SUCCESS)                                                                                                       \
-        {                                                                                                                                   \
-            free((obj)->field.data);                                                                                                        \
-            return SSZ_ERROR_DESERIALIZATION;                                                                                               \
-        }                                                                                                                                   \
-        (obj)->field.length = actual_count;                                                                                                 \
-        (offset_start) += (field_size);                                                                                                     \
+#define DESERIALIZE_BITLIST_FIELD(obj, offset_start, field_size, field, max_bits) \
+    do                                                                            \
+    {                                                                             \
+        size_t actual_count = 0;                                                  \
+        (obj)->field.data = malloc((max_bits) * sizeof(bool));                    \
+        if (!(obj)->field.data)                                                   \
+        {                                                                         \
+            return SSZ_ERROR_DESERIALIZATION;                                     \
+        }                                                                         \
+        ssz_error_t err_local = ssz_deserialize_bitlist(data + (offset_start),    \
+                                                        (field_size),             \
+                                                        (max_bits),               \
+                                                        (obj)->field.data,        \
+                                                        &actual_count);           \
+        if (err_local != SSZ_SUCCESS)                                             \
+        {                                                                         \
+            free((obj)->field.data);                                              \
+            return SSZ_ERROR_DESERIALIZATION;                                     \
+        }                                                                         \
+        (obj)->field.length = actual_count;                                       \
+        (offset_start) += (field_size);                                           \
     } while (0)
 
 #define DESERIALIZE_LIST_FIELD(obj, offset_start, list_size, field, max_length, deserialize_func)                                     \

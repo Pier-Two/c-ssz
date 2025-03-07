@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include "crypto/mincrypt/sha256.h"
+#include "mincrypt/sha256.h"
 #include "bench.h"
 #include "ssz_serialize.h"
 #include "ssz_deserialize.h"

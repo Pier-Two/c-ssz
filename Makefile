@@ -15,7 +15,7 @@ MKDIR_P = mkdir -p $1
 endif
 
 CFLAGS = -Wall -Wextra -O3 -g
-INCLUDE_FLAGS = -Iinclude -Ibench -Itests
+INCLUDE_FLAGS = -Iinclude -Ibench -Itests -Ilib
 LDFLAGS =
 
 AR = ar
@@ -27,9 +27,12 @@ ARFLAGS = rcs
 SRC_DIR = src
 OBJ_DIR = obj
 BIN_DIR = bin
+BUILD_DIR = build
 TEST_DIR = tests
 LIB_DIR = lib
 BENCH_DIR = bench
+TEST_BIN_DIR = $(BUILD_DIR)/tests
+BENCH_BIN_DIR = $(BUILD_DIR)/bench
 
 ###############################################################################
 # Library sources/objects
@@ -40,19 +43,21 @@ LIB_SOURCES = \
 	$(SRC_DIR)/ssz_utils.c \
 	$(SRC_DIR)/ssz_merkle.c \
 	$(SRC_DIR)/ssz_constants.c \
-	$(SRC_DIR)/crypto/mincrypt/sha256.c
+	$(LIB_DIR)/mincrypt/sha256.c
 
 LIB_OBJECTS = \
 	$(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(filter $(SRC_DIR)/%.c, $(LIB_SOURCES))) \
-	$(patsubst $(BENCH_DIR)/%.c, $(OBJ_DIR)/bench/%.o, $(filter $(BENCH_DIR)/%.c, $(LIB_SOURCES)))
+	$(patsubst $(BENCH_DIR)/%.c, $(OBJ_DIR)/bench/%.o, $(filter $(BENCH_DIR)/%.c, $(LIB_SOURCES))) \
+	$(patsubst $(LIB_DIR)/%.c, $(OBJ_DIR)/lib/%.o, $(filter $(LIB_DIR)/%.c, $(LIB_SOURCES)))
 
-STATIC_LIB = $(LIB_DIR)/libssz.a
+
+STATIC_LIB = $(BUILD_DIR)/libssz.a
 
 ###############################################################################
 # Test sources/binaries
 ###############################################################################
 TEST_SOURCES := $(wildcard $(TEST_DIR)/test_ssz_*.c)
-TEST_BINARIES := $(patsubst $(TEST_DIR)/%.c, $(BIN_DIR)/%$(EXE_EXT), $(TEST_SOURCES))
+TEST_BINARIES := $(patsubst $(TEST_DIR)/%.c, $(TEST_BIN_DIR)/%$(EXE_EXT), $(TEST_SOURCES))
 
 ###############################################################################
 # Bench sources/binaries
@@ -94,9 +99,9 @@ endif
 # Platform-specific LDFLAGS
 ###############################################################################
 ifeq ($(IS_WINDOWS),1)
-SSZ_LDFLAGS = -L$(LIB_DIR) -lssz
+SSZ_LDFLAGS = -L$(BUILD_DIR) -lssz
 else
-SSZ_LDFLAGS = -L$(LIB_DIR) -lssz -lm
+SSZ_LDFLAGS = -L$(BUILD_DIR) -lssz -lm
 endif
 
 ###############################################################################
@@ -120,6 +125,10 @@ $(OBJ_DIR)/bench/%.o: $(BENCH_DIR)/%.c
 	@$(call MKDIR_P,$(OBJ_DIR)/bench)
 	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) -MMD -MP -c $< -o $@
 
+$(OBJ_DIR)/lib/%.o: $(LIB_DIR)/%.c
+	@$(call MKDIR_P,$(dir $@))
+	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) -MMD -MP -c $< -o $@
+
 $(OBJ_DIR)/tests/snappy_decode.o: $(SNAPPY_DECODE_SRC)
 	@$(call MKDIR_P,$(OBJ_DIR)/tests)
 	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) -MMD -MP -c $< -o $@
@@ -131,15 +140,15 @@ $(OBJ_DIR)/tests/snappy_decode.o: $(SNAPPY_DECODE_SRC)
 ###############################################################################
 # Generic test build rule for tests
 ###############################################################################
-$(BIN_DIR)/test_ssz_%$(EXE_EXT): $(TEST_DIR)/test_ssz_%.c $(STATIC_LIB) $(SNAPPY_DECODE_OBJ) $(YAMLPARSER_OBJ)
-	@$(call MKDIR_P,$(BIN_DIR))
+$(TEST_BIN_DIR)/test_ssz_%$(EXE_EXT): $(TEST_DIR)/test_ssz_%.c $(STATIC_LIB) $(SNAPPY_DECODE_OBJ) $(YAMLPARSER_OBJ)
+	@$(call MKDIR_P,$(TEST_BIN_DIR))
 	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< $(STATIC_LIB) $(SNAPPY_DECODE_OBJ) $(YAMLPARSER_OBJ) -o $@ $(LDFLAGS) $(SSZ_LDFLAGS)
 
 ###############################################################################
 # Snappy decode binary
 ###############################################################################
-$(BIN_DIR)/snappy_decode$(EXE_EXT): $(SNAPPY_DECODE_SRC)
-	@$(call MKDIR_P,$(BIN_DIR))
+$(TEST_BIN_DIR)/snappy_decode$(EXE_EXT): $(SNAPPY_DECODE_SRC)
+	@$(call MKDIR_P,$(TEST_BIN_DIR))
 	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< -o $@ $(LDFLAGS)
 
 ###############################################################################
@@ -169,9 +178,9 @@ test: $(STATIC_LIB)
 	  ) \
 	) else ( \
 	  echo Building test ssz_$(SINGLE_TEST)... && \
-	  $(MAKE) $(BIN_DIR)/test_ssz_$(SINGLE_TEST)$(EXE_EXT) && \
+	  $(MAKE) $(TEST_BIN_DIR)/test_ssz_$(SINGLE_TEST)$(EXE_EXT) && \
 	  echo Running test ssz_$(SINGLE_TEST)... && \
-	  cmd /c "$(subst /,\,$(BIN_DIR)/test_ssz_$(SINGLE_TEST)$(EXE_EXT))" \
+	  "$(subst /,\,$(TEST_BIN_DIR)/test_ssz_$(SINGLE_TEST)$(EXE_EXT))" \
 	)
 else
 test: $(STATIC_LIB)
@@ -185,17 +194,17 @@ test: $(STATIC_LIB)
 	  done; \
 	else \
 	  echo "Building test ssz_$(SINGLE_TEST)..."; \
-	  $(MAKE) $(BIN_DIR)/test_ssz_$(SINGLE_TEST)$(EXE_EXT); \
+	  $(MAKE) $(TEST_BIN_DIR)/test_ssz_$(SINGLE_TEST)$(EXE_EXT); \
 	  echo "Running test ssz_$(SINGLE_TEST)..."; \
-	  ./$(BIN_DIR)/test_ssz_$(SINGLE_TEST)$(EXE_EXT); \
+	  ./$(TEST_BIN_DIR)/test_ssz_$(SINGLE_TEST)$(EXE_EXT); \
 	fi
 endif
 
 ###############################################################################
 # Bench build rule
 ###############################################################################
-$(BIN_DIR)/bench_ssz_%$(EXE_EXT): $(BENCH_DIR)/bench_ssz_%.c $(STATIC_LIB) $(SNAPPY_DECODE_OBJ) $(BENCH_COMMON_OBJECTS) $(YAMLPARSER_OBJ)
-	@$(call MKDIR_P,$(BIN_DIR))
+$(BENCH_BIN_DIR)/bench_ssz_%$(EXE_EXT): $(BENCH_DIR)/bench_ssz_%.c $(STATIC_LIB) $(SNAPPY_DECODE_OBJ) $(BENCH_COMMON_OBJECTS) $(YAMLPARSER_OBJ)
+	@$(call MKDIR_P,$(BENCH_BIN_DIR))
 	$(CC) $(CFLAGS) $(INCLUDE_FLAGS) $< $(BENCH_COMMON_OBJECTS) $(SNAPPY_DECODE_OBJ) $(YAMLPARSER_OBJ) -o $@ $(LDFLAGS) $(SSZ_LDFLAGS)
 
 ###############################################################################
@@ -207,15 +216,15 @@ bench: $(STATIC_LIB) $(BENCH_COMMON_OBJECTS)
 	  echo No ^<type^> provided, running ALL benchmarks... & \
 	  for %%b in ($(SUB_BENCHES)) do ( \
 	    echo Building bench_ssz_%%b... & \
-	    $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_%%b$(EXE_EXT) & \
+	    $(MAKE) --no-print-directory $(BENCH_BIN_DIR)/bench_ssz_%%b$(EXE_EXT) & \
 	    echo Running bench_ssz_%%b... & \
-	    cmd /c "$(subst /,\,$(BIN_DIR)/bench_ssz_%%b$(EXE_EXT))" \
+	    cmd /c "$(subst /,\,$(BENCH_BIN_DIR)/bench_ssz_%%b$(EXE_EXT))" \
 	  ) \
 	) else ( \
 	  echo Building only bench_ssz_$(EXTRA_BENCH)... & \
-	  $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$(EXTRA_BENCH)$(EXE_EXT) & \
+	  $(MAKE) --no-print-directory $(BENCH_BIN_DIR)/bench_ssz_$(EXTRA_BENCH)$(EXE_EXT) & \
 	  echo Running bench_ssz_$(EXTRA_BENCH)... & \
-	  cmd /c "$(subst /,\,$(BIN_DIR)/bench_ssz_$(EXTRA_BENCH)$(EXE_EXT))" \
+	  cmd /c "$(subst /,\,$(BENCH_BIN_DIR)/bench_ssz_$(EXTRA_BENCH)$(EXE_EXT))" \
 	)
 else
 bench: $(STATIC_LIB) $(BENCH_COMMON_OBJECTS)
@@ -224,22 +233,22 @@ bench: $(STATIC_LIB) $(BENCH_COMMON_OBJECTS)
 	  echo "No <type> provided, running ALL benchmarks..."; \
 	  for b in $(SUB_BENCHES); do \
 	    echo "Building bench_ssz_$$b..."; \
-	    $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$$b$(EXE_EXT); \
+	    $(MAKE) --no-print-directory $(BENCH_BIN_DIR)/bench_ssz_$$b$(EXE_EXT); \
 	    echo "Running bench_ssz_$$b..."; \
-	    ./$(BIN_DIR)/bench_ssz_$$b$(EXE_EXT); \
+	    ./$(BENCH_BIN_DIR)/bench_ssz_$$b$(EXE_EXT); \
 	  done; \
 	elif echo "$(SUB_BENCHES)" | grep -qw "$$second"; then \
 	  echo "Building bench_ssz_$$second..."; \
-	  $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$$second$(EXE_EXT); \
+	  $(MAKE) --no-print-directory $(BENCH_BIN_DIR)/bench_ssz_$$second$(EXE_EXT); \
 	  echo "Running bench_ssz_$$second..."; \
-	  ./$(BIN_DIR)/bench_ssz_$$second$(EXE_EXT); \
+	  ./$(BENCH_BIN_DIR)/bench_ssz_$$second$(EXE_EXT); \
 	else \
 	  echo "Argument '$$second' not recognized, running ALL benchmarks..."; \
 	  for b in $(SUB_BENCHES); do \
 	    echo "Building bench_ssz_$$b..."; \
-	    $(MAKE) --no-print-directory $(BIN_DIR)/bench_ssz_$$b$(EXE_EXT); \
+	    $(MAKE) --no-print-directory $(BENCH_BIN_DIR)/bench_ssz_$$b$(EXE_EXT); \
 	    echo "Running bench_ssz_$$b..."; \
-	    ./$(BIN_DIR)/bench_ssz_$$b$(EXE_EXT); \
+	    ./$(BENCH_BIN_DIR)/bench_ssz_$$b$(EXE_EXT); \
 	  done; \
 	fi
 endif
@@ -259,20 +268,24 @@ ifeq ($(IS_WINDOWS),1)
 clean:
 	@echo Removing object files from $(OBJ_DIR)
 	@if exist $(OBJ_DIR) (for /R $(OBJ_DIR) %%F in (*) do del "%%F")
-	@echo Removing binaries from $(BIN_DIR)
-	@if exist $(BIN_DIR) (for /R $(BIN_DIR) %%F in (*) do del "%%F")
-	@echo Removing library files from $(LIB_DIR)
-	@if exist $(LIB_DIR) (for /R $(LIB_DIR) %%F in (*) do del "%%F")
-	@echo Removing .dSYM directories from $(BIN_DIR)
-	@for /d %%D in ($(BIN_DIR)\*.dSYM) do rd /s /q "%%D"
+	@echo Removing binaries from $(BUILD_DIR)
+	@if exist $(BUILD_DIR) (for /R $(BUILD_DIR) %%F in (*) do del "%%F")
+	@echo Removing library files from $(BUILD_DIR)
+	@if exist $(BUILD_DIR) (for /R $(BUILD_DIR) %%F in (*) do del "%%F")
+	@echo Removing .dSYM directories from $(BUILD_DIR)
+	@for /d %%D in ($(BUILD_DIR)\*.dSYM) do rd /s /q "%%D"
+
+build/tests/test_ssz_beacon_state$(EXE_EXT): build/tests/test_ssz_static_beacon_state$(EXE_EXT)
+	@echo Creating alias for beacon_state test...
+	copy /Y build\tests\test_ssz_static_beacon_state$(EXE_EXT) build\tests\test_ssz_beacon_state$(EXE_EXT)
 else
 clean:
 	@echo "Removing object files from $(OBJ_DIR)"
 	@find $(OBJ_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
-	@echo "Removing binaries from $(BIN_DIR)"
-	@find $(BIN_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
-	@echo "Removing library files from $(LIB_DIR)"
-	@find $(LIB_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
-	@echo "Removing .dSYM directories from $(BIN_DIR)"
-	@find $(BIN_DIR) -type d -name '*.dSYM' -exec rm -rf {} +
+	@echo "Removing binaries from $(BUILD_DIR)"
+	@find $(BUILD_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
+	@echo "Removing library files from $(BUILD_DIR)"
+	@find $(BUILD_DIR) -type f ! -name '.emptydir' -exec rm -f {} +
+	@echo "Removing .dSYM directories from $(BUILD_DIR)"
+	@find $(BUILD_DIR) -type d -name '*.dSYM' -exec rm -rf {} +
 endif
