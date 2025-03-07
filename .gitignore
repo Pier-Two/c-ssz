@@ -65,9 +65,5 @@ tests/*
 # Allow .h files in the tests folder (if headers exist)
 !tests/*.h
 
-# Ignore all files in the bin folder without extensions 
-bin/*
-!bin/.emptydir
-
 # IDE Settings
 .vscode/*
