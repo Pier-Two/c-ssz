@@ -500,7 +500,7 @@ ssz_error_t serialize_BeaconState_object(const BeaconState *state, unsigned char
     SERIALIZE_LIST_CONTAINER_FIELD(state, offset, state->validators.length, validators, serialize_Validators);
 
     // Serialize balances
-    SERIALIZE_LIST_FIELD(state, offset, balances, state->balances.length * SSZ_BYTE_SIZE_OF_UINT64);
+    SERIALIZE_LIST_FIELD(state, offset, balances, SSZ_BYTE_SIZE_OF_UINT64); 
 
     // Serialize previous_epoch_attestations
     SERIALIZE_LIST_VARIABLE_CONTAINER_FIELD(state, previous_epoch_attestations_offset, previous_epoch_attestations, serialize_PendingAttestation);
