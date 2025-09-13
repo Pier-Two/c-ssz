@@ -1,6 +1,6 @@
-# SimpleSerializeC
+# C-SSZ
 
-SimpleSerializeC is a C library implementing the Simple Serialize (SSZ) [specification](https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md). SSZ is a serialization format designed for simplicity and efficiency.
+C-SSZ is a C library implementing the Simple Serialize (SSZ) [specification](https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md). SSZ is a serialization format designed for simplicity and efficiency.
 
 ## Features
 
