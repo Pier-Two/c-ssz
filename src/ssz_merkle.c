@@ -5,12 +5,81 @@
 #include "ssz_utils.h"
 #include "ssz_constants.h"
 
+static inline uint8_t *zero_hash_slot(uint8_t *zero_hashes, size_t depth) {
+    return zero_hashes + (depth * SSZ_BYTES_PER_CHUNK);
+}
+
+static inline const uint8_t *zero_hash_at(const uint8_t *zero_hashes, size_t depth) {
+    return zero_hashes + (depth * SSZ_BYTES_PER_CHUNK);
+}
+
+static ssz_error_t merkleize_subtree(
+    const uint8_t *chunks,
+    size_t chunk_count,
+    size_t effective_count,
+    size_t start,
+    size_t length,
+    size_t depth,
+    const uint8_t *zero_hashes,
+    uint8_t *out_root) {
+    if (start >= effective_count || start >= chunk_count) {
+        memcpy(out_root, zero_hash_at(zero_hashes, depth), SSZ_BYTES_PER_CHUNK);
+        return SSZ_SUCCESS;
+    }
+    if (length == 1) {
+        if (start < chunk_count) {
+            memcpy(out_root, chunks + (start * SSZ_BYTES_PER_CHUNK), SSZ_BYTES_PER_CHUNK);
+        } else {
+            memcpy(out_root, zero_hash_at(zero_hashes, 0), SSZ_BYTES_PER_CHUNK);
+        }
+        return SSZ_SUCCESS;
+    }
+
+    size_t half = length >> 1;
+    uint8_t left[SSZ_BYTES_PER_CHUNK];
+    uint8_t right[SSZ_BYTES_PER_CHUNK];
+    ssz_error_t err = merkleize_subtree(
+        chunks,
+        chunk_count,
+        effective_count,
+        start,
+        half,
+        depth - 1,
+        zero_hashes,
+        left);
+    if (err != SSZ_SUCCESS) {
+        return err;
+    }
+    if (start + half >= effective_count) {
+        memcpy(right, zero_hash_at(zero_hashes, depth - 1), SSZ_BYTES_PER_CHUNK);
+    } else {
+        err = merkleize_subtree(
+            chunks,
+            chunk_count,
+            effective_count,
+            start + half,
+            half,
+            depth - 1,
+            zero_hashes,
+            right);
+        if (err != SSZ_SUCCESS) {
+            return err;
+        }
+    }
+    uint8_t concat[SSZ_BYTES_PER_CHUNK * 2];
+    memcpy(concat, left, SSZ_BYTES_PER_CHUNK);
+    memcpy(concat + SSZ_BYTES_PER_CHUNK, right, SSZ_BYTES_PER_CHUNK);
+    SHA256_hash(concat, sizeof(concat), out_root);
+    return SSZ_SUCCESS;
+}
+
 /**
  * Computes the Merkle root from an array of chunks.
  *
- * This function constructs a Merkle tree by first copying the provided chunks
- * into leaf nodes, padding with zeros if necessary, and then iteratively hashing
- * pairs of nodes until a single root is obtained.
+ * This function constructs a Merkle tree respecting the SSZ limit by lazily
+ * inserting zero subtrees instead of eagerly padding every missing leaf.
+ * It preserves the same semantics as the spec while avoiding O(limit)
+ * zero-byte copies.
  *
  * @param chunks Pointer to the array of chunks (each chunk is SSZ_BYTES_PER_CHUNK bytes).
  * @param chunk_count Number of chunks provided.
@@ -18,60 +87,64 @@
  * @param out_root Output buffer to write the resulting Merkle root (at least SSZ_BYTES_PER_CHUNK bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_merkleize(const uint8_t *restrict chunks, size_t chunk_count, size_t limit, uint8_t *restrict out_root) 
-{
+ssz_error_t ssz_merkleize(
+    const uint8_t *restrict chunks,
+    size_t chunk_count,
+    size_t limit,
+    uint8_t *restrict out_root) {
     size_t effective = chunk_count;
-    if (limit != 0) 
-    {
-        if (chunk_count > limit) 
-        {
+    if (limit != 0) {
+        if (chunk_count > limit) {
             return SSZ_ERROR_SERIALIZATION;
         }
         effective = limit;
     }
-    if (effective == 0) 
-    {
+    if (effective == 0) {
         memset(out_root, 0, SSZ_BYTES_PER_CHUNK);
         return SSZ_SUCCESS;
     }
-    size_t padded = next_pow_of_two(effective);
-    if (padded == 1) 
-    {
-        if (chunk_count >= 1) 
-        {
-            memcpy(out_root, chunks, SSZ_BYTES_PER_CHUNK);
-        } else 
-        {
-            memset(out_root, 0, SSZ_BYTES_PER_CHUNK);
-        }
-        return SSZ_SUCCESS;
-    }
-    uint8_t *restrict nodes = malloc(padded * SSZ_BYTES_PER_CHUNK);
-    if (!nodes) 
-    {
+
+    uint64_t padded_u64 = next_pow_of_two(effective);
+    if (padded_u64 == 0) {
         return SSZ_ERROR_MERKLEIZATION;
     }
-    if (chunk_count) 
-    {
-        memcpy(nodes, chunks, chunk_count * SSZ_BYTES_PER_CHUNK);
+    size_t padded = (size_t)padded_u64;
+    size_t max_depth = 0;
+    while (((size_t)1 << max_depth) < padded) {
+        max_depth++;
     }
-    if (chunk_count < padded) 
-    {
-        memset(nodes + chunk_count * SSZ_BYTES_PER_CHUNK, 0, (padded - chunk_count) * SSZ_BYTES_PER_CHUNK);
+
+    size_t zero_table_size = (max_depth + 1) * SSZ_BYTES_PER_CHUNK;
+    uint8_t *zero_hashes = malloc(zero_table_size);
+    if (!zero_hashes) {
+        return SSZ_ERROR_MERKLEIZATION;
     }
-    size_t num = padded;
-    while (num > 1) 
-    {
-        size_t parent = num >> 1;
-        for (size_t i = 0; i < parent; i++) 
-        {
-            SHA256_hash(nodes + (2 * i) * SSZ_BYTES_PER_CHUNK, 2 * SSZ_BYTES_PER_CHUNK, nodes + i * SSZ_BYTES_PER_CHUNK);
-        }
-        num = parent;
+    memset(zero_hashes, 0, SSZ_BYTES_PER_CHUNK);
+    for (size_t depth = 1; depth <= max_depth; ++depth) {
+        uint8_t buffer[SSZ_BYTES_PER_CHUNK * 2];
+        const uint8_t *prev = zero_hash_at(zero_hashes, depth - 1);
+        memcpy(buffer, prev, SSZ_BYTES_PER_CHUNK);
+        memcpy(buffer + SSZ_BYTES_PER_CHUNK, prev, SSZ_BYTES_PER_CHUNK);
+        SHA256_hash(buffer, sizeof(buffer), zero_hash_slot(zero_hashes, depth));
     }
-    memcpy(out_root, nodes, SSZ_BYTES_PER_CHUNK);
-    free(nodes);
-    return SSZ_SUCCESS;
+
+    if (chunk_count == 0) {
+        memcpy(out_root, zero_hash_at(zero_hashes, max_depth), SSZ_BYTES_PER_CHUNK);
+        free(zero_hashes);
+        return SSZ_SUCCESS;
+    }
+
+    ssz_error_t err = merkleize_subtree(
+        chunks,
+        chunk_count,
+        effective,
+        0,
+        padded,
+        max_depth,
+        zero_hashes,
+        out_root);
+    free(zero_hashes);
+    return err;
 }
 
 /**
