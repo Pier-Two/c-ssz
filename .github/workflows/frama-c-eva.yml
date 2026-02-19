@@ -54,7 +54,8 @@ jobs:
         run: |
           frama-c -eva \
             -eva-precision 3 \
-            -json-compilation-database build/compile_commands.json \
+            -lib-entry \
+            -compilation-db build/compile_commands.json \
             2>&1 | tee frama-c-eva-report.txt
 
       - name: Upload Eva report
