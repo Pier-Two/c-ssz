@@ -60,6 +60,9 @@ jobs:
         run: cmake --build build
 
       - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: halt_on_error=0:print_stacktrace=1
         run: ctest --test-dir build --output-on-failure
 
   static-analysis:

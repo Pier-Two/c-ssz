@@ -4,6 +4,22 @@
 #include <ctype.h>
 #include "yaml_parser.h"
 
+static char *yaml_strdup(const char *src)
+{
+    if (!src)
+    {
+        return NULL;
+    }
+    size_t len = strlen(src) + 1;
+    char *copy = (char *)malloc(len);
+    if (!copy)
+    {
+        return NULL;
+    }
+    memcpy(copy, src, len);
+    return copy;
+}
+
 static int get_indentation(const char *line)
 {
     int count = 0;
@@ -41,7 +57,7 @@ static char **split_field_name(const char *field_name, int *count)
     {
         return NULL;
     }
-    char *temp = strdup(field_name);
+    char *temp = yaml_strdup(field_name);
     if (!temp)
     {
         return NULL;
@@ -64,7 +80,7 @@ static char **split_field_name(const char *field_name, int *count)
     char *token = strtok(temp, ".");
     while (token)
     {
-        parts[idx++] = strdup(token);
+        parts[idx++] = yaml_strdup(token);
         token = strtok(NULL, ".");
     }
     *count = segments;
@@ -153,8 +169,8 @@ static void add_pair_to_current(YamlObject *current_obj, const char *key, const 
         current_obj->pairs = new_pairs;
         current_obj->capacity = new_cap;
     }
-    current_obj->pairs[current_obj->num_pairs].key = strdup(key);
-    current_obj->pairs[current_obj->num_pairs].value = strdup(value);
+    current_obj->pairs[current_obj->num_pairs].key = yaml_strdup(key);
+    current_obj->pairs[current_obj->num_pairs].value = yaml_strdup(value);
     current_obj->num_pairs++;
 }
 
@@ -330,7 +346,7 @@ uint8_t *read_yaml_field(const char *file_path, const char *field_name, size_t *
                 val++;
             }
 
-            char *key_copy = strdup(key);
+            char *key_copy = yaml_strdup(key);
             if (!key_copy)
             {
                 fclose(fp);
@@ -738,7 +754,7 @@ YamlObject *read_yaml_array_of_objects(const char *file_path, const char *array_
         {
             val++;
         }
-        char *key_copy = strdup(key);
+        char *key_copy = yaml_strdup(key);
         if (!key_copy)
         {
             break;
