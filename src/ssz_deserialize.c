@@ -281,18 +281,19 @@ ssz_error_t ssz_deserialize_bitlist(
         }
         buffer_size = max_bytes;
     }
-    ssize_t boundary = -1;
-    for (ssize_t byte_i = (ssize_t)buffer_size - 1; byte_i >= 0; byte_i--)
+    size_t boundary = SIZE_MAX;
+    for (size_t byte_i = buffer_size; byte_i > 0; byte_i--)
     {
-        const uint8_t val = buffer[byte_i];
+        const size_t idx = byte_i - 1;
+        const uint8_t val = buffer[idx];
         if (val != 0)
         {
             const int bit = highest_bit_table[val];
-            boundary = (byte_i * 8) + bit;
+            boundary = (idx * 8) + (size_t)bit;
             break;
         }
     }
-    if (boundary < 0 || (size_t)boundary > max_bits)
+    if (boundary == SIZE_MAX || boundary > max_bits)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
@@ -309,7 +310,7 @@ ssz_error_t ssz_deserialize_bitlist(
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
-    const size_t data_bits = (size_t)boundary;
+    const size_t data_bits = boundary;
     *out_actual_bits = data_bits;
     if (data_bits < max_bits)
     {
