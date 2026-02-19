@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: build-and-test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: cmake --build build --config Debug
+
+      - name: Build (non-Windows)
+        if: runner.os != 'Windows'
+        run: cmake --build build
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        run: ctest --test-dir build --output-on-failure -C Debug
+
+      - name: Test (non-Windows)
+        if: runner.os != 'Windows'
+        run: ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    name: sanitizers (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure with sanitizers
+        run: cmake -S . -B build -DSSZ_SANITIZERS=address,undefined -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  static-analysis:
+    name: static-analysis (clang-tidy + cppcheck)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install analysis tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy cppcheck
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run clang-tidy (informational)
+        continue-on-error: true
+        run: |
+          mapfile -t c_files < <(git ls-files '*.c')
+          if [ ${#c_files[@]} -eq 0 ]; then
+            echo "No C source files found."
+            exit 0
+          fi
+
+          clang-tidy -p build "${c_files[@]}"
+
+      - name: Run cppcheck (informational)
+        continue-on-error: true
+        run: |
+          cppcheck \
+            --enable=warning,style,performance,portability \
+            --std=c11 \
+            --project=build/compile_commands.json \
+            --suppress=missingIncludeSystem
