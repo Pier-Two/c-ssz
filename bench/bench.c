@@ -33,9 +33,8 @@ static double bench_get_time_in_nanoseconds(void)
 
 static double bench_get_time_in_nanoseconds(void)
 {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (double)ts.tv_sec * 1e9 + (double)ts.tv_nsec;
+    /* Fallback that is portable under strict C99 without POSIX feature macros. */
+    return ((double)clock() * 1e9) / (double)CLOCKS_PER_SEC;
 }
 
 #endif

@@ -73,6 +73,12 @@ file(GLOB SSZ_TEST_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ssz_*.c
 )
 
+if(WIN32)
+  # These fixture-driven tests use POSIX dirent APIs that are not available with MSVC.
+  list(FILTER SSZ_TEST_SOURCES EXCLUDE REGEX ".*/test_ssz_generic_.*\\.c$")
+  list(FILTER SSZ_TEST_SOURCES EXCLUDE REGEX ".*/test_ssz_static_beacon_state\\.c$")
+endif()
+
 set(SSZ_TEST_TARGETS)
 foreach(TEST_SOURCE IN LISTS SSZ_TEST_SOURCES)
   get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
