@@ -52,14 +52,50 @@ jobs:
       - name: Run Eva analysis
         continue-on-error: true
         run: |
-          frama-c -eva \
-            -eva-precision 3 \
-            -lib-entry \
-            -main ssz_deserialize_uint8 \
-            -compilation-db build/compile_commands.json \
-            src/*.c \
-            lib/mincrypt/*.c \
-            2>&1 | tee frama-c-eva-report.txt
+          : > frama-c-eva-report.txt
+
+          mapfile -t public_functions < <(
+            awk '
+              /^[[:space:]]*(ssz_error_t|bool|uint64_t)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(/ {
+                name = $2
+                sub(/\(.*/, "", name)
+                print name
+              }
+            ' \
+              include/ssz_serialize.h \
+              include/ssz_deserialize.h \
+              include/ssz_merkle.h \
+              include/ssz_utils.h
+          )
+
+          echo "Found ${#public_functions[@]} public API functions" | tee -a frama-c-eva-report.txt
+
+          failed_functions=()
+          for func in "${public_functions[@]}"; do
+            {
+              echo
+              echo "===== Eva analysis: ${func} ====="
+            } | tee -a frama-c-eva-report.txt
+
+            if ! frama-c -eva \
+              -eva-precision 3 \
+              -lib-entry \
+              -main "${func}" \
+              -compilation-db build/compile_commands.json \
+              src/*.c \
+              2>&1 | tee -a frama-c-eva-report.txt; then
+              failed_functions+=("${func}")
+              echo "Eva command failed for: ${func}" | tee -a frama-c-eva-report.txt
+            fi
+          done
+
+          if [ "${#failed_functions[@]}" -gt 0 ]; then
+            {
+              echo
+              echo "Eva failed for ${#failed_functions[@]} function(s): ${failed_functions[*]}"
+            } | tee -a frama-c-eva-report.txt
+            exit 1
+          fi
 
       - name: Upload Eva report
         if: always()
