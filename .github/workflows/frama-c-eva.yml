@@ -55,6 +55,7 @@ jobs:
           frama-c -eva \
             -eva-precision 3 \
             -lib-entry \
+            -main ssz_deserialize_uint8 \
             -compilation-db build/compile_commands.json \
             src/*.c \
             lib/mincrypt/*.c \
