@@ -18,7 +18,14 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y opam ninja-build pkg-config
+          sudo apt-get install -y \
+            opam \
+            ninja-build \
+            pkg-config \
+            graphviz \
+            libcairo2-dev \
+            libgtk-3-dev \
+            libgtksourceview-3.0-dev
 
       - name: Cache opam
         uses: actions/cache@v4
