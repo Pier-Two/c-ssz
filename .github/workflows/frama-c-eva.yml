@@ -56,6 +56,8 @@ jobs:
             -eva-precision 3 \
             -lib-entry \
             -compilation-db build/compile_commands.json \
+            src/*.c \
+            lib/mincrypt/*.c \
             2>&1 | tee frama-c-eva-report.txt
 
       - name: Upload Eva report
