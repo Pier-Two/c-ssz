@@ -1,0 +1,58 @@
+name: Frama-C Eva
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  frama-c-eva:
+    name: Frama-C Eva (Safety Analysis)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y opam ninja-build pkg-config
+
+      - name: Cache opam
+        uses: actions/cache@v4
+        with:
+          path: ~/.opam
+          key: ${{ runner.os }}-opam-frama-c-${{ hashFiles('.github/workflows/frama-c-eva.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-opam-frama-c-
+
+      - name: Initialize opam
+        run: opam init -y --disable-sandboxing
+
+      - name: Install Frama-C
+        run: |
+          eval "$(opam env)"
+          opam install frama-c -y
+
+      - name: Add opam bin to PATH
+        run: echo "$HOME/.opam/default/bin" >> "$GITHUB_PATH"
+
+      - name: Configure (CMake with compilation database)
+        run: cmake -S . -B build -GNinja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Run Eva analysis
+        continue-on-error: true
+        run: |
+          frama-c -eva \
+            -eva-precision 3 \
+            -json-compilation-database build/compile_commands.json \
+            2>&1 | tee frama-c-eva-report.txt
+
+      - name: Upload Eva report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frama-c-eva-report
+          path: frama-c-eva-report.txt
