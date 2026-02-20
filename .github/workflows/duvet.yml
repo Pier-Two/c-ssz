@@ -30,6 +30,16 @@ jobs:
         run: |
           cargo install --locked duvet || cargo install duvet
 
+      - name: Ensure consensus spec checkout
+        run: |
+          if [ -f external/consensus-specs/ssz/simple-serialize.md ]; then
+            exit 0
+          fi
+
+          echo "consensus-specs submodule content not found; cloning fallback."
+          rm -rf external/consensus-specs
+          git clone --depth 1 https://github.com/ethereum/consensus-specs.git external/consensus-specs
+
       - name: Verify SSZ spec file exists
         run: |
           test -f external/consensus-specs/ssz/simple-serialize.md
