@@ -1,0 +1,211 @@
+name: Spec Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  generate-fixtures:
+    name: Generate Fixtures Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify fixture directories
+        run: |
+          set -euo pipefail
+          test -d tests/fixtures/general/phase0/ssz_generic/basic_vector
+          test -d tests/fixtures/general/phase0/ssz_generic/bitlist
+          test -d tests/fixtures/general/phase0/ssz_generic/bitvector
+          test -d tests/fixtures/general/phase0/ssz_generic/boolean
+          test -d tests/fixtures/general/phase0/ssz_generic/uints
+          test -d tests/fixtures/mainnet/phase0/ssz_static/BeaconState/ssz_random
+
+  linux-spec-test:
+    name: Linux Spec (${{ matrix.compiler }}, ${{ matrix.arch }}-bit)
+    runs-on: ubuntu-latest
+    needs: [generate-fixtures]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        arch: ['64', '32']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain packages
+        run: |
+          set -euo pipefail
+          packages=()
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            packages+=(clang)
+          fi
+          if [ "${{ matrix.arch }}" = "32" ]; then
+            packages+=(gcc-multilib g++-multilib)
+          fi
+          if [ ${#packages[@]} -gt 0 ]; then
+            sudo apt-get update
+            sudo apt-get install -y "${packages[@]}"
+          fi
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.compiler }}
+        run: |
+          set -euo pipefail
+          build_dir="build/linux-${{ matrix.compiler }}-${{ matrix.arch }}"
+          cmake_args=(-S . -B "$build_dir" -DCMAKE_BUILD_TYPE=Debug)
+          if [ "${{ matrix.arch }}" = "32" ]; then
+            cmake_args+=("-DCMAKE_C_FLAGS=-m32" "-DCMAKE_EXE_LINKER_FLAGS=-m32")
+          fi
+          cmake "${cmake_args[@]}"
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          cmake --build "build/linux-${{ matrix.compiler }}-${{ matrix.arch }}" --parallel
+
+      - name: Test
+        run: |
+          set -euo pipefail
+          ctest --test-dir "build/linux-${{ matrix.compiler }}-${{ matrix.arch }}" --output-on-failure
+
+  macos-spec-test:
+    name: macOS Spec
+    runs-on: macos-latest
+    needs: [generate-fixtures]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build/macos-spec -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build/macos-spec --parallel
+
+      - name: Test
+        run: ctest --test-dir build/macos-spec --output-on-failure
+
+  windows-spec:
+    name: Windows Spec
+    runs-on: windows-latest
+    needs: [generate-fixtures]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build/windows-spec -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build/windows-spec --config Debug
+
+      - name: Test
+        run: ctest --test-dir build/windows-spec -C Debug --output-on-failure
+
+  sanitizer-suite:
+    name: Sanitizer Suite (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    needs: [generate-fixtures]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: asan-ubsan
+            cc: clang
+            sanitizers: address,undefined
+            cmake_c_flags: ''
+            asan_options: detect_leaks=0
+            ubsan_options: halt_on_error=1:print_stacktrace=1
+          - name: msan
+            cc: clang
+            sanitizers: memory
+            cmake_c_flags: -fsanitize=memory -fno-omit-frame-pointer -fsanitize-memory-track-origins
+            asan_options: ''
+            ubsan_options: ''
+          - name: tsan
+            cc: clang
+            sanitizers: thread
+            cmake_c_flags: ''
+            asan_options: ''
+            ubsan_options: ''
+          - name: valgrind
+            cc: gcc
+            sanitizers: ''
+            cmake_c_flags: ''
+            asan_options: ''
+            ubsan_options: ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install runtime packages
+        run: |
+          set -euo pipefail
+          packages=()
+          if [ "${{ matrix.cc }}" = "clang" ]; then
+            packages+=(clang)
+          fi
+          if [ "${{ matrix.name }}" = "valgrind" ]; then
+            packages+=(valgrind)
+          fi
+          if [ ${#packages[@]} -gt 0 ]; then
+            sudo apt-get update
+            sudo apt-get install -y "${packages[@]}"
+          fi
+
+      - name: Prepare asan/ubsan ignorelist
+        if: matrix.name == 'asan-ubsan'
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          cat > build/asan-ubsan.ignore <<'EOF'
+          src:*lib/mincrypt/sha256.c
+          src:*tests/test_ssz_static_beacon_state.c
+          EOF
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.cc }}
+          SSZ_SANITIZERS: ${{ matrix.sanitizers }}
+          CMAKE_C_FLAGS_EXTRA: ${{ matrix.cmake_c_flags }}
+        run: |
+          set -euo pipefail
+          cmake_args=(-S . -B build -DCMAKE_BUILD_TYPE=Debug)
+          if [ -n "$SSZ_SANITIZERS" ]; then
+            cmake_args+=("-DSSZ_SANITIZERS=$SSZ_SANITIZERS")
+          fi
+          if [ "${{ matrix.name }}" = "asan-ubsan" ]; then
+            cmake_args+=("-DCMAKE_C_FLAGS=-fsanitize-ignorelist=$PWD/build/asan-ubsan.ignore")
+          fi
+          if [ -n "$CMAKE_C_FLAGS_EXTRA" ]; then
+            cmake_args+=("-DCMAKE_C_FLAGS=$CMAKE_C_FLAGS_EXTRA")
+          fi
+          cmake "${cmake_args[@]}"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        env:
+          ASAN_OPTIONS: ${{ matrix.asan_options }}
+          UBSAN_OPTIONS: ${{ matrix.ubsan_options }}
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Test under valgrind
+        if: matrix.name == 'valgrind'
+        run: valgrind --error-exitcode=1 --leak-check=full ctest --test-dir build --output-on-failure
