@@ -1,0 +1,72 @@
+name: Duvet
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  duvet:
+    name: Duvet Spec Compliance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-duvet
+          restore-keys: |
+            ${{ runner.os }}-duvet-
+
+      - name: Install duvet
+        run: |
+          cargo install --locked duvet || cargo install duvet
+
+      - name: Ensure consensus spec checkout
+        run: |
+          if [ -f external/consensus-specs/ssz/simple-serialize.md ]; then
+            exit 0
+          fi
+
+          echo "consensus-specs submodule content not found; cloning fallback."
+          rm -rf external/consensus-specs
+          git clone --depth 1 https://github.com/ethereum/consensus-specs.git external/consensus-specs
+
+      - name: Verify SSZ spec file exists
+        run: |
+          test -f external/consensus-specs/ssz/simple-serialize.md
+
+      - name: Generate Duvet config
+        run: |
+          mkdir -p build/duvet
+          cat > build/duvet/config.toml <<'EOF'
+          '$schema' = "https://awslabs.github.io/duvet/config/v0.4.0.json"
+
+          [[source]]
+          pattern = "src/**/*.c"
+
+          [[source]]
+          pattern = "include/**/*.h"
+
+          [[specification]]
+          source = "external/consensus-specs/ssz/simple-serialize.md"
+          format = "markdown"
+          EOF
+
+      - name: Run duvet report
+        run: |
+          duvet report --config-path build/duvet/config.toml --json build/duvet/report.json
+
+      - name: Upload duvet report
+        uses: actions/upload-artifact@v4
+        with:
+          name: duvet-report
+          path: build/duvet/report.json
