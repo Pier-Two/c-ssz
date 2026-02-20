@@ -1,0 +1,37 @@
+name: CodeQL
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Weekly at 00:00 UTC on Sunday.
+    - cron: "0 0 * * 0"
+
+jobs:
+  codeql:
+    name: CodeQL (C/C++)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: c-cpp
+          queries: security-extended
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B build
+          cmake --build build
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
