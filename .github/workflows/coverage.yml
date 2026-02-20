@@ -1,0 +1,47 @@
+name: Coverage
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install lcov
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov
+
+      - name: Configure
+        run: cmake -S . -B build/coverage -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS='--coverage' -DCMAKE_EXE_LINKER_FLAGS='--coverage'
+
+      - name: Build
+        run: cmake --build build/coverage --parallel
+
+      - name: Test
+        run: ctest --test-dir build/coverage --output-on-failure
+
+      - name: Generate coverage data
+        run: lcov --capture --directory build/coverage --output-file build/coverage/coverage.info --ignore-errors mismatch
+
+      - name: Filter coverage report
+        run: lcov --remove build/coverage/coverage.info '/usr/*' '*/tests/*' '*/bench/*' '*/lib/*' --output-file build/coverage/coverage-filtered.info --ignore-errors unused
+
+      - name: Generate HTML report
+        run: genhtml build/coverage/coverage-filtered.info --output-directory build/coverage/html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: build/coverage/html
+
+      - name: Coverage summary
+        run: lcov --summary build/coverage/coverage-filtered.info
