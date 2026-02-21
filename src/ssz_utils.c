@@ -1,8 +1,10 @@
-#include <stddef.h>
-#include <string.h>
-#include <stdint.h>
-#include <stdbool.h>
 #include "ssz_utils.h"
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
 #include "ssz_constants.h"
 
 /**
@@ -14,13 +16,14 @@
  */
 bool is_zero(const uint8_t *ptr, size_t len)
 {
-    for (size_t j = 0; j < len; ++j) 
+    for (size_t j = 0; j < len; ++j)
     {
         if (ptr[j] != 0)
         {
             return false;
         }
     }
+
     return true;
 }
 
@@ -36,15 +39,19 @@ uint64_t next_pow_of_two(uint64_t value)
     {
         return 1;
     }
+
     if ((value & (value - 1)) == 0)
     {
         return value;
     }
+
     uint64_t p = 1;
+
     while (p < value)
     {
         p <<= 1;
     }
+
     return p;
 }
 

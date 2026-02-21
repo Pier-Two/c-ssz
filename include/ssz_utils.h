@@ -1,9 +1,9 @@
 #ifndef SSZ_UTILS_H
 #define SSZ_UTILS_H
 
-#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /**
  * Checks if the given memory region is filled with zeros.
