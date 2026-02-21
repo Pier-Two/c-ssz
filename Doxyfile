@@ -1,0 +1,38 @@
+# c-ssz Doxygen configuration
+# Primary purpose: enforce that all public symbols have documentation comments.
+# Run: cmake --build build --target doxygen
+#   or: doxygen Doxyfile
+
+PROJECT_NAME           = "c-ssz"
+PROJECT_BRIEF          = "C99 SSZ (SimpleSerialize) library"
+
+# Only scan public headers — implementation files are not part of the public API.
+INPUT                  = include/
+RECURSIVE              = NO
+FILE_PATTERNS          = *.h
+
+# Extract all declarations, including those without doc comments (so we can warn about them).
+EXTRACT_ALL            = NO
+EXTRACT_STATIC         = YES
+
+# Warn on any public symbol that lacks a Doxygen comment.
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = YES
+WARN_AS_ERROR          = FAIL_ON_WARNINGS
+
+# Output format — HTML is sufficient for local review; disable LaTeX.
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HTML_OUTPUT            = docs/doxygen
+
+# Preprocessor — expand macros so #define aliases are visible.
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+PREDEFINED             = SSZ_ALIGNAS(n)=
+
+# Quiet mode — only show warnings (the actionable output).
+QUIET                  = YES
+
+# Optimize for C.
+OPTIMIZE_OUTPUT_FOR_C  = YES

@@ -13,6 +13,9 @@ set(CMAKE_C_EXTENSIONS OFF)
 # Keep default warning/optimization/debug flags aligned with the Makefile.
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
   add_compile_options(-Wall -Wextra -O3 -g)
+  if(CMAKE_C_COMPILER_ID MATCHES "Clang|AppleClang")
+    add_compile_options(-Wdocumentation)
+  endif()
 endif()
 
 set(SSZ_SANITIZERS "" CACHE STRING "Sanitizers to enable (example: address or address,undefined)")
@@ -161,3 +164,14 @@ foreach(BENCH_TARGET IN LISTS SSZ_BENCH_TARGETS)
     USES_TERMINAL
   )
 endforeach()
+
+# Doxygen documentation and undocumented-symbol enforcement.
+find_package(Doxygen QUIET)
+if(DOXYGEN_FOUND)
+  add_custom_target(doxygen
+    COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Running Doxygen — warnings indicate undocumented public symbols"
+    USES_TERMINAL
+  )
+endif()

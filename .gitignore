@@ -68,5 +68,8 @@ tests/*
 # Allow .h files in the tests folder (if headers exist)
 !tests/*.h
 
+# Doxygen generated output
+docs/doxygen/
+
 # IDE Settings
 .vscode/*
