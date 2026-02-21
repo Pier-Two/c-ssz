@@ -35,8 +35,12 @@ ssz_error_t ssz_merkleize(const uint8_t *chunks, size_t chunk_count, size_t limi
  * @param out_chunk_count Pointer to store the number of chunks written.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t
-ssz_pack(const uint8_t *values, size_t value_size, size_t value_count, uint8_t *out_chunks, size_t *out_chunk_count);
+ssz_error_t ssz_pack(
+    const uint8_t *values,
+    size_t value_size,
+    size_t value_count,
+    uint8_t *out_chunks,
+    size_t *out_chunk_count);
 
 /**
  * Packs an array of boolean values into fixed-size chunks.

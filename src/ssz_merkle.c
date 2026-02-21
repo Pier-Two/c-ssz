@@ -18,14 +18,15 @@ static inline const uint8_t *zero_hash_at(const uint8_t *zero_hashes, size_t dep
     return zero_hashes + (depth * SSZ_BYTES_PER_CHUNK);
 }
 
-static ssz_error_t merkleize_subtree(const uint8_t *chunks,
-                                     size_t chunk_count,
-                                     size_t effective_count,
-                                     size_t start,
-                                     size_t length,
-                                     size_t depth,
-                                     const uint8_t *zero_hashes,
-                                     uint8_t *out_root)
+static ssz_error_t merkleize_subtree(
+    const uint8_t *chunks,
+    size_t chunk_count,
+    size_t effective_count,
+    size_t start,
+    size_t length,
+    size_t depth,
+    const uint8_t *zero_hashes,
+    uint8_t *out_root)
 {
     if (start >= effective_count || start >= chunk_count)
     {
@@ -173,8 +174,12 @@ ssz_error_t ssz_merkleize(const uint8_t *restrict chunks, size_t chunk_count, si
  * @param out_chunk_count Pointer to store the number of chunks written.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t
-ssz_pack(const uint8_t *values, size_t value_size, size_t value_count, uint8_t *out_chunks, size_t *out_chunk_count)
+ssz_error_t ssz_pack(
+    const uint8_t *values,
+    size_t value_size,
+    size_t value_count,
+    uint8_t *out_chunks,
+    size_t *out_chunk_count)
 {
     size_t total_bytes = value_size * value_count;
 

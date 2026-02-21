@@ -18,10 +18,12 @@ ContinuationIndentWidth: 4
 # 120-column line width
 ColumnLimit: 120
 
-# One parameter per line when wrapping, aligned to the opening parenthesis
-AlignAfterOpenBracket: Align
+# One parameter per line when wrapping, indented 4 spaces after break
+AlignAfterOpenBracket: AlwaysBreak
 BinPackArguments: false
 BinPackParameters: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowAllArgumentsOnNextLine: false
 
 # Pointer alignment: right-aligned (uint8_t *out, not uint8_t* out)
 PointerAlignment: Right
@@ -65,5 +67,5 @@ IndentGotoLabels: false
 # Penalties — prefer wrapping parameters over exceeding column limit
 PenaltyBreakBeforeFirstCallParameter: 200
 PenaltyExcessCharacter: 1000000
-PenaltyReturnTypeOnItsOwnLine: 100
+PenaltyReturnTypeOnItsOwnLine: 10000
 ...

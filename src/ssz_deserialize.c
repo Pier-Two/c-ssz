@@ -279,7 +279,11 @@ ssz_error_t ssz_deserialize_bitvector(const uint8_t *buffer, size_t buffer_size,
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_bitlist(
-    const uint8_t *buffer, size_t buffer_size, size_t max_bits, bool *out_bits, size_t *out_actual_bits)
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_bits,
+    bool *out_bits,
+    size_t *out_actual_bits)
 {
     if (buffer == NULL || out_bits == NULL || out_actual_bits == NULL || buffer_size == 0)
     {
@@ -424,8 +428,11 @@ ssz_error_t ssz_deserialize_union(const uint8_t *buffer, size_t buffer_size, ssz
  *
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
-ssz_error_t
-ssz_deserialize_vector_uint8(const uint8_t *buffer, size_t buffer_size, size_t element_count, uint8_t *out_elements)
+ssz_error_t ssz_deserialize_vector_uint8(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t element_count,
+    uint8_t *out_elements)
 {
     if (buffer == NULL || out_elements == NULL || element_count == 0)
     {
@@ -453,8 +460,11 @@ ssz_deserialize_vector_uint8(const uint8_t *buffer, size_t buffer_size, size_t e
  *
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
-ssz_error_t
-ssz_deserialize_vector_uint16(const uint8_t *buffer, size_t buffer_size, size_t element_count, uint16_t *out_elements)
+ssz_error_t ssz_deserialize_vector_uint16(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t element_count,
+    uint16_t *out_elements)
 {
     if (buffer == NULL || out_elements == NULL || element_count == 0)
     {
@@ -491,8 +501,11 @@ ssz_deserialize_vector_uint16(const uint8_t *buffer, size_t buffer_size, size_t 
  *
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
-ssz_error_t
-ssz_deserialize_vector_uint32(const uint8_t *buffer, size_t buffer_size, size_t element_count, uint32_t *out_elements)
+ssz_error_t ssz_deserialize_vector_uint32(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t element_count,
+    uint32_t *out_elements)
 {
     if (buffer == NULL || out_elements == NULL || element_count == 0)
     {
@@ -529,8 +542,11 @@ ssz_deserialize_vector_uint32(const uint8_t *buffer, size_t buffer_size, size_t 
  *
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
-ssz_error_t
-ssz_deserialize_vector_uint64(const uint8_t *buffer, size_t buffer_size, size_t element_count, uint64_t *out_elements)
+ssz_error_t ssz_deserialize_vector_uint64(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t element_count,
+    uint64_t *out_elements)
 {
     if (buffer == NULL || out_elements == NULL || element_count == 0)
     {
@@ -567,8 +583,11 @@ ssz_deserialize_vector_uint64(const uint8_t *buffer, size_t buffer_size, size_t 
  *
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
-ssz_error_t
-ssz_deserialize_vector_uint128(const uint8_t *buffer, size_t buffer_size, size_t element_count, void *out_elements)
+ssz_error_t ssz_deserialize_vector_uint128(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t element_count,
+    void *out_elements)
 {
     if (buffer == NULL || out_elements == NULL || element_count == 0)
     {
@@ -606,8 +625,11 @@ ssz_deserialize_vector_uint128(const uint8_t *buffer, size_t buffer_size, size_t
  *
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
-ssz_error_t
-ssz_deserialize_vector_uint256(const uint8_t *buffer, size_t buffer_size, size_t element_count, void *out_elements)
+ssz_error_t ssz_deserialize_vector_uint256(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t element_count,
+    void *out_elements)
 {
     if (buffer == NULL || out_elements == NULL || element_count == 0)
     {
@@ -645,8 +667,11 @@ ssz_deserialize_vector_uint256(const uint8_t *buffer, size_t buffer_size, size_t
  *
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
-ssz_error_t
-ssz_deserialize_vector_bool(const uint8_t *buffer, size_t buffer_size, size_t element_count, bool *out_elements)
+ssz_error_t ssz_deserialize_vector_bool(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t element_count,
+    bool *out_elements)
 {
     if (buffer == NULL || out_elements == NULL || element_count == 0)
     {
@@ -689,7 +714,11 @@ ssz_deserialize_vector_bool(const uint8_t *buffer, size_t buffer_size, size_t el
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_list_uint8(
-    const uint8_t *buffer, size_t buffer_size, size_t max_length, uint8_t *out_elements, size_t *out_actual_count)
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    uint8_t *out_elements,
+    size_t *out_actual_count)
 {
     if (!buffer || !out_elements || !out_actual_count)
         return SSZ_ERROR_DESERIALIZATION;
@@ -714,7 +743,11 @@ ssz_error_t ssz_deserialize_list_uint8(
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_list_uint16(
-    const uint8_t *buffer, size_t buffer_size, size_t max_length, uint16_t *out_elements, size_t *out_actual_count)
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    uint16_t *out_elements,
+    size_t *out_actual_count)
 {
     if (!buffer || !out_elements || !out_actual_count)
         return SSZ_ERROR_DESERIALIZATION;
@@ -750,7 +783,11 @@ ssz_error_t ssz_deserialize_list_uint16(
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_list_uint32(
-    const uint8_t *buffer, size_t buffer_size, size_t max_length, uint32_t *out_elements, size_t *out_actual_count)
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    uint32_t *out_elements,
+    size_t *out_actual_count)
 {
     if (!buffer || !out_elements || !out_actual_count)
         return SSZ_ERROR_DESERIALIZATION;
@@ -786,7 +823,11 @@ ssz_error_t ssz_deserialize_list_uint32(
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_list_uint64(
-    const uint8_t *buffer, size_t buffer_size, size_t max_length, uint64_t *out_elements, size_t *out_actual_count)
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    uint64_t *out_elements,
+    size_t *out_actual_count)
 {
     if (!buffer || !out_elements || !out_actual_count)
         return SSZ_ERROR_DESERIALIZATION;
@@ -822,7 +863,11 @@ ssz_error_t ssz_deserialize_list_uint64(
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_list_uint128(
-    const uint8_t *buffer, size_t buffer_size, size_t max_length, void *out_elements, size_t *out_actual_count)
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    void *out_elements,
+    size_t *out_actual_count)
 {
     if (!buffer || !out_elements || !out_actual_count)
         return SSZ_ERROR_DESERIALIZATION;
@@ -859,7 +904,11 @@ ssz_error_t ssz_deserialize_list_uint128(
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_list_uint256(
-    const uint8_t *buffer, size_t buffer_size, size_t max_length, void *out_elements, size_t *out_actual_count)
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    void *out_elements,
+    size_t *out_actual_count)
 {
     if (!buffer || !out_elements || !out_actual_count)
         return SSZ_ERROR_DESERIALIZATION;
@@ -896,7 +945,11 @@ ssz_error_t ssz_deserialize_list_uint256(
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
 ssz_error_t ssz_deserialize_list_bool(
-    const uint8_t *buffer, size_t buffer_size, size_t max_length, bool *out_elements, size_t *out_actual_count)
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t max_length,
+    bool *out_elements,
+    size_t *out_actual_count)
 {
     if (!buffer || !out_elements || !out_actual_count)
         return SSZ_ERROR_DESERIALIZATION;
