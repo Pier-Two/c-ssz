@@ -23,10 +23,12 @@ typedef enum
  *
  * @param data Pointer to the data to serialize.
  * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes written.
+ * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
+ * written.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-typedef ssz_error_t (*ssz_union_data_serialize_fn)(const void *data, uint8_t *out_buf, size_t *out_size);
+typedef ssz_error_t (
+    *ssz_union_data_serialize_fn)(const void *data, uint8_t *out_buf, size_t *out_size);
 
 /**
  * Defines a function pointer type for deserializing union data.
@@ -36,7 +38,8 @@ typedef ssz_error_t (*ssz_union_data_serialize_fn)(const void *data, uint8_t *ou
  * @param out_obj Pointer to store the deserialized object.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-typedef ssz_error_t (*ssz_union_data_deserialize_fn)(const uint8_t *buffer, size_t buffer_size, void **out_obj);
+typedef ssz_error_t (
+    *ssz_union_data_deserialize_fn)(const uint8_t *buffer, size_t buffer_size, void **out_obj);
 
 /**
  * Represents a union structure for the SSZ "Union" type.

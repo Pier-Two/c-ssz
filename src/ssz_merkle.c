@@ -51,8 +51,15 @@ static ssz_error_t merkleize_subtree(
     size_t half = length >> 1;
     uint8_t left[SSZ_BYTES_PER_CHUNK];
     uint8_t right[SSZ_BYTES_PER_CHUNK];
-    ssz_error_t err =
-        merkleize_subtree(chunks, chunk_count, effective_count, start, half, depth - 1, zero_hashes, left);
+    ssz_error_t err = merkleize_subtree(
+        chunks,
+        chunk_count,
+        effective_count,
+        start,
+        half,
+        depth - 1,
+        zero_hashes,
+        left);
 
     if (err != SSZ_SUCCESS)
     {
@@ -65,8 +72,15 @@ static ssz_error_t merkleize_subtree(
     }
     else
     {
-        err =
-            merkleize_subtree(chunks, chunk_count, effective_count, start + half, half, depth - 1, zero_hashes, right);
+        err = merkleize_subtree(
+            chunks,
+            chunk_count,
+            effective_count,
+            start + half,
+            half,
+            depth - 1,
+            zero_hashes,
+            right);
 
         if (err != SSZ_SUCCESS)
         {
@@ -91,11 +105,17 @@ static ssz_error_t merkleize_subtree(
  *
  * @param chunks Pointer to the array of chunks (each chunk is SSZ_BYTES_PER_CHUNK bytes).
  * @param chunk_count Number of chunks provided.
- * @param limit Maximum number of chunks allowed; if non-zero, chunk_count must not exceed this limit.
- * @param out_root Output buffer to write the resulting Merkle root (at least SSZ_BYTES_PER_CHUNK bytes).
+ * @param limit Maximum number of chunks allowed; if non-zero, chunk_count must not exceed this
+ * limit.
+ * @param out_root Output buffer to write the resulting Merkle root (at least SSZ_BYTES_PER_CHUNK
+ * bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_merkleize(const uint8_t *restrict chunks, size_t chunk_count, size_t limit, uint8_t *restrict out_root)
+ssz_error_t ssz_merkleize(
+    const uint8_t *restrict chunks,
+    size_t chunk_count,
+    size_t limit,
+    uint8_t *restrict out_root)
 {
     size_t effective = chunk_count;
 
@@ -156,7 +176,15 @@ ssz_error_t ssz_merkleize(const uint8_t *restrict chunks, size_t chunk_count, si
         return SSZ_SUCCESS;
     }
 
-    ssz_error_t err = merkleize_subtree(chunks, chunk_count, effective, 0, padded, max_depth, zero_hashes, out_root);
+    ssz_error_t err = merkleize_subtree(
+        chunks,
+        chunk_count,
+        effective,
+        0,
+        padded,
+        max_depth,
+        zero_hashes,
+        out_root);
     free(zero_hashes);
     return err;
 }
@@ -165,7 +193,8 @@ ssz_error_t ssz_merkleize(const uint8_t *restrict chunks, size_t chunk_count, si
  * Packs a contiguous byte array into fixed-size chunks.
  *
  * This function divides the input byte array into chunks of size SSZ_BYTES_PER_CHUNK.
- * If the total number of bytes is not a multiple of SSZ_BYTES_PER_CHUNK, the last chunk is zero-padded.
+ * If the total number of bytes is not a multiple of SSZ_BYTES_PER_CHUNK, the last chunk is
+ * zero-padded.
  *
  * @param values Pointer to the input byte array.
  * @param value_size Size of each value element in bytes.
@@ -211,8 +240,8 @@ ssz_error_t ssz_pack(
  * Packs an array of boolean values into fixed-size chunks.
  *
  * This function converts a bitfield represented as an array of booleans into a compact byte array,
- * and then divides that byte array into fixed-size chunks (each of size SSZ_BYTES_PER_CHUNK) for Merkleization.
- * If bit_count is zero, a single default chunk is generated.
+ * and then divides that byte array into fixed-size chunks (each of size SSZ_BYTES_PER_CHUNK) for
+ * Merkleization. If bit_count is zero, a single default chunk is generated.
  *
  * @param bits Pointer to the array of boolean values.
  * @param bit_count Number of boolean values in the array.
@@ -220,11 +249,16 @@ ssz_error_t ssz_pack(
  * @param out_chunk_count Pointer to store the number of chunks written.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_pack_bits(const bool *bits, size_t bit_count, uint8_t *out_chunks, size_t *out_chunk_count)
+ssz_error_t ssz_pack_bits(
+    const bool *bits,
+    size_t bit_count,
+    uint8_t *out_chunks,
+    size_t *out_chunk_count)
 {
     size_t bitfield_len = bit_count ? (bit_count + 7) >> 3 : 1;
     uint8_t small_buf[SSZ_SMALL_BUFFER_SIZE];
-    uint8_t *bitfield_bytes = bitfield_len <= SSZ_SMALL_BUFFER_SIZE ? small_buf : malloc(bitfield_len);
+    uint8_t *bitfield_bytes =
+        bitfield_len <= SSZ_SMALL_BUFFER_SIZE ? small_buf : malloc(bitfield_len);
 
     if (!bitfield_bytes)
     {
@@ -243,10 +277,10 @@ ssz_error_t ssz_pack_bits(const bool *bits, size_t bit_count, uint8_t *out_chunk
         for (size_t i = 0; i < full_bytes; i++)
         {
             size_t base = i << 3;
-            bitfield_bytes[i] = (uint8_t)bits[base] | (uint8_t)bits[base + 1] << 1 | (uint8_t)bits[base + 2] << 2 |
-                                (uint8_t)bits[base + 3] << 3 | (uint8_t)bits[base + 4] << 4 |
-                                (uint8_t)bits[base + 5] << 5 | (uint8_t)bits[base + 6] << 6 |
-                                (uint8_t)bits[base + 7] << 7;
+            bitfield_bytes[i] = (uint8_t)bits[base] | (uint8_t)bits[base + 1] << 1 |
+                                (uint8_t)bits[base + 2] << 2 | (uint8_t)bits[base + 3] << 3 |
+                                (uint8_t)bits[base + 4] << 4 | (uint8_t)bits[base + 5] << 5 |
+                                (uint8_t)bits[base + 6] << 6 | (uint8_t)bits[base + 7] << 7;
         }
 
         if (rem)

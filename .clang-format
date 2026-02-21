@@ -15,8 +15,8 @@ TabWidth: 4
 UseTab: Never
 ContinuationIndentWidth: 4
 
-# 120-column line width
-ColumnLimit: 120
+# 100-column line width
+ColumnLimit: 100
 
 # One parameter per line when wrapping, indented 4 spaces after break
 AlignAfterOpenBracket: AlwaysBreak

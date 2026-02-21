@@ -39,7 +39,8 @@ ssz_error_t ssz_deserialize_uint8(const uint8_t *buffer, size_t buffer_size, voi
  */
 ssz_error_t ssz_deserialize_uint16(const uint8_t *buffer, size_t buffer_size, void *out_value)
 {
-    if (buffer_size < 2 || buffer == NULL || out_value == NULL || buffer_size != SSZ_BYTE_SIZE_OF_UINT16)
+    if (buffer_size < 2 || buffer == NULL || out_value == NULL ||
+        buffer_size != SSZ_BYTE_SIZE_OF_UINT16)
     {
         return SSZ_ERROR_DESERIALIZATION;
     }
@@ -213,7 +214,11 @@ ssz_error_t ssz_deserialize_boolean(const uint8_t *buffer, size_t buffer_size, b
  *
  * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
  */
-ssz_error_t ssz_deserialize_bitvector(const uint8_t *buffer, size_t buffer_size, size_t num_bits, bool *out_bits)
+ssz_error_t ssz_deserialize_bitvector(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t num_bits,
+    bool *out_bits)
 {
     if (buffer == NULL || out_bits == NULL || num_bits == 0)
     {

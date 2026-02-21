@@ -86,7 +86,11 @@ ssz_error_t ssz_deserialize_boolean(const uint8_t *buffer, size_t buffer_size, b
  * @param out_bits Pointer to store the deserialized bits.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_deserialize_bitvector(const uint8_t *buffer, size_t buffer_size, size_t num_bits, bool *out_bits);
+ssz_error_t ssz_deserialize_bitvector(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    size_t num_bits,
+    bool *out_bits);
 
 /**
  * Deserializes a bitlist from the buffer.
@@ -113,7 +117,10 @@ ssz_error_t ssz_deserialize_bitlist(
  * @param out_union Pointer to the structure to store the deserialized union.
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_deserialize_union(const uint8_t *buffer, size_t buffer_size, ssz_union_t *out_union);
+ssz_error_t ssz_deserialize_union(
+    const uint8_t *buffer,
+    size_t buffer_size,
+    ssz_union_t *out_union);
 
 /**
  * Deserializes a fixed-size vector of 8-bit elements.
