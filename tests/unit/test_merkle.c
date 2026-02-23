@@ -838,7 +838,9 @@ static bool test_merkle_additional_error_paths(void)
                SSZ_ERR_OVERFLOW);
     ASSERT_ERR(ssz_hash_tree_root_list_fixed(NULL, 1u, SSZ_NO_LIMIT, 1u, NULL, &root),
                SSZ_ERR_INVALID_ARGUMENT);
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_hash_tree_root_list_fixed(NULL, 0u, 2u, SIZE_MAX, NULL, &root), SSZ_ERR_OVERFLOW);
+#endif
 
     ASSERT_ERR(ssz_hash_tree_root_list_composite(1u, SSZ_NO_LIMIT, NULL, NULL, &root),
                SSZ_ERR_INVALID_ARGUMENT);

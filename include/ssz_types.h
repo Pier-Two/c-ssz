@@ -15,10 +15,20 @@ extern "C"
 #define SSZ_BITS_PER_BYTE           8u
 #define SSZ_NO_LIMIT                UINT64_MAX
 
+#if defined(_MSC_VER)
+#define SSZ_PACKED_BEGIN __pragma(pack(push, 1))
+#define SSZ_PACKED_END   __pragma(pack(pop))
+#define SSZ_PACKED_ATTR
+#define SSZ_ALIGNAS(n) __declspec(align(n))
+#else
+#define SSZ_PACKED_BEGIN
+#define SSZ_PACKED_END
+#define SSZ_PACKED_ATTR __attribute__((packed))
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 #define SSZ_ALIGNAS(n) _Alignas(n)
 #else
 #define SSZ_ALIGNAS(n) __attribute__((aligned(n)))
+#endif
 #endif
 
 typedef struct

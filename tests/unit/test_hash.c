@@ -287,7 +287,9 @@ static bool test_hash_sha256_error_paths(void)
 
     ASSERT_ERR(ssz_hash_sha256(NULL, 1u, out), SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_sha256(&byte, 1u, NULL), SSZ_ERR_INVALID_ARGUMENT);
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_hash_sha256(&byte, (size_t)UINT32_MAX + 1u, out), SSZ_ERR_OVERFLOW);
+#endif
 
     return true;
 }
