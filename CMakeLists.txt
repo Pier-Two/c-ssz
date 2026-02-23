@@ -64,6 +64,16 @@ target_include_directories(ssz
     ${SSZ_HACL_INCLUDE_DIRS}
 )
 
+# HACL*/karamel's lowstar_endianness.h uses be32toh/htobe32 etc. from <endian.h>.
+# In strict C99 mode (-std=c99), glibc does not expose these macros unless
+# _DEFAULT_SOURCE is defined.
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+  set_source_files_properties(
+    external/hacl/src/Hacl_Hash_SHA2.c
+    PROPERTIES COMPILE_DEFINITIONS _DEFAULT_SOURCE
+  )
+endif()
+
 target_link_libraries(ssz PUBLIC ${SSZ_PLATFORM_LIBS})
 
 enable_testing()
