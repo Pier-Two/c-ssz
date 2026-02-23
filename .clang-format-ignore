@@ -1,0 +1,4 @@
+# Files excluded from clang-format
+# ssz_generator.h uses multi-line macros with complex continuation patterns
+# that clang-format cannot handle correctly.
+include/ssz_generator.h
