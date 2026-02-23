@@ -1,352 +1,1244 @@
-#include "ssz_merkle.h"
-
-#include <stdlib.h>
 #include <string.h>
 
-#include "ssz_constants.h"
-#include "ssz_utils.h"
+#include "ssz_internal.h"
+#include "ssz_merkle.h"
 
-#include "mincrypt/sha256.h"
+typedef ssz_error_t (*ssz_internal_leaf_reader_t)(
+    const void *ctx,
+    uint64_t index,
+    ssz_chunk_t *out_leaf);
 
-static inline uint8_t *zero_hash_slot(uint8_t *zero_hashes, size_t depth)
+typedef struct
 {
-    return zero_hashes + (depth * SSZ_BYTES_PER_CHUNK);
+    const ssz_chunk_t *chunks;
+    uint64_t count;
+} ssz_internal_chunk_reader_ctx_t;
+
+typedef struct
+{
+    const uint8_t *bytes;
+    size_t byte_len;
+    uint64_t chunk_count;
+} ssz_internal_bytes_reader_ctx_t;
+
+typedef struct
+{
+    const ssz_member_codec_t *codec;
+    uint64_t count;
+} ssz_internal_codec_reader_ctx_t;
+
+static ssz_error_t ssz_internal_read_chunk_leaf(
+    const void *ctx,
+    uint64_t index,
+    ssz_chunk_t *out_leaf)
+{
+    const ssz_internal_chunk_reader_ctx_t *reader = (const ssz_internal_chunk_reader_ctx_t *)ctx;
+    if ((reader == NULL) || (out_leaf == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((index >= reader->count) || ((reader->chunks == NULL) && (reader->count != 0u)))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_leaf = reader->chunks[index];
+    return SSZ_SUCCESS;
 }
 
-static inline const uint8_t *zero_hash_at(const uint8_t *zero_hashes, size_t depth)
+static ssz_error_t ssz_internal_read_bytes_leaf(
+    const void *ctx,
+    uint64_t index,
+    ssz_chunk_t *out_leaf)
 {
-    return zero_hashes + (depth * SSZ_BYTES_PER_CHUNK);
+    const ssz_internal_bytes_reader_ctx_t *reader = (const ssz_internal_bytes_reader_ctx_t *)ctx;
+    uint64_t start_u64 = 0u;
+    size_t start = 0u;
+
+    if ((reader == NULL) || (out_leaf == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (index >= reader->chunk_count)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((reader->byte_len != 0u) && (reader->bytes == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (ssz_internal_mul_overflow_u64(index, SSZ_BYTES_PER_CHUNK, &start_u64) ||
+        !ssz_internal_u64_to_size(start_u64, &start))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    memset(out_leaf->bytes, 0, SSZ_BYTES_PER_CHUNK);
+    if (start < reader->byte_len)
+    {
+        size_t remaining = reader->byte_len - start;
+        size_t copy_len = (remaining < SSZ_BYTES_PER_CHUNK) ? remaining : SSZ_BYTES_PER_CHUNK;
+        memcpy(out_leaf->bytes, reader->bytes + start, copy_len);
+    }
+
+    return SSZ_SUCCESS;
 }
 
-static ssz_error_t merkleize_subtree(
-    const uint8_t *chunks,
-    size_t chunk_count,
-    size_t effective_count,
-    size_t start,
-    size_t length,
-    size_t depth,
-    const uint8_t *zero_hashes,
-    uint8_t *out_root)
+static ssz_error_t ssz_internal_read_codec_leaf(
+    const void *ctx,
+    uint64_t index,
+    ssz_chunk_t *out_leaf)
 {
-    if (start >= effective_count || start >= chunk_count)
+    const ssz_internal_codec_reader_ctx_t *reader = (const ssz_internal_codec_reader_ctx_t *)ctx;
+
+    if ((reader == NULL) || (out_leaf == NULL) || (reader->codec == NULL) ||
+        (reader->codec->root == NULL) || (index >= reader->count))
     {
-        memcpy(out_root, zero_hash_at(zero_hashes, depth), SSZ_BYTES_PER_CHUNK);
-        return SSZ_SUCCESS;
+        return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    if (length == 1)
-    {
-        if (start < chunk_count)
-        {
-            memcpy(out_root, chunks + (start * SSZ_BYTES_PER_CHUNK), SSZ_BYTES_PER_CHUNK);
-        }
-        else
-        {
-            memcpy(out_root, zero_hash_at(zero_hashes, 0), SSZ_BYTES_PER_CHUNK);
-        }
+    return reader->codec->root(reader->codec->ctx, index, out_leaf);
+}
 
-        return SSZ_SUCCESS;
+static uint32_t ssz_internal_log2_u64(uint64_t value)
+{
+    uint32_t depth = 0u;
+    while (value > 1u)
+    {
+        value >>= 1u;
+        depth++;
     }
+    return depth;
+}
 
-    size_t half = length >> 1;
-    uint8_t left[SSZ_BYTES_PER_CHUNK];
-    uint8_t right[SSZ_BYTES_PER_CHUNK];
-    ssz_error_t err = merkleize_subtree(
-        chunks,
-        chunk_count,
-        effective_count,
-        start,
-        half,
-        depth - 1,
-        zero_hashes,
-        left);
+static ssz_error_t ssz_internal_build_zero_hashes(
+    uint32_t max_depth,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t zero_hashes[64])
+{
+    memset(zero_hashes[0].bytes, 0, SSZ_BYTES_PER_CHUNK);
 
-    if (err != SSZ_SUCCESS)
+    for (uint32_t depth = 1u; depth <= max_depth; depth++)
     {
-        return err;
-    }
-
-    if (start + half >= effective_count)
-    {
-        memcpy(right, zero_hash_at(zero_hashes, depth - 1), SSZ_BYTES_PER_CHUNK);
-    }
-    else
-    {
-        err = merkleize_subtree(
-            chunks,
-            chunk_count,
-            effective_count,
-            start + half,
-            half,
-            depth - 1,
-            zero_hashes,
-            right);
-
+        ssz_error_t err = ssz_hash_2to1(hash_fn, &zero_hashes[depth - 1u], &zero_hashes[depth - 1u],
+                                        &zero_hashes[depth]);
         if (err != SSZ_SUCCESS)
         {
             return err;
         }
     }
 
-    uint8_t concat[SSZ_BYTES_PER_CHUNK * 2];
-    memcpy(concat, left, SSZ_BYTES_PER_CHUNK);
-    memcpy(concat + SSZ_BYTES_PER_CHUNK, right, SSZ_BYTES_PER_CHUNK);
-    SHA256_hash(concat, sizeof(concat), out_root);
     return SSZ_SUCCESS;
 }
 
-/**
- * Computes the Merkle root from an array of chunks.
- *
- * This function constructs a Merkle tree respecting the SSZ limit by lazily
- * inserting zero subtrees instead of eagerly padding every missing leaf.
- * It preserves the same semantics as the spec while avoiding O(limit)
- * zero-byte copies.
- *
- * @param chunks Pointer to the array of chunks (each chunk is SSZ_BYTES_PER_CHUNK bytes).
- * @param chunk_count Number of chunks provided.
- * @param limit Maximum number of chunks allowed; if non-zero, chunk_count must not exceed this
- * limit.
- * @param out_root Output buffer to write the resulting Merkle root (at least SSZ_BYTES_PER_CHUNK
- * bytes).
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_merkleize(
-    const uint8_t *restrict chunks,
-    size_t chunk_count,
-    size_t limit,
-    uint8_t *restrict out_root)
+static ssz_error_t ssz_internal_merkleize_subtree(
+    ssz_internal_leaf_reader_t reader,
+    const void *reader_ctx,
+    uint64_t source_start,
+    uint64_t leaf_count,
+    uint64_t node_start,
+    uint64_t subtree_size,
+    uint32_t depth,
+    const ssz_hash_fn_t *hash_fn,
+    const ssz_chunk_t zero_hashes[64],
+    ssz_chunk_t *out_root)
 {
-    size_t effective = chunk_count;
-
-    if (limit != 0)
+    if (node_start >= leaf_count)
     {
-        if (chunk_count > limit)
+        *out_root = zero_hashes[depth];
+        return SSZ_SUCCESS;
+    }
+
+    if (subtree_size == 1u)
+    {
+        uint64_t source_index = 0u;
+        if (ssz_internal_add_overflow_u64(source_start, node_start, &source_index))
         {
-            return SSZ_ERROR_SERIALIZATION;
+            return SSZ_ERR_OVERFLOW;
         }
-
-        effective = limit;
+        return reader(reader_ctx, source_index, out_root);
     }
 
-    if (effective == 0)
+    uint64_t half = subtree_size >> 1u;
+    uint64_t right_start = 0u;
+    if (ssz_internal_add_overflow_u64(node_start, half, &right_start))
     {
-        memset(out_root, 0, SSZ_BYTES_PER_CHUNK);
-        return SSZ_SUCCESS;
+        return SSZ_ERR_OVERFLOW;
     }
 
-    uint64_t padded_u64 = next_pow_of_two(effective);
+    ssz_chunk_t left_root;
+    ssz_chunk_t right_root;
 
-    if (padded_u64 == 0)
+    ssz_error_t err = ssz_internal_merkleize_subtree(reader,
+                                                     reader_ctx,
+                                                     source_start,
+                                                     leaf_count,
+                                                     node_start,
+                                                     half,
+                                                     depth - 1u,
+                                                     hash_fn,
+                                                     zero_hashes,
+                                                     &left_root);
+    if (err != SSZ_SUCCESS)
     {
-        return SSZ_ERROR_MERKLEIZATION;
+        return err;
     }
 
-    size_t padded = (size_t)padded_u64;
-    size_t max_depth = 0;
-
-    while (((size_t)1 << max_depth) < padded)
+    err = ssz_internal_merkleize_subtree(reader,
+                                         reader_ctx,
+                                         source_start,
+                                         leaf_count,
+                                         right_start,
+                                         half,
+                                         depth - 1u,
+                                         hash_fn,
+                                         zero_hashes,
+                                         &right_root);
+    if (err != SSZ_SUCCESS)
     {
-        max_depth++;
+        return err;
     }
 
-    size_t zero_table_size = (max_depth + 1) * SSZ_BYTES_PER_CHUNK;
-    uint8_t *zero_hashes = malloc(zero_table_size);
-
-    if (!zero_hashes)
-    {
-        return SSZ_ERROR_MERKLEIZATION;
-    }
-
-    memset(zero_hashes, 0, SSZ_BYTES_PER_CHUNK);
-
-    for (size_t depth = 1; depth <= max_depth; ++depth)
-    {
-        uint8_t buffer[SSZ_BYTES_PER_CHUNK * 2];
-        const uint8_t *prev = zero_hash_at(zero_hashes, depth - 1);
-        memcpy(buffer, prev, SSZ_BYTES_PER_CHUNK);
-        memcpy(buffer + SSZ_BYTES_PER_CHUNK, prev, SSZ_BYTES_PER_CHUNK);
-        SHA256_hash(buffer, sizeof(buffer), zero_hash_slot(zero_hashes, depth));
-    }
-
-    if (chunk_count == 0)
-    {
-        memcpy(out_root, zero_hash_at(zero_hashes, max_depth), SSZ_BYTES_PER_CHUNK);
-        free(zero_hashes);
-        return SSZ_SUCCESS;
-    }
-
-    ssz_error_t err = merkleize_subtree(
-        chunks,
-        chunk_count,
-        effective,
-        0,
-        padded,
-        max_depth,
-        zero_hashes,
-        out_root);
-    free(zero_hashes);
-    return err;
+    return ssz_hash_2to1(hash_fn, &left_root, &right_root, out_root);
 }
 
-/**
- * Packs a contiguous byte array into fixed-size chunks.
- *
- * This function divides the input byte array into chunks of size SSZ_BYTES_PER_CHUNK.
- * If the total number of bytes is not a multiple of SSZ_BYTES_PER_CHUNK, the last chunk is
- * zero-padded.
- *
- * @param values Pointer to the input byte array.
- * @param value_size Size of each value element in bytes.
- * @param value_count Number of values in the array.
- * @param out_chunks Output buffer to write the chunked data.
- * @param out_chunk_count Pointer to store the number of chunks written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_pack(
-    const uint8_t *values,
-    size_t value_size,
-    size_t value_count,
-    uint8_t *out_chunks,
-    size_t *out_chunk_count)
+static ssz_error_t ssz_internal_merkleize_reader(
+    ssz_internal_leaf_reader_t reader,
+    const void *reader_ctx,
+    uint64_t source_start,
+    uint64_t leaf_count,
+    uint64_t limit,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
 {
-    size_t total_bytes = value_size * value_count;
+    uint64_t effective_width = 0u;
+    uint64_t tree_size = 0u;
+    ssz_chunk_t zero_hashes[64];
 
-    if (value_count != 0 && total_bytes / value_count != value_size)
+    if ((reader == NULL) || (out_root == NULL))
     {
-        return SSZ_ERROR_SERIALIZATION;
+        return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    if (total_bytes == 0)
+    if (limit == SSZ_NO_LIMIT)
     {
-        *out_chunk_count = 0;
-        return SSZ_SUCCESS;
-    }
-
-    size_t chunk_count = (total_bytes + SSZ_BYTES_PER_CHUNK - 1) / SSZ_BYTES_PER_CHUNK;
-    size_t padded_size = chunk_count * SSZ_BYTES_PER_CHUNK;
-    memcpy(out_chunks, values, total_bytes);
-
-    if (padded_size > total_bytes)
-    {
-        memset(out_chunks + total_bytes, 0, padded_size - total_bytes);
-    }
-
-    *out_chunk_count = chunk_count;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Packs an array of boolean values into fixed-size chunks.
- *
- * This function converts a bitfield represented as an array of booleans into a compact byte array,
- * and then divides that byte array into fixed-size chunks (each of size SSZ_BYTES_PER_CHUNK) for
- * Merkleization. If bit_count is zero, a single default chunk is generated.
- *
- * @param bits Pointer to the array of boolean values.
- * @param bit_count Number of boolean values in the array.
- * @param out_chunks Output buffer to write the packed bitfield chunks.
- * @param out_chunk_count Pointer to store the number of chunks written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_pack_bits(
-    const bool *bits,
-    size_t bit_count,
-    uint8_t *out_chunks,
-    size_t *out_chunk_count)
-{
-    size_t bitfield_len = bit_count ? (bit_count + 7) >> 3 : 1;
-    uint8_t small_buf[SSZ_SMALL_BUFFER_SIZE];
-    uint8_t *bitfield_bytes =
-        bitfield_len <= SSZ_SMALL_BUFFER_SIZE ? small_buf : malloc(bitfield_len);
-
-    if (!bitfield_bytes)
-    {
-        return SSZ_ERROR_MERKLEIZATION;
-    }
-
-    if (!bit_count)
-    {
-        bitfield_bytes[0] = 0x01;
+        effective_width = leaf_count;
     }
     else
     {
-        memset(bitfield_bytes, 0, bitfield_len);
-        size_t full_bytes = bit_count >> 3, rem = bit_count & 7;
-
-        for (size_t i = 0; i < full_bytes; i++)
+        if (leaf_count > limit)
         {
-            size_t base = i << 3;
-            bitfield_bytes[i] = (uint8_t)bits[base] | (uint8_t)bits[base + 1] << 1 |
-                                (uint8_t)bits[base + 2] << 2 | (uint8_t)bits[base + 3] << 3 |
-                                (uint8_t)bits[base + 4] << 4 | (uint8_t)bits[base + 5] << 5 |
-                                (uint8_t)bits[base + 6] << 6 | (uint8_t)bits[base + 7] << 7;
+            return SSZ_ERR_LIMIT_EXCEEDED;
         }
-
-        if (rem)
-        {
-            uint8_t byte = 0;
-
-            for (size_t j = 0, base = full_bytes << 3; j < rem; j++)
-                byte |= (uint8_t)bits[base + j] << j;
-            bitfield_bytes[full_bytes] = byte;
-        }
+        effective_width = limit;
     }
 
-    ssz_error_t err = ssz_pack(bitfield_bytes, 1, bitfield_len, out_chunks, out_chunk_count);
-
-    if (bitfield_bytes != small_buf)
+    tree_size = ssz_next_pow_of_two(effective_width);
+    if (tree_size == 0u)
     {
-        free(bitfield_bytes);
+        return SSZ_ERR_OVERFLOW;
     }
 
-    return err;
+    uint32_t depth = ssz_internal_log2_u64(tree_size);
+    ssz_error_t err = ssz_internal_build_zero_hashes(depth, hash_fn, zero_hashes);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    return ssz_internal_merkleize_subtree(reader,
+                                          reader_ctx,
+                                          source_start,
+                                          leaf_count,
+                                          0u,
+                                          tree_size,
+                                          depth,
+                                          hash_fn,
+                                          zero_hashes,
+                                          out_root);
 }
 
-/**
- * Mixes a length value into a Merkle root to produce an updated root.
- *
- * This function takes an existing Merkle root and a length value, then mixes the length
- * into the root by placing it in a buffer alongside the original root and computing SHA256_hash.
- *
- * @param root Pointer to the original Merkle root (32 bytes).
- * @param length 64-bit unsigned integer representing the length to mix in.
- * @param out_root Output buffer to write the new Merkle root (32 bytes).
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_mix_in_length(const uint8_t *root, uint64_t length, uint8_t *out_root)
+static ssz_error_t ssz_internal_merkleize_progressive_reader(
+    ssz_internal_leaf_reader_t reader,
+    const void *reader_ctx,
+    uint64_t source_start,
+    uint64_t leaf_count,
+    uint64_t num_leaves,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
 {
-    uint8_t buf[64];
-    memcpy(buf, root, 32);
-    buf[32] = (uint8_t)length;
-    buf[33] = (uint8_t)(length >> 8);
-    buf[34] = (uint8_t)(length >> 16);
-    buf[35] = (uint8_t)(length >> 24);
-    buf[36] = (uint8_t)(length >> 32);
-    buf[37] = (uint8_t)(length >> 40);
-    buf[38] = (uint8_t)(length >> 48);
-    buf[39] = (uint8_t)(length >> 56);
-    memset(buf + 40, 0, 24);
-    SHA256_hash(buf, 64, out_root);
+    if ((reader == NULL) || (out_root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    if (leaf_count == 0u)
+    {
+        memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
+        return SSZ_SUCCESS;
+    }
+
+    uint64_t left_count = (leaf_count < num_leaves) ? leaf_count : num_leaves;
+    uint64_t right_count = leaf_count - left_count;
+
+    ssz_chunk_t left_root;
+    ssz_chunk_t right_root;
+
+    ssz_error_t err =
+        ssz_internal_merkleize_reader(reader, reader_ctx, source_start, left_count, num_leaves,
+                                      hash_fn, &left_root);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    uint64_t next_source_start = 0u;
+    if (ssz_internal_add_overflow_u64(source_start, left_count, &next_source_start))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    uint64_t next_num_leaves = 0u;
+    if (ssz_internal_mul_overflow_u64(num_leaves, 4u, &next_num_leaves))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    err = ssz_internal_merkleize_progressive_reader(reader,
+                                                    reader_ctx,
+                                                    next_source_start,
+                                                    right_count,
+                                                    next_num_leaves,
+                                                    hash_fn,
+                                                    &right_root);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    return ssz_hash_2to1(hash_fn, &left_root, &right_root, out_root);
+}
+
+static ssz_error_t ssz_internal_byte_len_to_chunk_count(size_t byte_len, uint64_t *out_chunk_count)
+{
+    size_t chunk_count = 0u;
+
+    if (out_chunk_count == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    if (byte_len == 0u)
+    {
+        *out_chunk_count = 0u;
+        return SSZ_SUCCESS;
+    }
+
+    if (ssz_internal_add_overflow_size(byte_len, SSZ_BYTES_PER_CHUNK - 1u, &chunk_count))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    chunk_count /= SSZ_BYTES_PER_CHUNK;
+
+    *out_chunk_count = (uint64_t)chunk_count;
     return SSZ_SUCCESS;
 }
 
-/**
- * Mixes a selector byte into a Merkle root to produce an updated root.
- *
- * This function takes an existing Merkle root and a selector byte, places the selector in a
- * buffer along with the root, and computes SHA256_hash to produce a new Merkle root.
- *
- * @param root Pointer to the original Merkle root (32 bytes).
- * @param selector The selector byte to mix into the root.
- * @param out_root Output buffer to write the new Merkle root (32 bytes).
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_mix_in_selector(const uint8_t *root, uint8_t selector, uint8_t *out_root)
+static ssz_error_t ssz_internal_merkleize_packed_bytes(
+    const uint8_t *bytes,
+    size_t bytes_len,
+    uint64_t limit_chunks,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
 {
-    uint8_t buf[64] = {0};
-    memcpy(buf, root, 32);
-    buf[32] = selector;
-    SHA256_hash(buf, 64, out_root);
+    uint64_t chunk_count = 0u;
+    ssz_error_t err = ssz_internal_byte_len_to_chunk_count(bytes_len, &chunk_count);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    if ((bytes_len != 0u) && (bytes == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    ssz_internal_bytes_reader_ctx_t ctx = {
+        .bytes = bytes,
+        .byte_len = bytes_len,
+        .chunk_count = chunk_count,
+    };
+
+    return ssz_internal_merkleize_reader(
+        ssz_internal_read_bytes_leaf,
+        &ctx,
+        0u,
+        chunk_count,
+        limit_chunks,
+        hash_fn,
+        out_root);
+}
+
+static ssz_error_t ssz_internal_validate_active_fields(
+    const uint8_t *active_fields,
+    size_t active_fields_len,
+    uint32_t field_count)
+{
+    size_t one_bits = 0u;
+
+    if (field_count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if ((active_fields == NULL) || (active_fields_len == 0u))
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (active_fields_len > 32u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (active_fields[active_fields_len - 1u] == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+
+    for (size_t i = 0u; i < active_fields_len; i++)
+    {
+        one_bits += ssz_internal_count_bits_u8(active_fields[i]);
+    }
+
+    if (one_bits != field_count)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+
     return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_hash_tree_root_uint8(uint8_t value, ssz_chunk_t *out_root)
+{
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
+    out_root->bytes[0] = value;
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_hash_tree_root_uint16(uint16_t value, ssz_chunk_t *out_root)
+{
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
+    ssz_internal_write_u16_le(out_root->bytes, value);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_hash_tree_root_uint32(uint32_t value, ssz_chunk_t *out_root)
+{
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
+    ssz_internal_write_u32_le(out_root->bytes, value);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_hash_tree_root_uint64(uint64_t value, ssz_chunk_t *out_root)
+{
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
+    ssz_internal_write_u64_le(out_root->bytes, value);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_hash_tree_root_uint128(const uint8_t value[16], ssz_chunk_t *out_root)
+{
+    if ((value == NULL) || (out_root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
+    memcpy(out_root->bytes, value, 16u);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_hash_tree_root_uint256(const uint8_t value[32], ssz_chunk_t *out_root)
+{
+    if ((value == NULL) || (out_root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    memcpy(out_root->bytes, value, SSZ_BYTES_PER_CHUNK);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_hash_tree_root_boolean(uint8_t value, ssz_chunk_t *out_root)
+{
+    if (value > 1u)
+    {
+        return SSZ_ERR_ENCODING_INVALID;
+    }
+    return ssz_hash_tree_root_uint8(value, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_bitvector(
+    const uint8_t *bits_le,
+    size_t bits_le_len,
+    uint64_t bit_count,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    size_t bitfield_bytes = 0u;
+    uint64_t chunk_limit = 0u;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (bit_count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (!ssz_internal_bits_to_bytes(bit_count, &bitfield_bytes))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((bits_le == NULL) || (bits_le_len < bitfield_bytes))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    if ((bit_count % 8u) != 0u)
+    {
+        uint8_t mask = (uint8_t)((1u << (bit_count % 8u)) - 1u);
+        if ((bits_le[bitfield_bytes - 1u] & (uint8_t)(~mask)) != 0u)
+        {
+            return SSZ_ERR_ENCODING_INVALID;
+        }
+    }
+
+    if (ssz_internal_add_overflow_u64(bit_count, 255u, &chunk_limit))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    chunk_limit /= 256u;
+
+    return ssz_internal_merkleize_packed_bytes(bits_le, bitfield_bytes, chunk_limit, hash_fn, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_bitlist(
+    const uint8_t *bits_le,
+    size_t bits_le_len,
+    uint64_t bit_len,
+    uint64_t bit_limit,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    size_t bitfield_bytes = 0u;
+    uint64_t chunk_limit = SSZ_NO_LIMIT;
+    ssz_chunk_t data_root;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((bit_limit != SSZ_NO_LIMIT) && (bit_len > bit_limit))
+    {
+        return SSZ_ERR_LIMIT_EXCEEDED;
+    }
+    if (!ssz_internal_bits_to_bytes(bit_len, &bitfield_bytes))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((bitfield_bytes != 0u) && ((bits_le == NULL) || (bits_le_len < bitfield_bytes)))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    if ((bit_len % 8u) != 0u)
+    {
+        uint8_t mask = (uint8_t)((1u << (bit_len % 8u)) - 1u);
+        if ((bits_le[bitfield_bytes - 1u] & (uint8_t)(~mask)) != 0u)
+        {
+            return SSZ_ERR_ENCODING_INVALID;
+        }
+    }
+
+    if (bit_limit != SSZ_NO_LIMIT)
+    {
+        if (ssz_internal_add_overflow_u64(bit_limit, 255u, &chunk_limit))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+        chunk_limit /= 256u;
+    }
+
+    ssz_error_t err =
+        ssz_internal_merkleize_packed_bytes(bits_le, bitfield_bytes, chunk_limit, hash_fn, &data_root);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    return ssz_mix_in_length(&data_root, bit_len, hash_fn, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_vector_fixed(
+    const uint8_t *elements,
+    uint64_t element_count,
+    size_t element_size,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    size_t total_bytes = 0u;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (element_count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (element_size == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (!ssz_internal_u64_to_size(element_count, NULL))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &total_bytes))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((elements == NULL) && (total_bytes != 0u))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    return ssz_internal_merkleize_packed_bytes(elements, total_bytes, SSZ_NO_LIMIT, hash_fn, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_vector_composite(
+    uint64_t element_count,
+    const ssz_member_codec_t *codec,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (element_count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if ((codec == NULL) || (codec->root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    ssz_internal_codec_reader_ctx_t ctx = {
+        .codec = codec,
+        .count = element_count,
+    };
+
+    return ssz_internal_merkleize_reader(
+        ssz_internal_read_codec_leaf,
+        &ctx,
+        0u,
+        element_count,
+        SSZ_NO_LIMIT,
+        hash_fn,
+        out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_vector_roots(
+    const ssz_chunk_t *roots,
+    uint64_t count,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    if (count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (count > (uint64_t)SIZE_MAX)
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    return ssz_merkleize(roots, (size_t)count, SSZ_NO_LIMIT, hash_fn, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_list_fixed(
+    const uint8_t *elements,
+    uint64_t element_count,
+    uint64_t element_limit,
+    size_t element_size,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    size_t total_bytes = 0u;
+    uint64_t chunk_limit = SSZ_NO_LIMIT;
+    ssz_chunk_t data_root;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (element_size == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
+    {
+        return SSZ_ERR_LIMIT_EXCEEDED;
+    }
+    if (!ssz_internal_u64_to_size(element_count, NULL))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &total_bytes))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((elements == NULL) && (total_bytes != 0u))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    if (element_limit != SSZ_NO_LIMIT)
+    {
+        uint64_t limit_bytes = 0u;
+        if (ssz_internal_mul_overflow_u64(element_limit, (uint64_t)element_size, &limit_bytes) ||
+            ssz_internal_add_overflow_u64(limit_bytes, SSZ_BYTES_PER_CHUNK - 1u, &chunk_limit))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+        chunk_limit /= SSZ_BYTES_PER_CHUNK;
+    }
+
+    ssz_error_t err =
+        ssz_internal_merkleize_packed_bytes(elements, total_bytes, chunk_limit, hash_fn, &data_root);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    return ssz_mix_in_length(&data_root, element_count, hash_fn, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_list_composite(
+    uint64_t element_count,
+    uint64_t element_limit,
+    const ssz_member_codec_t *codec,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    ssz_chunk_t data_root;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
+    {
+        return SSZ_ERR_LIMIT_EXCEEDED;
+    }
+    if ((codec == NULL) || (codec->root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    ssz_internal_codec_reader_ctx_t ctx = {
+        .codec = codec,
+        .count = element_count,
+    };
+
+    ssz_error_t err = ssz_internal_merkleize_reader(
+        ssz_internal_read_codec_leaf,
+        &ctx,
+        0u,
+        element_count,
+        element_limit,
+        hash_fn,
+        &data_root);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    return ssz_mix_in_length(&data_root, element_count, hash_fn, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_list_roots(
+    const ssz_chunk_t *roots,
+    uint64_t count,
+    uint64_t limit,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    ssz_chunk_t data_root;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((limit != SSZ_NO_LIMIT) && (count > limit))
+    {
+        return SSZ_ERR_LIMIT_EXCEEDED;
+    }
+    if (count > (uint64_t)SIZE_MAX)
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    ssz_error_t err = ssz_merkleize(roots, (size_t)count, limit, hash_fn, &data_root);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    return ssz_mix_in_length(&data_root, count, hash_fn, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_union(
+    uint8_t selector,
+    bool has_none,
+    const ssz_member_codec_t *codec,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    ssz_chunk_t value_root;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    if (has_none && (selector == 0u))
+    {
+        memset(value_root.bytes, 0, SSZ_BYTES_PER_CHUNK);
+    }
+    else
+    {
+        if ((codec == NULL) || (codec->root == NULL))
+        {
+            return SSZ_ERR_INVALID_ARGUMENT;
+        }
+        ssz_error_t err = codec->root(codec->ctx, selector, &value_root);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
+        }
+    }
+
+    return ssz_mix_in_selector(&value_root, selector, hash_fn, out_root);
+}
+
+ssz_error_t ssz_merkleize(
+    const ssz_chunk_t *chunks,
+    size_t chunk_count,
+    uint64_t limit,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    ssz_internal_chunk_reader_ctx_t ctx = {
+        .chunks = chunks,
+        .count = (uint64_t)chunk_count,
+    };
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((chunk_count != 0u) && (chunks == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    return ssz_internal_merkleize_reader(
+        ssz_internal_read_chunk_leaf,
+        &ctx,
+        0u,
+        (uint64_t)chunk_count,
+        limit,
+        hash_fn,
+        out_root);
+}
+
+ssz_error_t ssz_mix_in_length(
+    const ssz_chunk_t *root,
+    uint64_t length,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    ssz_chunk_t length_chunk;
+
+    if ((root == NULL) || (out_root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    memset(length_chunk.bytes, 0, SSZ_BYTES_PER_CHUNK);
+    ssz_internal_write_u64_le(length_chunk.bytes, length);
+
+    return ssz_hash_2to1(hash_fn, root, &length_chunk, out_root);
+}
+
+ssz_error_t ssz_mix_in_selector(
+    const ssz_chunk_t *root,
+    uint8_t selector,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    ssz_chunk_t selector_chunk;
+
+    if ((root == NULL) || (out_root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    memset(selector_chunk.bytes, 0, SSZ_BYTES_PER_CHUNK);
+    selector_chunk.bytes[0] = selector;
+
+    return ssz_hash_2to1(hash_fn, root, &selector_chunk, out_root);
+}
+
+ssz_error_t ssz_merkleize_progressive(
+    const ssz_chunk_t *chunks,
+    size_t chunk_count,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    ssz_internal_chunk_reader_ctx_t ctx = {
+        .chunks = chunks,
+        .count = (uint64_t)chunk_count,
+    };
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((chunk_count != 0u) && (chunks == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    return ssz_internal_merkleize_progressive_reader(
+        ssz_internal_read_chunk_leaf,
+        &ctx,
+        0u,
+        (uint64_t)chunk_count,
+        1u,
+        hash_fn,
+        out_root);
+}
+
+ssz_error_t ssz_mix_in_active_fields(
+    const ssz_chunk_t *root,
+    const uint8_t *active_fields,
+    size_t active_fields_len,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    ssz_chunk_t active_chunk;
+
+    if ((root == NULL) || (out_root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (active_fields_len > 32u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if ((active_fields_len != 0u) && (active_fields == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    memset(active_chunk.bytes, 0, SSZ_BYTES_PER_CHUNK);
+    if (active_fields_len != 0u)
+    {
+        memcpy(active_chunk.bytes, active_fields, active_fields_len);
+    }
+
+    return ssz_hash_2to1(hash_fn, root, &active_chunk, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_progressive_container(
+    uint32_t field_count,
+    const uint8_t *active_fields,
+    size_t active_fields_len,
+    const ssz_member_codec_t *codec,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    ssz_chunk_t data_root;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((codec == NULL) || (codec->root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    ssz_error_t err = ssz_internal_validate_active_fields(active_fields, active_fields_len, field_count);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    ssz_internal_codec_reader_ctx_t ctx = {
+        .codec = codec,
+        .count = field_count,
+    };
+
+    err = ssz_internal_merkleize_progressive_reader(
+        ssz_internal_read_codec_leaf,
+        &ctx,
+        0u,
+        field_count,
+        1u,
+        hash_fn,
+        &data_root);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    return ssz_mix_in_active_fields(&data_root, active_fields, active_fields_len, hash_fn, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_progressive_list_fixed(
+    const uint8_t *elements,
+    uint64_t element_count,
+    size_t element_size,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    size_t total_bytes = 0u;
+    uint64_t chunk_count = 0u;
+    ssz_chunk_t data_root;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (element_size == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (!ssz_internal_u64_to_size(element_count, NULL))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &total_bytes))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((elements == NULL) && (total_bytes != 0u))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    ssz_error_t err = ssz_internal_byte_len_to_chunk_count(total_bytes, &chunk_count);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    ssz_internal_bytes_reader_ctx_t ctx = {
+        .bytes = elements,
+        .byte_len = total_bytes,
+        .chunk_count = chunk_count,
+    };
+
+    err = ssz_internal_merkleize_progressive_reader(
+        ssz_internal_read_bytes_leaf,
+        &ctx,
+        0u,
+        chunk_count,
+        1u,
+        hash_fn,
+        &data_root);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    return ssz_mix_in_length(&data_root, element_count, hash_fn, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_progressive_list_composite(
+    uint64_t element_count,
+    const ssz_member_codec_t *codec,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    ssz_chunk_t data_root;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((codec == NULL) || (codec->root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    ssz_internal_codec_reader_ctx_t ctx = {
+        .codec = codec,
+        .count = element_count,
+    };
+
+    ssz_error_t err = ssz_internal_merkleize_progressive_reader(
+        ssz_internal_read_codec_leaf,
+        &ctx,
+        0u,
+        element_count,
+        1u,
+        hash_fn,
+        &data_root);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    return ssz_mix_in_length(&data_root, element_count, hash_fn, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_progressive_bitlist(
+    const uint8_t *bits_le,
+    size_t bits_le_len,
+    uint64_t bit_len,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    size_t bitfield_bytes = 0u;
+    uint64_t chunk_count = 0u;
+    ssz_chunk_t data_root;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (!ssz_internal_bits_to_bytes(bit_len, &bitfield_bytes))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((bitfield_bytes != 0u) && ((bits_le == NULL) || (bits_le_len < bitfield_bytes)))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((bit_len % 8u) != 0u)
+    {
+        uint8_t mask = (uint8_t)((1u << (bit_len % 8u)) - 1u);
+        if ((bits_le[bitfield_bytes - 1u] & (uint8_t)(~mask)) != 0u)
+        {
+            return SSZ_ERR_ENCODING_INVALID;
+        }
+    }
+
+    ssz_error_t err = ssz_internal_byte_len_to_chunk_count(bitfield_bytes, &chunk_count);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    ssz_internal_bytes_reader_ctx_t ctx = {
+        .bytes = bits_le,
+        .byte_len = bitfield_bytes,
+        .chunk_count = chunk_count,
+    };
+
+    err = ssz_internal_merkleize_progressive_reader(
+        ssz_internal_read_bytes_leaf,
+        &ctx,
+        0u,
+        chunk_count,
+        1u,
+        hash_fn,
+        &data_root);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    return ssz_mix_in_length(&data_root, bit_len, hash_fn, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_progressive_container_roots(
+    const ssz_chunk_t *roots,
+    uint32_t count,
+    const uint8_t *active_fields,
+    size_t active_fields_len,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    ssz_chunk_t data_root;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    ssz_error_t err = ssz_internal_validate_active_fields(active_fields, active_fields_len, count);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    err = ssz_merkleize_progressive(roots, count, hash_fn, &data_root);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    return ssz_mix_in_active_fields(&data_root, active_fields, active_fields_len, hash_fn, out_root);
+}
+
+ssz_error_t ssz_hash_tree_root_progressive_list_roots(
+    const ssz_chunk_t *roots,
+    uint64_t count,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    ssz_chunk_t data_root;
+
+    if (out_root == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (count > (uint64_t)SIZE_MAX)
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    ssz_error_t err = ssz_merkleize_progressive(roots, (size_t)count, hash_fn, &data_root);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    return ssz_mix_in_length(&data_root, count, hash_fn, out_root);
 }

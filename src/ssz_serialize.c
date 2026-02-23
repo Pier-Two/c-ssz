@@ -1,1100 +1,777 @@
-#include "ssz_serialize.h"
-
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 
-#include "ssz_constants.h"
-#include "ssz_types.h"
-#include "ssz_utils.h"
+#include "ssz_internal.h"
+#include "ssz_serialize.h"
 
-/**
- * Serializes an 8-bit unsigned integer into a single byte.
- *
- * @param value Pointer to the 8-bit unsigned integer to serialize.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_uint8(const void *value, uint8_t *out_buf, size_t *out_size)
+static ssz_error_t ssz_internal_prepare_output(
+    size_t required,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
 {
-    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_UINT8)
+    if (out_len == NULL)
     {
-        return SSZ_ERROR_SERIALIZATION;
+        return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    out_buf[0] = *(const uint8_t *)value;
-    *out_size = SSZ_BYTE_SIZE_OF_UINT8;
+    *out_len = required;
+    if (out == NULL)
+    {
+        return SSZ_SUCCESS;
+    }
+    if (out_cap < required)
+    {
+        return SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+
     return SSZ_SUCCESS;
 }
 
-/**
- * Serializes a 16-bit unsigned integer into two bytes.
- *
- * @param value Pointer to the 16-bit unsigned integer to serialize.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_uint16(const void *value, uint8_t *out_buf, size_t *out_size)
+static bool ssz_internal_selector_allowed(
+    uint8_t selector,
+    const uint8_t *allowed_selectors,
+    uint32_t allowed_selector_count)
 {
-    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_UINT16)
+    for (uint32_t i = 0u; i < allowed_selector_count; i++)
     {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    uint16_t val;
-    memcpy(&val, value, sizeof(val));
-    out_buf[0] = (uint8_t)(val);
-    out_buf[1] = (uint8_t)(val >> 8);
-    *out_size = SSZ_BYTE_SIZE_OF_UINT16;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a 32-bit unsigned integer into four bytes.
- *
- * @param value Pointer to the 32-bit unsigned integer to serialize.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_uint32(const void *value, uint8_t *out_buf, size_t *out_size)
-{
-    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_UINT32)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    uint32_t val;
-    memcpy(&val, value, sizeof(val));
-    out_buf[0] = (uint8_t)(val);
-    out_buf[1] = (uint8_t)(val >> 8);
-    out_buf[2] = (uint8_t)(val >> 16);
-    out_buf[3] = (uint8_t)(val >> 24);
-    *out_size = SSZ_BYTE_SIZE_OF_UINT32;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a 64-bit unsigned integer into eight bytes.
- *
- * @param value Pointer to the 64-bit unsigned integer to serialize.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_uint64(const void *value, uint8_t *out_buf, size_t *out_size)
-{
-    if (value == NULL || out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_UINT64)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    uint64_t val = *(const uint64_t *)value;
-    out_buf[0] = (uint8_t)(val);
-    out_buf[1] = (uint8_t)(val >> 8);
-    out_buf[2] = (uint8_t)(val >> 16);
-    out_buf[3] = (uint8_t)(val >> 24);
-    out_buf[4] = (uint8_t)(val >> 32);
-    out_buf[5] = (uint8_t)(val >> 40);
-    out_buf[6] = (uint8_t)(val >> 48);
-    out_buf[7] = (uint8_t)(val >> 56);
-    *out_size = SSZ_BYTE_SIZE_OF_UINT64;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a 128-bit unsigned integer into sixteen bytes.
- *
- * @param value Pointer to the 128-bit unsigned integer to serialize.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_uint128(
-    const void *restrict value,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (value == NULL || out_buf == NULL || out_size == NULL ||
-        *out_size < SSZ_BYTE_SIZE_OF_UINT128)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    static const uint32_t test_value = 1;
-    const uint8_t *endian_check = (const uint8_t *)&test_value;
-
-    if (endian_check[0] == 0x01)
-    {
-        memcpy(out_buf, value, 16);
-    }
-    else
-    {
-        const uint8_t *src = (const uint8_t *)value;
-
-        for (size_t i = 0; i < 16; i++)
+        if (allowed_selectors[i] == selector)
         {
-            out_buf[i] = src[15 - i];
+            return true;
+        }
+    }
+    return false;
+}
+
+static ssz_error_t ssz_internal_validate_compatible_union_schema(
+    const uint8_t *allowed_selectors,
+    uint32_t allowed_selector_count)
+{
+    if ((allowed_selectors == NULL) || (allowed_selector_count == 0u))
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+
+    for (uint32_t i = 0u; i < allowed_selector_count; i++)
+    {
+        if ((allowed_selectors[i] == 0u) || (allowed_selectors[i] > 127u))
+        {
+            return SSZ_ERR_SCHEMA_INVALID;
         }
     }
 
-    *out_size = SSZ_BYTE_SIZE_OF_UINT128;
     return SSZ_SUCCESS;
 }
 
-/**
- * Serializes a 256-bit unsigned integer into thirty-two bytes.
- *
- * @param value Pointer to the 256-bit unsigned integer to serialize.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_uint256(
-    const void *restrict value,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
+ssz_error_t ssz_serialize_uint8(uint8_t value, uint8_t out[1])
 {
-    if (value == NULL || out_buf == NULL || out_size == NULL ||
-        *out_size < SSZ_BYTE_SIZE_OF_UINT256)
+    if (out == NULL)
     {
-        return SSZ_ERROR_SERIALIZATION;
+        return SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    static const uint32_t test_value = 1;
-    const uint8_t endian_check = *(const uint8_t *)&test_value;
-
-    if (endian_check == 0x01)
-    {
-        memcpy(out_buf, value, 32);
-    }
-    else
-    {
-        const uint8_t *src = (const uint8_t *)value;
-
-        for (size_t i = 0; i < 32; i++)
-        {
-            out_buf[i] = src[31 - i];
-        }
-    }
-
-    *out_size = SSZ_BYTE_SIZE_OF_UINT256;
+    out[0] = value;
     return SSZ_SUCCESS;
 }
 
-/**
- * Serializes a boolean value into a single byte.
- *
- * @param value The boolean value to serialize.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_boolean(const bool *value, uint8_t *out_buf, size_t *out_size)
+ssz_error_t ssz_serialize_uint16(uint16_t value, uint8_t out[2])
 {
-    if (out_buf == NULL || out_size == NULL || *out_size < SSZ_BYTE_SIZE_OF_BOOL)
+    if (out == NULL)
     {
-        return SSZ_ERROR_SERIALIZATION;
+        return SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    out_buf[0] = (uint8_t)(*value);
-    *out_size = SSZ_BYTE_SIZE_OF_BOOL;
+    ssz_internal_write_u16_le(out, value);
     return SSZ_SUCCESS;
 }
 
-/**
- * Serializes a bitvector into a compact byte array. Each bit in the input
- * is packed into the output buffer, with unused bits in the last byte set to 0.
- *
- * @param bits Pointer to the input bit array.
- * @param num_bits The number of bits to serialize.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
+ssz_error_t ssz_serialize_uint32(uint32_t value, uint8_t out[4])
+{
+    if (out == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    ssz_internal_write_u32_le(out, value);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_serialize_uint64(uint64_t value, uint8_t out[8])
+{
+    if (out == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    ssz_internal_write_u64_le(out, value);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_serialize_uint128(const uint8_t value[16], uint8_t out[16])
+{
+    if ((value == NULL) || (out == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    memcpy(out, value, 16u);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_serialize_uint256(const uint8_t value[32], uint8_t out[32])
+{
+    if ((value == NULL) || (out == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    memcpy(out, value, 32u);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_serialize_boolean(uint8_t value, uint8_t out[1])
+{
+    if (out == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (value > 1u)
+    {
+        return SSZ_ERR_ENCODING_INVALID;
+    }
+    out[0] = value;
+    return SSZ_SUCCESS;
+}
+
 ssz_error_t ssz_serialize_bitvector(
-    const bool *restrict bits,
-    size_t num_bits,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
+    const uint8_t *bits_le,
+    size_t bits_le_len,
+    uint64_t bit_count,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
 {
-    if (bits == NULL || out_buf == NULL || out_size == NULL || num_bits == 0)
+    size_t byte_count = 0u;
+
+    if (bit_count == 0u)
     {
-        return SSZ_ERROR_SERIALIZATION;
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (!ssz_internal_bits_to_bytes(bit_count, &byte_count))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((bits_le == NULL) || (bits_le_len < byte_count))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    const size_t byte_count = (num_bits + 7) / 8;
-
-    if (*out_size < byte_count)
+    if ((bit_count % 8u) != 0u)
     {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    const size_t full_bytes = num_bits / 8;
-    const size_t remainder_bits = num_bits % 8;
-    const bool *bit_ptr = bits;
-    uint8_t *out_ptr = out_buf;
-
-    for (size_t i = 0; i < full_bytes; ++i)
-    {
-        *out_ptr++ = (uint8_t)((bit_ptr[0] << 0) | (bit_ptr[1] << 1) | (bit_ptr[2] << 2) |
-                               (bit_ptr[3] << 3) | (bit_ptr[4] << 4) | (bit_ptr[5] << 5) |
-                               (bit_ptr[6] << 6) | (bit_ptr[7] << 7));
-        bit_ptr += 8;
-    }
-
-    if (remainder_bits > 0)
-    {
-        uint8_t value = 0;
-
-        for (size_t bit = 0; bit < remainder_bits; ++bit)
+        uint8_t mask = (uint8_t)((1u << (bit_count % 8u)) - 1u);
+        if ((bits_le[byte_count - 1u] & (uint8_t)(~mask)) != 0u)
         {
-            value |= (*bit_ptr++) << bit;
+            return SSZ_ERR_ENCODING_INVALID;
         }
-
-        *out_ptr = value;
     }
 
-    *out_size = byte_count;
+    ssz_error_t err = ssz_internal_prepare_output(byte_count, out, out_cap, out_len);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+    if (out != NULL)
+    {
+        memcpy(out, bits_le, byte_count);
+    }
+
     return SSZ_SUCCESS;
 }
 
-/**
- * Serializes a bitlist into a compact byte array. A bitlist is similar to a bitvector,
- * but includes an additional "end bit" to indicate the end of the list.
- *
- * @param bits Pointer to the input bit array.
- * @param num_bits The number of bits to serialize.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
 ssz_error_t ssz_serialize_bitlist(
-    const bool *bits,
-    size_t num_bits,
-    uint8_t *out_buf,
-    size_t *out_size)
+    const uint8_t *bits_le,
+    size_t bits_le_len,
+    uint64_t bit_len,
+    uint64_t bit_limit,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
 {
-    if (bits == NULL || out_buf == NULL || out_size == NULL)
+    size_t data_bytes = 0u;
+    size_t delimiter_byte = 0u;
+    size_t required = 0u;
+
+    if ((bit_limit != SSZ_NO_LIMIT) && (bit_len > bit_limit))
     {
-        return SSZ_ERROR_SERIALIZATION;
+        return SSZ_ERR_LIMIT_EXCEEDED;
     }
 
-    const size_t total_bits = num_bits + 1;
-    const size_t byte_count = (total_bits + 7) / 8;
-
-    if (*out_size < byte_count)
+    if (!ssz_internal_bits_to_bytes(bit_len, &data_bytes))
     {
-        return SSZ_ERROR_SERIALIZATION;
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (!ssz_internal_u64_to_size(bit_len / 8u, &delimiter_byte) ||
+        ssz_internal_add_overflow_size(delimiter_byte, 1u, &required))
+    {
+        return SSZ_ERR_OVERFLOW;
     }
 
-    const size_t delimiter_byte = num_bits / 8;
-    const size_t delimiter_bit = num_bits % 8;
-    const bool *bit_ptr = bits;
-
-    for (size_t j = 0; j < byte_count; j++)
+    if (data_bytes != 0u)
     {
-        uint8_t byte = 0;
-        const size_t start = j * 8;
-
-        if (start + 8 <= num_bits)
+        if ((bits_le == NULL) || (bits_le_len < data_bytes))
         {
-            byte |= (uint8_t)(*bit_ptr++) << 0;
-            byte |= (uint8_t)(*bit_ptr++) << 1;
-            byte |= (uint8_t)(*bit_ptr++) << 2;
-            byte |= (uint8_t)(*bit_ptr++) << 3;
-            byte |= (uint8_t)(*bit_ptr++) << 4;
-            byte |= (uint8_t)(*bit_ptr++) << 5;
-            byte |= (uint8_t)(*bit_ptr++) << 6;
-            byte |= (uint8_t)(*bit_ptr++) << 7;
+            return SSZ_ERR_INVALID_ARGUMENT;
+        }
+        if ((bit_len % 8u) != 0u)
+        {
+            uint8_t mask = (uint8_t)((1u << (bit_len % 8u)) - 1u);
+            if ((bits_le[data_bytes - 1u] & (uint8_t)(~mask)) != 0u)
+            {
+                return SSZ_ERR_ENCODING_INVALID;
+            }
+        }
+    }
+
+    ssz_error_t err = ssz_internal_prepare_output(required, out, out_cap, out_len);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+    if (out == NULL)
+    {
+        return SSZ_SUCCESS;
+    }
+
+    memset(out, 0, required);
+    if (data_bytes != 0u)
+    {
+        memcpy(out, bits_le, data_bytes);
+    }
+
+    uint8_t delimiter_bit = (uint8_t)(1u << (bit_len % 8u));
+    out[delimiter_byte] = (uint8_t)(out[delimiter_byte] | delimiter_bit);
+
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_serialize_vector_fixed(
+    const uint8_t *elements,
+    uint64_t element_count,
+    size_t element_size,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
+{
+    size_t required = 0u;
+
+    if (element_count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (element_size == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (!ssz_internal_u64_to_size(element_count, NULL))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &required))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((required != 0u) && (elements == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    ssz_error_t err = ssz_internal_prepare_output(required, out, out_cap, out_len);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+    if ((out != NULL) && (required != 0u))
+    {
+        memcpy(out, elements, required);
+    }
+
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_serialize_vector_variable(
+    uint64_t element_count,
+    const ssz_member_codec_t *codec,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
+{
+    size_t fixed_region = 0u;
+    size_t total = 0u;
+
+    if (element_count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if ((codec == NULL) || (codec->write == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (!ssz_internal_u64_to_size(element_count, NULL))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_internal_mul_overflow_size((size_t)element_count, SSZ_BYTES_PER_LENGTH_OFFSET, &fixed_region))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    total = fixed_region;
+    for (uint64_t i = 0u; i < element_count; i++)
+    {
+        size_t encoded_len = 0u;
+        ssz_error_t err = codec->write(codec->ctx, i, NULL, 0u, &encoded_len);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
+        }
+        if (ssz_internal_add_overflow_size(total, encoded_len, &total))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+    }
+    if (total > UINT32_MAX)
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    ssz_error_t err = ssz_internal_prepare_output(total, out, out_cap, out_len);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+    if (out == NULL)
+    {
+        return SSZ_SUCCESS;
+    }
+
+    size_t cursor = fixed_region;
+    for (uint64_t i = 0u; i < element_count; i++)
+    {
+        size_t expected_len = 0u;
+        err = codec->write(codec->ctx, i, NULL, 0u, &expected_len);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
+        }
+
+        ssz_internal_write_u32_le(out + (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET, (uint32_t)cursor);
+
+        size_t written = 0u;
+        err = codec->write(codec->ctx, i, out + cursor, out_cap - cursor, &written);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
+        }
+        if (written != expected_len)
+        {
+            return SSZ_ERR_TYPE_MISMATCH;
+        }
+        if (ssz_internal_add_overflow_size(cursor, written, &cursor))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+    }
+
+    return (cursor == total) ? SSZ_SUCCESS : SSZ_ERR_TYPE_MISMATCH;
+}
+
+ssz_error_t ssz_serialize_list_fixed(
+    const uint8_t *elements,
+    uint64_t element_count,
+    uint64_t element_limit,
+    size_t element_size,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
+{
+    size_t required = 0u;
+
+    if (element_size == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
+    {
+        return SSZ_ERR_LIMIT_EXCEEDED;
+    }
+    if (!ssz_internal_u64_to_size(element_count, NULL))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &required))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((required != 0u) && (elements == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    ssz_error_t err = ssz_internal_prepare_output(required, out, out_cap, out_len);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+    if ((out != NULL) && (required != 0u))
+    {
+        memcpy(out, elements, required);
+    }
+
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_serialize_list_variable(
+    uint64_t element_count,
+    uint64_t element_limit,
+    const ssz_member_codec_t *codec,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
+{
+    size_t fixed_region = 0u;
+    size_t total = 0u;
+
+    if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
+    {
+        return SSZ_ERR_LIMIT_EXCEEDED;
+    }
+    if ((codec == NULL) || (codec->write == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (!ssz_internal_u64_to_size(element_count, NULL))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_internal_mul_overflow_size((size_t)element_count, SSZ_BYTES_PER_LENGTH_OFFSET, &fixed_region))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    total = fixed_region;
+    for (uint64_t i = 0u; i < element_count; i++)
+    {
+        size_t encoded_len = 0u;
+        ssz_error_t err = codec->write(codec->ctx, i, NULL, 0u, &encoded_len);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
+        }
+        if (ssz_internal_add_overflow_size(total, encoded_len, &total))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+    }
+    if (total > UINT32_MAX)
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    ssz_error_t err = ssz_internal_prepare_output(total, out, out_cap, out_len);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+    if (out == NULL)
+    {
+        return SSZ_SUCCESS;
+    }
+
+    size_t cursor = fixed_region;
+    for (uint64_t i = 0u; i < element_count; i++)
+    {
+        size_t expected_len = 0u;
+        err = codec->write(codec->ctx, i, NULL, 0u, &expected_len);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
+        }
+
+        ssz_internal_write_u32_le(out + (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET, (uint32_t)cursor);
+
+        size_t written = 0u;
+        err = codec->write(codec->ctx, i, out + cursor, out_cap - cursor, &written);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
+        }
+        if (written != expected_len)
+        {
+            return SSZ_ERR_TYPE_MISMATCH;
+        }
+        if (ssz_internal_add_overflow_size(cursor, written, &cursor))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+    }
+
+    return (cursor == total) ? SSZ_SUCCESS : SSZ_ERR_TYPE_MISMATCH;
+}
+
+ssz_error_t ssz_serialize_container(
+    const size_t *field_fixed_sizes,
+    uint32_t field_count,
+    const ssz_member_codec_t *codec,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
+{
+    size_t fixed_region = 0u;
+    size_t total = 0u;
+
+    if ((field_fixed_sizes == NULL) || (field_count == 0u))
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if ((codec == NULL) || (codec->write == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    for (uint32_t i = 0u; i < field_count; i++)
+    {
+        size_t fixed_size = field_fixed_sizes[i];
+        size_t contribution = (fixed_size == 0u) ? SSZ_BYTES_PER_LENGTH_OFFSET : fixed_size;
+        if (ssz_internal_add_overflow_size(fixed_region, contribution, &fixed_region))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+    }
+
+    total = fixed_region;
+    for (uint32_t i = 0u; i < field_count; i++)
+    {
+        size_t encoded_len = 0u;
+        ssz_error_t err = codec->write(codec->ctx, i, NULL, 0u, &encoded_len);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
+        }
+
+        if (field_fixed_sizes[i] == 0u)
+        {
+            if (ssz_internal_add_overflow_size(total, encoded_len, &total))
+            {
+                return SSZ_ERR_OVERFLOW;
+            }
+        }
+        else if (encoded_len != field_fixed_sizes[i])
+        {
+            return SSZ_ERR_TYPE_MISMATCH;
+        }
+    }
+
+    if (total > UINT32_MAX)
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    ssz_error_t err = ssz_internal_prepare_output(total, out, out_cap, out_len);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+    if (out == NULL)
+    {
+        return SSZ_SUCCESS;
+    }
+
+    size_t fixed_cursor = 0u;
+    size_t variable_cursor = fixed_region;
+
+    for (uint32_t i = 0u; i < field_count; i++)
+    {
+        size_t fixed_size = field_fixed_sizes[i];
+        size_t written = 0u;
+
+        if (fixed_size == 0u)
+        {
+            size_t expected_len = 0u;
+            err = codec->write(codec->ctx, i, NULL, 0u, &expected_len);
+            if (err != SSZ_SUCCESS)
+            {
+                return err;
+            }
+
+            ssz_internal_write_u32_le(out + fixed_cursor, (uint32_t)variable_cursor);
+            fixed_cursor += SSZ_BYTES_PER_LENGTH_OFFSET;
+
+            err = codec->write(codec->ctx, i, out + variable_cursor, out_cap - variable_cursor, &written);
+            if (err != SSZ_SUCCESS)
+            {
+                return err;
+            }
+            if (written != expected_len)
+            {
+                return SSZ_ERR_TYPE_MISMATCH;
+            }
+            if (ssz_internal_add_overflow_size(variable_cursor, written, &variable_cursor))
+            {
+                return SSZ_ERR_OVERFLOW;
+            }
         }
         else
         {
-            for (size_t k = 0; k < 8; k++)
+            err = codec->write(codec->ctx, i, out + fixed_cursor, fixed_size, &written);
+            if (err != SSZ_SUCCESS)
             {
-                if (start + k >= num_bits)
-                    break;
-                byte |= (uint8_t)(*bit_ptr++) << k;
+                return err;
             }
-        }
-
-        if (j == delimiter_byte)
-        {
-            byte |= (1 << delimiter_bit);
-        }
-
-        out_buf[j] = byte;
-    }
-
-    *out_size = byte_count;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a union type, which includes a selector and optional data.
- * The selector determines the type of the union, and the data is serialized
- * using the provided serialization function.
- *
- * @param u Pointer to the union to serialize.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_union(const ssz_union_t *u, uint8_t *out_buf, size_t *out_size)
-{
-    if (u == NULL || out_buf == NULL || out_size == NULL || *out_size < 1 || u->selector > 127)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    if (u->selector == 0)
-    {
-        if (u->data != NULL)
-        {
-            return SSZ_ERROR_SERIALIZATION;
-        }
-
-        out_buf[0] = 0;
-        *out_size = 1;
-        return SSZ_SUCCESS;
-    }
-
-    out_buf[0] = (uint8_t)(u->selector & 0x7F);
-    size_t used = 1;
-
-    if (u->data != NULL)
-    {
-        if (u->serialize_fn == NULL)
-        {
-            return SSZ_ERROR_SERIALIZATION;
-        }
-
-        size_t space_remaining = *out_size - used;
-        ssz_error_t ret = u->serialize_fn(u->data, &out_buf[used], &space_remaining);
-
-        if (ret != SSZ_SUCCESS)
-        {
-            return ret;
-        }
-
-        used += space_remaining;
-    }
-
-    *out_size = used;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a vector of uint8 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_uint8(
-    const uint8_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    size_t total_bytes = element_count;
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    memcpy(out_buf, elements, total_bytes);
-    *out_size = total_bytes;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a vector of uint16 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_uint16(
-    const uint16_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    size_t total_bytes = element_count * sizeof(uint16_t);
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    static const uint32_t test_value = 1;
-    const uint8_t endian_check = *(const uint8_t *)&test_value;
-
-    if (endian_check == 0x01)
-    {
-        memcpy(out_buf, elements, total_bytes);
-    }
-    else
-    {
-        for (size_t i = 0; i < element_count; i++)
-        {
-            uint16_t val = elements[i];
-            out_buf[2 * i] = (uint8_t)(val);
-            out_buf[2 * i + 1] = (uint8_t)(val >> 8);
-        }
-    }
-
-    *out_size = total_bytes;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a vector of uint32 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_uint32(
-    const uint32_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    size_t total_bytes = element_count * sizeof(uint32_t);
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    static const uint32_t test_value = 1;
-    const uint8_t endian_check = *(const uint8_t *)&test_value;
-
-    if (endian_check == 0x01)
-    {
-        memcpy(out_buf, elements, total_bytes);
-    }
-    else
-    {
-        for (size_t i = 0; i < element_count; i++)
-        {
-            uint32_t val = elements[i];
-            size_t base = i * 4;
-            out_buf[base + 0] = (uint8_t)(val);
-            out_buf[base + 1] = (uint8_t)(val >> 8);
-            out_buf[base + 2] = (uint8_t)(val >> 16);
-            out_buf[base + 3] = (uint8_t)(val >> 24);
-        }
-    }
-
-    *out_size = total_bytes;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a vector of uint64 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_uint64(
-    const uint64_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    size_t total_bytes = element_count * sizeof(uint64_t);
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    static const uint32_t test_value = 1;
-    const uint8_t endian_check = *(const uint8_t *)&test_value;
-
-    if (endian_check == 0x01)
-    {
-        memcpy(out_buf, elements, total_bytes);
-    }
-    else
-    {
-        for (size_t i = 0; i < element_count; i++)
-        {
-            uint64_t val = elements[i];
-            size_t base = i * 8;
-            out_buf[base + 0] = (uint8_t)(val);
-            out_buf[base + 1] = (uint8_t)(val >> 8);
-            out_buf[base + 2] = (uint8_t)(val >> 16);
-            out_buf[base + 3] = (uint8_t)(val >> 24);
-            out_buf[base + 4] = (uint8_t)(val >> 32);
-            out_buf[base + 5] = (uint8_t)(val >> 40);
-            out_buf[base + 6] = (uint8_t)(val >> 48);
-            out_buf[base + 7] = (uint8_t)(val >> 56);
-        }
-    }
-
-    *out_size = total_bytes;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a vector of uint128 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_uint128(
-    const void *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    size_t total_bytes = element_count * 16;
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    static const uint32_t test_value = 1;
-    const uint8_t endian_check = *(const uint8_t *)&test_value;
-
-    if (endian_check == 0x01)
-    {
-        memcpy(out_buf, elements, total_bytes);
-    }
-    else
-    {
-        for (size_t i = 0; i < element_count; i++)
-        {
-            const uint8_t *src = (const uint8_t *)elements + (i * 16);
-            uint8_t *dst = out_buf + (i * 16);
-
-            for (size_t j = 0; j < 16; j++)
+            if (written != fixed_size)
             {
-                dst[j] = src[15 - j];
+                return SSZ_ERR_TYPE_MISMATCH;
             }
+            fixed_cursor += fixed_size;
         }
     }
 
-    *out_size = total_bytes;
+    if ((fixed_cursor != fixed_region) || (variable_cursor != total))
+    {
+        return SSZ_ERR_TYPE_MISMATCH;
+    }
+
     return SSZ_SUCCESS;
 }
 
-/**
- * Serializes a vector of uint256 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_uint256(
-    const void *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
+ssz_error_t ssz_serialize_union(
+    uint8_t selector,
+    uint32_t option_count,
+    bool has_none,
+    const ssz_member_codec_t *codec,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
 {
-    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
+    size_t payload_len = 0u;
+    size_t total = 1u;
+
+    if (option_count == 0u)
     {
-        return SSZ_ERROR_SERIALIZATION;
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (option_count > 256u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (has_none && (option_count < 2u))
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if ((uint32_t)selector >= option_count)
+    {
+        return SSZ_ERR_SELECTOR_INVALID;
     }
 
-    size_t total_bytes = element_count * 32;
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    if (!(has_none && (selector == 0u)))
     {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    static const uint32_t test_value = 1;
-    const uint8_t endian_check = *(const uint8_t *)&test_value;
-
-    if (endian_check == 0x01)
-    {
-        memcpy(out_buf, elements, total_bytes);
-    }
-    else
-    {
-        for (size_t i = 0; i < element_count; i++)
+        if ((codec == NULL) || (codec->write == NULL))
         {
-            const uint8_t *src = (const uint8_t *)elements + (i * 32);
-            uint8_t *dst = out_buf + (i * 32);
-
-            for (size_t j = 0; j < 32; j++)
-            {
-                dst[j] = src[31 - j];
-            }
+            return SSZ_ERR_INVALID_ARGUMENT;
         }
-    }
-
-    *out_size = total_bytes;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a vector of bool elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf The output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_bool(
-    const bool *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (elements == NULL || out_buf == NULL || out_size == NULL || element_count == 0)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    size_t total_bytes = element_count;
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        out_buf[i] = (uint8_t)(elements[i]);
-    }
-
-    *out_size = total_bytes;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a list of uint8 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_uint8(
-    const uint8_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (elements == NULL || out_buf == NULL || out_size == NULL)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    if (element_count == 0)
-    {
-        *out_size = 0;
-        return SSZ_SUCCESS;
-    }
-
-    size_t total_bytes = element_count;
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    memcpy(out_buf, elements, total_bytes);
-    *out_size = total_bytes;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a list of uint16 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_uint16(
-    const uint16_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (elements == NULL || out_buf == NULL || out_size == NULL)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    if (element_count == 0)
-    {
-        *out_size = 0;
-        return SSZ_SUCCESS;
-    }
-
-    size_t total_bytes = element_count * sizeof(uint16_t);
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    static const uint32_t test_value = 1;
-    const uint8_t endian_check = *(const uint8_t *)&test_value;
-
-    if (endian_check == 0x01)
-    {
-        memcpy(out_buf, elements, total_bytes);
-    }
-    else
-    {
-        for (size_t i = 0; i < element_count; i++)
+        ssz_error_t err = codec->write(codec->ctx, selector, NULL, 0u, &payload_len);
+        if (err != SSZ_SUCCESS)
         {
-            uint16_t val = elements[i];
-            out_buf[2 * i] = (uint8_t)(val);
-            out_buf[2 * i + 1] = (uint8_t)(val >> 8);
+            return err;
         }
-    }
-
-    *out_size = total_bytes;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a list of uint32 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_uint32(
-    const uint32_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (elements == NULL || out_buf == NULL || out_size == NULL)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    if (element_count == 0)
-    {
-        *out_size = 0;
-        return SSZ_SUCCESS;
-    }
-
-    size_t total_bytes = element_count * sizeof(uint32_t);
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    static const uint32_t test_value = 1;
-    const uint8_t endian_check = *(const uint8_t *)&test_value;
-
-    if (endian_check == 0x01)
-    {
-        memcpy(out_buf, elements, total_bytes);
-    }
-    else
-    {
-        for (size_t i = 0; i < element_count; i++)
+        if (ssz_internal_add_overflow_size(total, payload_len, &total))
         {
-            uint32_t val = elements[i];
-            size_t base = i * 4;
-            out_buf[base + 0] = (uint8_t)(val);
-            out_buf[base + 1] = (uint8_t)(val >> 8);
-            out_buf[base + 2] = (uint8_t)(val >> 16);
-            out_buf[base + 3] = (uint8_t)(val >> 24);
+            return SSZ_ERR_OVERFLOW;
         }
     }
 
-    *out_size = total_bytes;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a list of uint64 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_uint64(
-    const uint64_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (elements == NULL || out_buf == NULL || out_size == NULL)
+    ssz_error_t err = ssz_internal_prepare_output(total, out, out_cap, out_len);
+    if (err != SSZ_SUCCESS)
     {
-        return SSZ_ERROR_SERIALIZATION;
+        return err;
     }
-
-    if (element_count == 0)
+    if (out == NULL)
     {
-        *out_size = 0;
         return SSZ_SUCCESS;
     }
 
-    size_t total_bytes = element_count * sizeof(uint64_t);
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    out[0] = selector;
+    if (total == 1u)
     {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    static const uint32_t test_value = 1;
-    const uint8_t endian_check = *(const uint8_t *)&test_value;
-
-    if (endian_check == 0x01)
-    {
-        memcpy(out_buf, elements, total_bytes);
-    }
-    else
-    {
-        for (size_t i = 0; i < element_count; i++)
-        {
-            uint64_t val = elements[i];
-            size_t base = i * 8;
-            out_buf[base + 0] = (uint8_t)(val);
-            out_buf[base + 1] = (uint8_t)(val >> 8);
-            out_buf[base + 2] = (uint8_t)(val >> 16);
-            out_buf[base + 3] = (uint8_t)(val >> 24);
-            out_buf[base + 4] = (uint8_t)(val >> 32);
-            out_buf[base + 5] = (uint8_t)(val >> 40);
-            out_buf[base + 6] = (uint8_t)(val >> 48);
-            out_buf[base + 7] = (uint8_t)(val >> 56);
-        }
-    }
-
-    *out_size = total_bytes;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a list of uint128 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_uint128(
-    const void *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (elements == NULL || out_buf == NULL || out_size == NULL)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    if (element_count == 0)
-    {
-        *out_size = 0;
         return SSZ_SUCCESS;
     }
 
-    size_t total_bytes = element_count * 16;
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    size_t written = 0u;
+    err = codec->write(codec->ctx, selector, out + 1u, out_cap - 1u, &written);
+    if (err != SSZ_SUCCESS)
     {
-        return SSZ_ERROR_SERIALIZATION;
+        return err;
+    }
+    if (written != payload_len)
+    {
+        return SSZ_ERR_TYPE_MISMATCH;
     }
 
-    static const uint32_t test_value = 1;
-    const uint8_t endian_check = *(const uint8_t *)&test_value;
-
-    if (endian_check == 0x01)
-    {
-        memcpy(out_buf, elements, total_bytes);
-    }
-    else
-    {
-        for (size_t i = 0; i < element_count; i++)
-        {
-            const uint8_t *src = (const uint8_t *)elements + (i * 16);
-            uint8_t *dst = out_buf + (i * 16);
-
-            for (size_t j = 0; j < 16; j++)
-            {
-                dst[j] = src[15 - j];
-            }
-        }
-    }
-
-    *out_size = total_bytes;
     return SSZ_SUCCESS;
 }
 
-/**
- * Serializes a list of uint256 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_uint256(
-    const void *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
+ssz_error_t ssz_serialize_compatible_union(
+    uint8_t selector,
+    const uint8_t *allowed_selectors,
+    uint32_t allowed_selector_count,
+    const ssz_member_codec_t *codec,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
 {
-    if (elements == NULL || out_buf == NULL || out_size == NULL)
+    size_t payload_len = 0u;
+    size_t total = 1u;
+
+    ssz_error_t schema_err =
+        ssz_internal_validate_compatible_union_schema(allowed_selectors, allowed_selector_count);
+    if (schema_err != SSZ_SUCCESS)
     {
-        return SSZ_ERROR_SERIALIZATION;
+        return schema_err;
     }
 
-    if (element_count == 0)
+    if ((selector == 0u) || (selector > 127u) ||
+        !ssz_internal_selector_allowed(selector, allowed_selectors, allowed_selector_count))
     {
-        *out_size = 0;
+        return SSZ_ERR_SELECTOR_INVALID;
+    }
+    if ((codec == NULL) || (codec->write == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    ssz_error_t err = codec->write(codec->ctx, selector, NULL, 0u, &payload_len);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+    if (ssz_internal_add_overflow_size(total, payload_len, &total))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    err = ssz_internal_prepare_output(total, out, out_cap, out_len);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+    if (out == NULL)
+    {
         return SSZ_SUCCESS;
     }
 
-    size_t total_bytes = element_count * 32;
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
+    out[0] = selector;
+    size_t written = 0u;
+    err = codec->write(codec->ctx, selector, out + 1u, out_cap - 1u, &written);
+    if (err != SSZ_SUCCESS)
     {
-        return SSZ_ERROR_SERIALIZATION;
+        return err;
+    }
+    if (written != payload_len)
+    {
+        return SSZ_ERR_TYPE_MISMATCH;
     }
 
-    static const uint32_t test_value = 1;
-    const uint8_t endian_check = *(const uint8_t *)&test_value;
-
-    if (endian_check == 0x01)
-    {
-        memcpy(out_buf, elements, total_bytes);
-    }
-    else
-    {
-        for (size_t i = 0; i < element_count; i++)
-        {
-            const uint8_t *src = (const uint8_t *)elements + (i * 32);
-            uint8_t *dst = out_buf + (i * 32);
-
-            for (size_t j = 0; j < 32; j++)
-            {
-                dst[j] = src[31 - j];
-            }
-        }
-    }
-
-    *out_size = total_bytes;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Serializes a list of bool elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_bool(
-    const bool *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size)
-{
-    if (elements == NULL || out_buf == NULL || out_size == NULL)
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    if (element_count == 0)
-    {
-        *out_size = 0;
-        return SSZ_SUCCESS;
-    }
-
-    size_t total_bytes = element_count;
-
-    if (*out_size < total_bytes || !check_max_offset(total_bytes))
-    {
-        return SSZ_ERROR_SERIALIZATION;
-    }
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        out_buf[i] = (uint8_t)(elements[i]);
-    }
-
-    *out_size = total_bytes;
     return SSZ_SUCCESS;
 }
