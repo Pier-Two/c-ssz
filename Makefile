@@ -48,17 +48,10 @@ fixtures:
 	  cd external/consensus-specs; \
 	  uv sync --all-extras; \
 	  uv run python -m pysetup.generate_specs --all-forks; \
-	  run_generator() { \
-	    runner="$$1"; \
-	    if ! uv run --extra generator --no-editable --reinstall-package=eth-consensus-specs \
-	      python -m tests.generators.main --output ../../tests/fixtures -- --runner "$$runner"; then \
-	      echo "Retrying generator with --runner $$runner"; \
-	      uv run --extra generator --no-editable --reinstall-package=eth-consensus-specs \
-	        python -m tests.generators.main --output ../../tests/fixtures --runner "$$runner"; \
-	    fi; \
-	  }; \
-	  run_generator ssz_generic; \
-	  run_generator ssz_static; \
+	  uv run --extra generator --no-editable --reinstall-package=eth-consensus-specs \
+	    python -m tests.generators.main --output ../../tests/fixtures --runners ssz_generic; \
+	  uv run --extra generator --no-editable --reinstall-package=eth-consensus-specs \
+	    python -m tests.generators.main --output ../../tests/fixtures --runners ssz_static; \
 	else \
 	  echo "uv not found; using python3 + pip fallback"; \
 	  cd external/consensus-specs; \
@@ -67,15 +60,8 @@ fixtures:
 	  python -m pip install --upgrade pip; \
 	  python -m pip install -e .[generator]; \
 	  python -m pysetup.generate_specs --all-forks; \
-	  run_generator() { \
-	    runner="$$1"; \
-	    if ! python -m tests.generators.main --output ../../tests/fixtures -- --runner "$$runner"; then \
-	      echo "Retrying generator with --runner $$runner"; \
-	      python -m tests.generators.main --output ../../tests/fixtures --runner "$$runner"; \
-	    fi; \
-	  }; \
-	  run_generator ssz_generic; \
-	  run_generator ssz_static; \
+	  python -m tests.generators.main --output ../../tests/fixtures --runners ssz_generic; \
+	  python -m tests.generators.main --output ../../tests/fixtures --runners ssz_static; \
 	fi
 
 bench:
