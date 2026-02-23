@@ -34,7 +34,7 @@ jobs:
         run: lcov --capture --directory build/coverage --output-file build/coverage/coverage.info --ignore-errors mismatch
 
       - name: Filter coverage report
-        run: lcov --remove build/coverage/coverage.info '/usr/*' '*/tests/*' '*/bench/*' '*/lib/*' --output-file build/coverage/coverage-filtered.info --ignore-errors unused
+        run: lcov --remove build/coverage/coverage.info '/usr/*' '*/tests/*' '*/bench/*' '*/lib/*' '*/external/*' --output-file build/coverage/coverage-filtered.info --ignore-errors unused
 
       - name: Generate HTML report
         run: genhtml build/coverage/coverage-filtered.info --output-directory build/coverage/html
@@ -76,7 +76,7 @@ jobs:
         run: lcov --capture --directory build/coverage-32 --output-file build/coverage-32/coverage.info --ignore-errors mismatch
 
       - name: Filter coverage report
-        run: lcov --remove build/coverage-32/coverage.info '/usr/*' '*/tests/*' '*/bench/*' '*/lib/*' --output-file build/coverage-32/coverage-filtered.info --ignore-errors unused
+        run: lcov --remove build/coverage-32/coverage.info '/usr/*' '*/tests/*' '*/bench/*' '*/lib/*' '*/external/*' --output-file build/coverage-32/coverage-filtered.info --ignore-errors unused
 
       - name: Generate HTML report
         run: genhtml build/coverage-32/coverage-filtered.info --output-directory build/coverage-32/html
