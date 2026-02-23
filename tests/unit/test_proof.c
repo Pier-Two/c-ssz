@@ -922,6 +922,34 @@ static bool test_multiproof_additional_error_paths(void)
     return true;
 }
 
+static bool test_helper_indices_descending_sort(void)
+{
+    /* Indices {32, 47, 55} are depth-5 nodes in separate subtrees.  They
+       produce a 10-element diff array {7,9,10,12,17,22,26,33,46,54} that is
+       in ascending order — forcing qsort's descending comparator to exercise
+       both the ia<ib and ia>ib branches (ia>ib needs ≥ 8 elements on macOS). */
+    const ssz_gindex_t indices[3] = {32u, 47u, 55u};
+    ssz_gindex_t scratch[64] = {0u};
+    ssz_gindex_t helpers[16] = {0u};
+    size_t out_len = 0u;
+
+    ASSERT_ERR(ssz_get_helper_indices(indices, 3u, helpers, 16u, &out_len, scratch, 64u), SSZ_SUCCESS);
+    ASSERT_TRUE(out_len == 10u);
+    /* Must come back in descending order. */
+    ASSERT_TRUE(helpers[0] == 54u);
+    ASSERT_TRUE(helpers[1] == 46u);
+    ASSERT_TRUE(helpers[2] == 33u);
+    ASSERT_TRUE(helpers[3] == 26u);
+    ASSERT_TRUE(helpers[4] == 22u);
+    ASSERT_TRUE(helpers[5] == 17u);
+    ASSERT_TRUE(helpers[6] == 12u);
+    ASSERT_TRUE(helpers[7] == 10u);
+    ASSERT_TRUE(helpers[8] == 9u);
+    ASSERT_TRUE(helpers[9] == 7u);
+
+    return true;
+}
+
 int main(void)
 {
     const test_case_t tests[] = {
@@ -937,6 +965,7 @@ int main(void)
         {"indices_and_helper_error_paths", test_indices_and_helper_error_paths},
         {"proof_hash_and_verify_error_paths", test_proof_hash_and_verify_error_paths},
         {"multiproof_additional_error_paths", test_multiproof_additional_error_paths},
+        {"helper_indices_descending_sort", test_helper_indices_descending_sort},
     };
 
     size_t passed = 0u;

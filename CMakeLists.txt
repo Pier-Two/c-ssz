@@ -102,6 +102,47 @@ add_executable(test_types tests/unit/test_types.c)
 target_link_libraries(test_types PRIVATE ssz)
 add_test(NAME test_types COMMAND test_types)
 
+# --- Internal tests (#include .c files for static function access) ---
+# These do NOT link against libssz — the tested source file is #included
+# directly, and all other sources are compiled as explicit dependencies.
+
+set(SSZ_COMMON_SOURCES
+  src/ssz_types.c
+  src/ssz_serialize.c
+  src/ssz_deserialize.c
+  src/ssz_merkle.c
+  src/ssz_proof.c
+  src/ssz_hash.c
+  src/ssz_endian.c
+  external/hacl/src/Hacl_Hash_SHA2.c
+)
+
+# test_proof_internal: #includes ssz_proof.c — compile everything else
+set(SSZ_SOURCES_NO_PROOF ${SSZ_COMMON_SOURCES})
+list(REMOVE_ITEM SSZ_SOURCES_NO_PROOF src/ssz_proof.c)
+
+add_executable(test_proof_internal tests/unit/test_proof_internal.c ${SSZ_SOURCES_NO_PROOF})
+target_include_directories(test_proof_internal PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${SSZ_HACL_INCLUDE_DIRS}
+)
+target_link_libraries(test_proof_internal PRIVATE ${SSZ_PLATFORM_LIBS})
+add_test(NAME test_proof_internal COMMAND test_proof_internal)
+
+# test_deserialize_internal: #includes ssz_deserialize.c — compile everything else
+set(SSZ_SOURCES_NO_DESER ${SSZ_COMMON_SOURCES})
+list(REMOVE_ITEM SSZ_SOURCES_NO_DESER src/ssz_deserialize.c)
+
+add_executable(test_deserialize_internal tests/unit/test_deserialize_internal.c ${SSZ_SOURCES_NO_DESER})
+target_include_directories(test_deserialize_internal PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${SSZ_HACL_INCLUDE_DIRS}
+)
+target_link_libraries(test_deserialize_internal PRIVATE ${SSZ_PLATFORM_LIBS})
+add_test(NAME test_deserialize_internal COMMAND test_deserialize_internal)
+
 find_package(Doxygen QUIET)
 if(DOXYGEN_FOUND)
   add_custom_target(doxygen
