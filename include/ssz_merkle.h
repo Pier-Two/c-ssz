@@ -1,9 +1,10 @@
 #ifndef SSZ_MERKLE_H
 #define SSZ_MERKLE_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
+
 #include "ssz_types.h"
 
 /**
@@ -15,8 +16,10 @@
  *
  * @param chunks Pointer to the array of chunks (each chunk is SSZ_BYTES_PER_CHUNK bytes).
  * @param chunk_count Number of chunks provided.
- * @param limit Maximum number of chunks allowed; if non-zero, chunk_count must not exceed this limit.
- * @param out_root Output buffer to write the resulting Merkle root (at least SSZ_BYTES_PER_CHUNK bytes).
+ * @param limit Maximum number of chunks allowed; if non-zero, chunk_count must not exceed this
+ * limit.
+ * @param out_root Output buffer to write the resulting Merkle root (at least SSZ_BYTES_PER_CHUNK
+ * bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
 ssz_error_t ssz_merkleize(
@@ -29,7 +32,8 @@ ssz_error_t ssz_merkleize(
  * Packs a contiguous byte array into fixed-size chunks.
  *
  * This function divides the input byte array into chunks of size SSZ_BYTES_PER_CHUNK.
- * If the total number of bytes is not a multiple of SSZ_BYTES_PER_CHUNK, the last chunk is zero-padded.
+ * If the total number of bytes is not a multiple of SSZ_BYTES_PER_CHUNK, the last chunk is
+ * zero-padded.
  *
  * @param values Pointer to the input byte array.
  * @param value_size Size of each value element in bytes.
@@ -49,9 +53,9 @@ ssz_error_t ssz_pack(
  * Packs an array of boolean values into fixed-size chunks.
  *
  * This function converts a bitfield represented as an array of booleans into a compact byte array,
- * and then divides that byte array into fixed-size chunks (each of size SSZ_BYTES_PER_CHUNK) for Merkleization.
- * If bit_count is zero, a single default chunk is generated.
- * 
+ * and then divides that byte array into fixed-size chunks (each of size SSZ_BYTES_PER_CHUNK) for
+ * Merkleization. If bit_count is zero, a single default chunk is generated.
+ *
  * @param bits Pointer to the array of boolean values.
  * @param bit_count Number of boolean values in the array.
  * @param out_chunks Output buffer to write the packed bitfield chunks.
@@ -75,10 +79,7 @@ ssz_error_t ssz_pack_bits(
  * @param out_root Output buffer to write the new Merkle root (32 bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_mix_in_length(
-    const uint8_t *root,
-    uint64_t length,
-    uint8_t *out_root);
+ssz_error_t ssz_mix_in_length(const uint8_t *root, uint64_t length, uint8_t *out_root);
 
 /**
  * Mixes a selector byte into a Merkle root to produce an updated root.
@@ -91,9 +92,6 @@ ssz_error_t ssz_mix_in_length(
  * @param out_root Output buffer to write the new Merkle root (32 bytes).
  * @return SSZ_SUCCESS on success, or an error code on failure.
  */
-ssz_error_t ssz_mix_in_selector(
-    const uint8_t *root,
-    uint8_t selector,
-    uint8_t *out_root);
+ssz_error_t ssz_mix_in_selector(const uint8_t *root, uint8_t selector, uint8_t *out_root);
 
 #endif /* SSZ_MERKLE_H */
