@@ -21,7 +21,15 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Generate consensus-spec fixtures
-        run: make fixtures
+        run: |
+          set -euo pipefail
+          # Spec tests only consume ssz_generic fixtures.
+          rm -rf tests/fixtures
+          cd external/consensus-specs
+          uv sync --all-extras
+          uv run python -m pysetup.generate_specs --all-forks
+          uv run --extra generator --no-editable --reinstall-package=eth-consensus-specs \
+            python -m tests.generators.main --output ../../tests/fixtures --runners ssz_generic
 
       - name: Upload fixtures artifact
         uses: actions/upload-artifact@v4
