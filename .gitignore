@@ -5,6 +5,7 @@ build*/
 *.d
 
 # Object files
+obj/
 *.o
 *.ko
 *.obj
@@ -67,6 +68,11 @@ tests/*
 
 # Allow .h files in the tests folder (if headers exist)
 !tests/*.h
+
+# Ignore built binaries in bench folder
+bench/*
+!bench/*.c
+!bench/*.h
 
 # Doxygen generated output
 docs/doxygen/
