@@ -150,88 +150,94 @@ set(SSZ_SPEC_FIXTURES_DIR
   "Path to consensus-spec SSZ generic fixtures root"
 )
 
-set(SSZ_SPEC_COMMON_SOURCES
-  tests/spec/spec_common.c
-  tests/spec/snappy_decode.c
-  tests/spec/yaml_parser.c
-)
+if(EXISTS "${SSZ_SPEC_FIXTURES_DIR}")
+  message(STATUS "Spec fixtures found at ${SSZ_SPEC_FIXTURES_DIR} — registering spec tests")
 
-function(ssz_add_spec_test target_name fixture_handler source_file)
-  file(TO_CMAKE_PATH "${SSZ_SPEC_FIXTURES_DIR}/${fixture_handler}" SPEC_TESTS_DIR)
-
-  add_executable(${target_name}
-    ${source_file}
-    ${SSZ_SPEC_COMMON_SOURCES}
+  set(SSZ_SPEC_COMMON_SOURCES
+    tests/spec/spec_common.c
+    tests/spec/snappy_decode.c
+    tests/spec/yaml_parser.c
   )
 
-  target_include_directories(${target_name} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+  function(ssz_add_spec_test target_name fixture_handler source_file)
+    file(TO_CMAKE_PATH "${SSZ_SPEC_FIXTURES_DIR}/${fixture_handler}" SPEC_TESTS_DIR)
+
+    add_executable(${target_name}
+      ${source_file}
+      ${SSZ_SPEC_COMMON_SOURCES}
+    )
+
+    target_include_directories(${target_name} PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    )
+
+    target_compile_definitions(${target_name} PRIVATE TESTS_DIR="${SPEC_TESTS_DIR}")
+    target_link_libraries(${target_name} PRIVATE ssz)
+    add_test(NAME ${target_name} COMMAND ${target_name})
+  endfunction()
+
+  ssz_add_spec_test(
+    test_ssz_generic_uints
+    uints
+    tests/spec/test_ssz_generic_uints.c
   )
 
-  target_compile_definitions(${target_name} PRIVATE TESTS_DIR="${SPEC_TESTS_DIR}")
-  target_link_libraries(${target_name} PRIVATE ssz)
-  add_test(NAME ${target_name} COMMAND ${target_name})
-endfunction()
+  ssz_add_spec_test(
+    test_ssz_generic_boolean
+    boolean
+    tests/spec/test_ssz_generic_boolean.c
+  )
 
-ssz_add_spec_test(
-  test_ssz_generic_uints
-  uints
-  tests/spec/test_ssz_generic_uints.c
-)
+  ssz_add_spec_test(
+    test_ssz_generic_bitvector
+    bitvector
+    tests/spec/test_ssz_generic_bitvector.c
+  )
 
-ssz_add_spec_test(
-  test_ssz_generic_boolean
-  boolean
-  tests/spec/test_ssz_generic_boolean.c
-)
+  ssz_add_spec_test(
+    test_ssz_generic_bitlist
+    bitlist
+    tests/spec/test_ssz_generic_bitlist.c
+  )
 
-ssz_add_spec_test(
-  test_ssz_generic_bitvector
-  bitvector
-  tests/spec/test_ssz_generic_bitvector.c
-)
+  ssz_add_spec_test(
+    test_ssz_generic_basic_vector
+    basic_vector
+    tests/spec/test_ssz_generic_basic_vector.c
+  )
 
-ssz_add_spec_test(
-  test_ssz_generic_bitlist
-  bitlist
-  tests/spec/test_ssz_generic_bitlist.c
-)
+  ssz_add_spec_test(
+    test_ssz_generic_containers
+    containers
+    tests/spec/test_ssz_generic_containers.c
+  )
 
-ssz_add_spec_test(
-  test_ssz_generic_basic_vector
-  basic_vector
-  tests/spec/test_ssz_generic_basic_vector.c
-)
+  ssz_add_spec_test(
+    test_ssz_generic_compatible_unions
+    compatible_unions
+    tests/spec/test_ssz_generic_compatible_unions.c
+  )
 
-ssz_add_spec_test(
-  test_ssz_generic_containers
-  containers
-  tests/spec/test_ssz_generic_containers.c
-)
+  ssz_add_spec_test(
+    test_ssz_generic_progressive_bitlist
+    progressive_bitlist
+    tests/spec/test_ssz_generic_progressive_bitlist.c
+  )
 
-ssz_add_spec_test(
-  test_ssz_generic_compatible_unions
-  compatible_unions
-  tests/spec/test_ssz_generic_compatible_unions.c
-)
+  ssz_add_spec_test(
+    test_ssz_generic_basic_progressive_list
+    basic_progressive_list
+    tests/spec/test_ssz_generic_basic_progressive_list.c
+  )
 
-ssz_add_spec_test(
-  test_ssz_generic_progressive_bitlist
-  progressive_bitlist
-  tests/spec/test_ssz_generic_progressive_bitlist.c
-)
-
-ssz_add_spec_test(
-  test_ssz_generic_basic_progressive_list
-  basic_progressive_list
-  tests/spec/test_ssz_generic_basic_progressive_list.c
-)
-
-ssz_add_spec_test(
-  test_ssz_generic_progressive_containers
-  progressive_containers
-  tests/spec/test_ssz_generic_progressive_containers.c
-)
+  ssz_add_spec_test(
+    test_ssz_generic_progressive_containers
+    progressive_containers
+    tests/spec/test_ssz_generic_progressive_containers.c
+  )
+else()
+  message(STATUS "Spec fixtures not found at ${SSZ_SPEC_FIXTURES_DIR} — skipping spec tests")
+endif()
 
 find_package(Doxygen QUIET)
 if(DOXYGEN_FOUND)
