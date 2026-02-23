@@ -7,23 +7,28 @@ on:
 
 jobs:
   generate-fixtures:
-    name: Generate Fixtures Gate
+    name: Generate Fixtures
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Verify fixture directories
-        run: |
-          set -euo pipefail
-          test -d tests/fixtures/general/phase0/ssz_generic/basic_vector
-          test -d tests/fixtures/general/phase0/ssz_generic/bitlist
-          test -d tests/fixtures/general/phase0/ssz_generic/bitvector
-          test -d tests/fixtures/general/phase0/ssz_generic/boolean
-          test -d tests/fixtures/general/phase0/ssz_generic/uints
-          test -d tests/fixtures/mainnet/phase0/ssz_static/BeaconState/ssz_random
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Generate consensus-spec fixtures
+        run: make fixtures
+
+      - name: Upload fixtures artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: consensus-spec-fixtures
+          path: tests/fixtures/
+          if-no-files-found: error
 
   linux-spec-test:
     name: Linux Spec (${{ matrix.compiler }}, ${{ matrix.arch }}-bit)
@@ -39,6 +44,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-fixtures
+          path: tests/fixtures/
 
       - name: Install toolchain packages
         run: |
@@ -86,6 +99,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-fixtures
+          path: tests/fixtures/
 
       - name: Configure
         run: cmake -S . -B build/macos-spec -DCMAKE_BUILD_TYPE=Debug
@@ -105,6 +126,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-fixtures
+          path: tests/fixtures/
 
       - name: Configure
         run: cmake -S . -B build/windows-spec -DCMAKE_BUILD_TYPE=Debug
@@ -152,6 +181,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-fixtures
+          path: tests/fixtures/
 
       - name: Install runtime packages
         run: |
