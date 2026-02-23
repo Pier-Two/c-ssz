@@ -386,8 +386,10 @@ static bool test_hash_2to1_batch_error_paths(void)
     };
     ASSERT_ERR(ssz_hash_2to1_batch(&batch_fail, pairs_one, 1u, out), SSZ_ERR_HASH_FAILURE);
 
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_hash_2to1_batch(ssz_hash_default(), pairs_one, (SIZE_MAX / 2u) + 1u, out),
                SSZ_ERR_OVERFLOW);
+#endif
 
     counting_hash_t state = {
         .call_count = 0u,

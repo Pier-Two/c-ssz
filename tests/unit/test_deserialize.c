@@ -824,12 +824,14 @@ static bool test_deserialize_variable_sequence_error_paths(void)
                                                &null_read_codec),
                SSZ_ERR_INVALID_ARGUMENT);
 
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_deserialize_vector_variable((const uint8_t[4]){0x04u, 0x00u, 0x00u, 0x00u},
                                                4u,
                                                ((uint64_t)SIZE_MAX / SSZ_BYTES_PER_LENGTH_OFFSET) + 1u,
                                                0u,
                                                &ok_codec),
                SSZ_ERR_OVERFLOW);
+#endif
 
     ASSERT_ERR(ssz_deserialize_vector_variable((const uint8_t[8]){0u},
                                                8u,
@@ -885,6 +887,7 @@ static bool test_deserialize_collection_error_paths(void)
                SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_deserialize_vector_fixed((const uint8_t[1]){0x00u}, 1u, 1u, 0u, out, sizeof(out)),
                SSZ_ERR_SCHEMA_INVALID);
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_deserialize_vector_fixed((const uint8_t[1]){0x00u},
                                             1u,
                                             ((uint64_t)SIZE_MAX / 2u) + 1u,
@@ -892,6 +895,7 @@ static bool test_deserialize_collection_error_paths(void)
                                             out,
                                             sizeof(out)),
                SSZ_ERR_OVERFLOW);
+#endif
     ASSERT_ERR(ssz_deserialize_vector_fixed((const uint8_t[2]){0x11u, 0x22u}, 2u, 2u, 1u, out, 1u),
                SSZ_ERR_BUFFER_TOO_SMALL);
 

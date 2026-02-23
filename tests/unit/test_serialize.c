@@ -763,6 +763,7 @@ static bool test_serialize_fixed_collection_error_paths(void)
     ASSERT_ERR(ssz_serialize_vector_fixed((const uint8_t[]){0x11u}, UINT64_MAX, 1u, out, sizeof(out), &out_len),
                SSZ_ERR_OVERFLOW);
 #endif
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_serialize_vector_fixed((const uint8_t[]){0x11u},
                                           ((uint64_t)SIZE_MAX / 2u) + 1u,
                                           2u,
@@ -770,6 +771,7 @@ static bool test_serialize_fixed_collection_error_paths(void)
                                           sizeof(out),
                                           &out_len),
                SSZ_ERR_OVERFLOW);
+#endif
     ASSERT_ERR(ssz_serialize_vector_fixed(NULL, 1u, 1u, out, sizeof(out), &out_len),
                SSZ_ERR_INVALID_ARGUMENT);
 
@@ -779,6 +781,7 @@ static bool test_serialize_fixed_collection_error_paths(void)
     ASSERT_ERR(ssz_serialize_list_fixed((const uint8_t[]){0x11u}, UINT64_MAX, SSZ_NO_LIMIT, 1u, out, sizeof(out), &out_len),
                SSZ_ERR_OVERFLOW);
 #endif
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_serialize_list_fixed((const uint8_t[]){0x11u},
                                         ((uint64_t)SIZE_MAX / 2u) + 1u,
                                         SSZ_NO_LIMIT,
@@ -787,6 +790,7 @@ static bool test_serialize_fixed_collection_error_paths(void)
                                         sizeof(out),
                                         &out_len),
                SSZ_ERR_OVERFLOW);
+#endif
     ASSERT_ERR(ssz_serialize_list_fixed(NULL, 1u, SSZ_NO_LIMIT, 1u, out, sizeof(out), &out_len),
                SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_serialize_list_fixed((const uint8_t[]){0x11u}, 1u, SSZ_NO_LIMIT, 1u, out, sizeof(out), NULL),
@@ -818,12 +822,14 @@ static bool test_serialize_vector_variable_error_paths(void)
     ASSERT_ERR(ssz_serialize_vector_variable(UINT64_MAX, &simple_codec, out, sizeof(out), &out_len),
                SSZ_ERR_OVERFLOW);
 #endif
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_serialize_vector_variable(((uint64_t)SIZE_MAX / SSZ_BYTES_PER_LENGTH_OFFSET) + 1u,
                                              &simple_codec,
                                              out,
                                              sizeof(out),
                                              &out_len),
                SSZ_ERR_OVERFLOW);
+#endif
 
     const size_t query_err_lengths[1] = {0u};
     const ssz_error_t query_err_errors[1] = {SSZ_ERR_TYPE_MISMATCH};
@@ -967,6 +973,7 @@ static bool test_serialize_list_variable_error_paths(void)
             .fill = 0u,
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
+#if SIZE_MAX > UINT32_MAX
         ASSERT_ERR(ssz_serialize_list_variable(((uint64_t)SIZE_MAX / SSZ_BYTES_PER_LENGTH_OFFSET) + 1u,
                                                SSZ_NO_LIMIT,
                                                &codec,
@@ -974,6 +981,7 @@ static bool test_serialize_list_variable_error_paths(void)
                                                sizeof(out),
                                                &out_len),
                    SSZ_ERR_OVERFLOW);
+#endif
     }
 
     {

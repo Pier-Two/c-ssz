@@ -768,8 +768,10 @@ static bool test_merkle_additional_error_paths(void)
     ASSERT_ERR(ssz_hash_tree_root_bitvector(NULL, 0u, 8u, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_tree_root_bitvector((const uint8_t[2]){0xFFu, 0xC0u}, 2u, 10u, NULL, &root),
                SSZ_ERR_ENCODING_INVALID);
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_hash_tree_root_bitvector(&one_byte, SIZE_MAX, UINT64_MAX - 15u, NULL, &root),
                SSZ_ERR_OVERFLOW);
+#endif
 
     ASSERT_ERR(ssz_hash_tree_root_bitlist(&one_byte, 1u, 1u, SSZ_NO_LIMIT, NULL, NULL),
                SSZ_ERR_INVALID_ARGUMENT);
@@ -788,14 +790,18 @@ static bool test_merkle_additional_error_paths(void)
                SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_hash_tree_root_vector_fixed((const uint8_t[]){0x01u}, 1u, 0u, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_hash_tree_root_vector_fixed((const uint8_t[]){0x01u},
                                                ((uint64_t)SIZE_MAX / 2u) + 1u,
                                                2u,
                                                NULL,
                                                &root),
                SSZ_ERR_OVERFLOW);
+#endif
     ASSERT_ERR(ssz_hash_tree_root_vector_fixed(NULL, 1u, 1u, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_hash_tree_root_vector_fixed(&one_byte, SIZE_MAX, 1u, NULL, &root), SSZ_ERR_OVERFLOW);
+#endif
 
     ASSERT_ERR(ssz_hash_tree_root_vector_composite(1u, NULL, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_tree_root_vector_composite(1u,
@@ -829,6 +835,7 @@ static bool test_merkle_additional_error_paths(void)
                SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_hash_tree_root_list_fixed((const uint8_t[]){0x01u}, 2u, 1u, 1u, NULL, &root),
                SSZ_ERR_LIMIT_EXCEEDED);
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_hash_tree_root_list_fixed((const uint8_t[]){0x01u},
                                              ((uint64_t)SIZE_MAX / 2u) + 1u,
                                              SSZ_NO_LIMIT,
@@ -836,6 +843,7 @@ static bool test_merkle_additional_error_paths(void)
                                              NULL,
                                              &root),
                SSZ_ERR_OVERFLOW);
+#endif
     ASSERT_ERR(ssz_hash_tree_root_list_fixed(NULL, 1u, SSZ_NO_LIMIT, 1u, NULL, &root),
                SSZ_ERR_INVALID_ARGUMENT);
 #if SIZE_MAX > UINT32_MAX
@@ -882,8 +890,10 @@ static bool test_merkle_additional_error_paths(void)
     ASSERT_ERR(ssz_merkleize((const ssz_chunk_t[]){make_chunk(0x01u)}, 1u, SSZ_NO_LIMIT, NULL, NULL),
                SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_merkleize(NULL, 1u, SSZ_NO_LIMIT, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_merkleize((const ssz_chunk_t[]){make_chunk(0x01u)}, SIZE_MAX, SSZ_NO_LIMIT, NULL, &root),
                SSZ_ERR_OVERFLOW);
+#endif
 
     ASSERT_ERR(ssz_mix_in_length(NULL, 1u, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_mix_in_length(&root, 1u, NULL, NULL), SSZ_ERR_INVALID_ARGUMENT);
@@ -928,16 +938,20 @@ static bool test_merkle_additional_error_paths(void)
                SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_tree_root_progressive_list_fixed(&one_byte, 1u, 0u, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_hash_tree_root_progressive_list_fixed(&one_byte,
                                                          ((uint64_t)SIZE_MAX / 2u) + 1u,
                                                          2u,
                                                          NULL,
                                                          &root),
                SSZ_ERR_OVERFLOW);
+#endif
     ASSERT_ERR(ssz_hash_tree_root_progressive_list_fixed(NULL, 1u, 1u, NULL, &root),
                SSZ_ERR_INVALID_ARGUMENT);
+#if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_hash_tree_root_progressive_list_fixed(&one_byte, SIZE_MAX, 1u, NULL, &root),
                SSZ_ERR_OVERFLOW);
+#endif
     ASSERT_ERR(ssz_hash_tree_root_progressive_list_fixed(NULL, 0u, 1u, NULL, &root), SSZ_SUCCESS);
 
     ASSERT_ERR(ssz_hash_tree_root_progressive_list_composite(1u, NULL, NULL, &root),
