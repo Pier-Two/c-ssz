@@ -166,7 +166,7 @@ jobs:
             sanitizers: address,undefined
             cmake_c_flags: ''
             asan_options: detect_leaks=0
-            ubsan_options: halt_on_error=0:print_stacktrace=1
+            ubsan_options: halt_on_error=1:print_stacktrace=1
           - name: msan
             cc: clang
             sanitizers: memory
