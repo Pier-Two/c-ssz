@@ -41,6 +41,43 @@ test-coverage:
 	  --output-directory $(COVERAGE_DIR)/html
 	lcov --summary $(COVERAGE_DIR)/coverage-filtered.info
 
+fixtures:
+	@set -e; \
+	if command -v uv >/dev/null 2>&1; then \
+	  echo "Generating consensus-spec fixtures with uv"; \
+	  cd external/consensus-specs; \
+	  uv sync --all-extras; \
+	  uv run python -m pysetup.generate_specs --all-forks; \
+	  run_generator() { \
+	    runner="$$1"; \
+	    if ! uv run --extra generator --no-editable --reinstall-package=eth-consensus-specs \
+	      python -m tests.generators.main --output ../../tests/fixtures -- --runner "$$runner"; then \
+	      echo "Retrying generator with --runner $$runner"; \
+	      uv run --extra generator --no-editable --reinstall-package=eth-consensus-specs \
+	        python -m tests.generators.main --output ../../tests/fixtures --runner "$$runner"; \
+	    fi; \
+	  }; \
+	  run_generator ssz_generic; \
+	  run_generator ssz_static; \
+	else \
+	  echo "uv not found; using python3 + pip fallback"; \
+	  cd external/consensus-specs; \
+	  python3 -m venv .venv-spec; \
+	  . .venv-spec/bin/activate; \
+	  python -m pip install --upgrade pip; \
+	  python -m pip install -e .[generator]; \
+	  python -m pysetup.generate_specs --all-forks; \
+	  run_generator() { \
+	    runner="$$1"; \
+	    if ! python -m tests.generators.main --output ../../tests/fixtures -- --runner "$$runner"; then \
+	      echo "Retrying generator with --runner $$runner"; \
+	      python -m tests.generators.main --output ../../tests/fixtures --runner "$$runner"; \
+	    fi; \
+	  }; \
+	  run_generator ssz_generic; \
+	  run_generator ssz_static; \
+	fi
+
 bench:
 	cmake -S . -B $(BUILD_DIR) -DSSZ_BUILD_BENCH=ON
 	cmake --build $(BUILD_DIR) --parallel

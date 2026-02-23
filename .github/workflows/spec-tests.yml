@@ -1,0 +1,72 @@
+name: Spec Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  generate-fixtures:
+    name: generate-fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Generate consensus-spec fixtures
+        run: make fixtures
+
+      - name: Upload fixtures artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: consensus-spec-fixtures
+          path: tests/fixtures/general/phase0
+          if-no-files-found: error
+
+  spec-tests:
+    name: spec-tests (${{ matrix.target }})
+    needs: generate-fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - test_ssz_generic_uints
+          - test_ssz_generic_boolean
+          - test_ssz_generic_bitvector
+          - test_ssz_generic_bitlist
+          - test_ssz_generic_basic_vector
+          - test_ssz_generic_containers
+          - test_ssz_generic_compatible_unions
+          - test_ssz_generic_progressive_bitlist
+          - test_ssz_generic_basic_progressive_list
+          - test_ssz_generic_progressive_containers
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download fixtures artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-fixtures
+          path: tests/fixtures/general
+
+      - name: Configure
+        run: cmake -S . -B build -DSSZ_SPEC_FIXTURES_DIR=${{ github.workspace }}/tests/fixtures/general/phase0/ssz_generic
+
+      - name: Build target
+        run: cmake --build build --target ${{ matrix.target }}
+
+      - name: Run target
+        run: ctest --test-dir build --output-on-failure -R ^${{ matrix.target }}$
