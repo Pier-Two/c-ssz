@@ -7,342 +7,155 @@
 
 #include "ssz_types.h"
 
-/**
- * Serializes an 8-bit unsigned integer into a single byte.
- *
- * @param value Pointer to the 8-bit unsigned integer to serialize.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_uint8(const void *value, uint8_t *out_buf, size_t *out_size);
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
-/**
- * Serializes a 16-bit unsigned integer into two bytes.
- *
- * @param value Pointer to the 16-bit unsigned integer to serialize.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_uint16(const void *value, uint8_t *out_buf, size_t *out_size);
+ssz_error_t ssz_serialize_uint8(uint8_t value, uint8_t out[1]);
+ssz_error_t ssz_serialize_uint16(uint16_t value, uint8_t out[2]);
+ssz_error_t ssz_serialize_uint32(uint32_t value, uint8_t out[4]);
+ssz_error_t ssz_serialize_uint64(uint64_t value, uint8_t out[8]);
+ssz_error_t ssz_serialize_uint128(const uint8_t value[16], uint8_t out[16]);
+ssz_error_t ssz_serialize_uint256(const uint8_t value[32], uint8_t out[32]);
+ssz_error_t ssz_serialize_boolean(uint8_t value, uint8_t out[1]);
 
-/**
- * Serializes a 32-bit unsigned integer into four bytes.
- *
- * @param value Pointer to the 32-bit unsigned integer to serialize.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_uint32(const void *value, uint8_t *out_buf, size_t *out_size);
+#define ssz_serialize_byte ssz_serialize_uint8
+#define ssz_serialize_bit  ssz_serialize_boolean
 
-/**
- * Serializes a 64-bit unsigned integer into eight bytes.
- *
- * @param value Pointer to the 64-bit unsigned integer to serialize.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_uint64(const void *value, uint8_t *out_buf, size_t *out_size);
-
-/**
- * Serializes a 128-bit unsigned integer into sixteen bytes.
- *
- * @param value Pointer to the 128-bit unsigned integer to serialize.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_uint128(const void *value, uint8_t *out_buf, size_t *out_size);
-
-/**
- * Serializes a 256-bit unsigned integer into thirty-two bytes.
- *
- * @param value Pointer to the 256-bit unsigned integer to serialize.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_uint256(const void *value, uint8_t *out_buf, size_t *out_size);
-
-/**
- * Serializes a boolean value into a single byte.
- *
- * @param value The boolean value to serialize.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_boolean(const bool *value, uint8_t *out_buf, size_t *out_size);
-
-/**
- * Serializes a bitvector into a compact byte array.
- *
- * @param bits Pointer to the input bit array.
- * @param num_bits The number of bits to serialize.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
 ssz_error_t ssz_serialize_bitvector(
-    const bool *bits,
-    size_t num_bits,
-    uint8_t *out_buf,
-    size_t *out_size);
+    const uint8_t *bits_le,
+    size_t bits_le_len,
+    uint64_t bit_count,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len);
 
-/**
- * Serializes a bitlist into a compact byte array.
- *
- * @param bits Pointer to the input bit array.
- * @param num_bits The number of bits in the bitlist (excluding the boundary bit).
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
 ssz_error_t ssz_serialize_bitlist(
-    const bool *bits,
-    size_t num_bits,
-    uint8_t *out_buf,
-    size_t *out_size);
+    const uint8_t *bits_le,
+    size_t bits_le_len,
+    uint64_t bit_len,
+    uint64_t bit_limit,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len);
 
-/**
- * Serializes a union by writing the selector byte and optionally the serialized
- * data for the selected union variant.
- *
- * @param u Pointer to the union to serialize.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_union(const ssz_union_t *u, uint8_t *out_buf, size_t *out_size);
+ssz_error_t ssz_serialize_vector_fixed(
+    const uint8_t *elements,
+    uint64_t element_count,
+    size_t element_size,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len);
 
-/**
- * Serializes a vector of uint8 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_uint8(
-    const uint8_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
+ssz_error_t ssz_serialize_vector_variable(
+    uint64_t element_count,
+    const ssz_member_codec_t *codec,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len);
 
-/**
- * Serializes a vector of uint16 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_uint16(
-    const uint16_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
+ssz_error_t ssz_serialize_list_fixed(
+    const uint8_t *elements,
+    uint64_t element_count,
+    uint64_t element_limit,
+    size_t element_size,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len);
 
-/**
- * Serializes a vector of uint32 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_uint32(
-    const uint32_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
+ssz_error_t ssz_serialize_list_variable(
+    uint64_t element_count,
+    uint64_t element_limit,
+    const ssz_member_codec_t *codec,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len);
 
-/**
- * Serializes a vector of uint64 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_uint64(
-    const uint64_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
+ssz_error_t ssz_serialize_container(
+    const size_t *field_fixed_sizes,
+    uint32_t field_count,
+    const ssz_member_codec_t *codec,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len);
 
-/**
- * Serializes a vector of uint128 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_uint128(
-    const void *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
+ssz_error_t ssz_serialize_union(
+    uint8_t selector,
+    uint32_t option_count,
+    bool has_none,
+    const ssz_member_codec_t *codec,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len);
 
-/**
- * Serializes a vector of uint256 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_uint256(
-    const void *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
+ssz_error_t ssz_serialize_compatible_union(
+    uint8_t selector,
+    const uint8_t *allowed_selectors,
+    uint32_t allowed_selector_count,
+    const ssz_member_codec_t *codec,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len);
 
-/**
- * Serializes a vector of bool elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the vector.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_vector_bool(
-    const bool *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
+static inline ssz_error_t ssz_serialize_progressive_container(
+    const size_t *field_fixed_sizes,
+    uint32_t field_count,
+    const ssz_member_codec_t *codec,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
+{
+    return ssz_serialize_container(field_fixed_sizes, field_count, codec, out, out_cap, out_len);
+}
 
-/**
- * Serializes a list of uint8 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_uint8(
-    const uint8_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
+static inline ssz_error_t ssz_serialize_progressive_list_fixed(
+    const uint8_t *elements,
+    uint64_t element_count,
+    size_t element_size,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
+{
+    return ssz_serialize_list_fixed(
+        elements,
+        element_count,
+        SSZ_NO_LIMIT,
+        element_size,
+        out,
+        out_cap,
+        out_len);
+}
 
-/**
- * Serializes a list of uint16 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_uint16(
-    const uint16_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
+static inline ssz_error_t ssz_serialize_progressive_list_variable(
+    uint64_t element_count,
+    const ssz_member_codec_t *codec,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
+{
+    return ssz_serialize_list_variable(
+        element_count,
+        SSZ_NO_LIMIT,
+        codec,
+        out,
+        out_cap,
+        out_len);
+}
 
-/**
- * Serializes a list of uint32 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_uint32(
-    const uint32_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
+static inline ssz_error_t ssz_serialize_progressive_bitlist(
+    const uint8_t *bits_le,
+    size_t bits_le_len,
+    uint64_t bit_len,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_len)
+{
+    return ssz_serialize_bitlist(bits_le, bits_le_len, bit_len, SSZ_NO_LIMIT, out, out_cap, out_len);
+}
 
-/**
- * Serializes a list of uint64 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_uint64(
-    const uint64_t *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
+#ifdef __cplusplus
+}
+#endif
 
-/**
- * Serializes a list of uint128 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_uint128(
-    const void *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
-
-/**
- * Serializes a list of uint256 elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_uint256(
-    const void *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
-
-/**
- * Serializes a list of bool elements into consecutive bytes.
- *
- * @param elements Pointer to the elements.
- * @param element_count The number of elements in the list.
- * @param out_buf Pointer to the output buffer to write the serialized data.
- * @param out_size Pointer to the size of the output buffer. Updated with the number of bytes
- * written.
- * @return SSZ_SUCCESS on success, or an error code on failure.
- */
-ssz_error_t ssz_serialize_list_bool(
-    const bool *restrict elements,
-    size_t element_count,
-    uint8_t *restrict out_buf,
-    size_t *restrict out_size);
-
-#endif /* SSZ_SERIALIZE_H */
+#endif

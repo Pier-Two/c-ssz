@@ -39,7 +39,68 @@ if(NOT WIN32)
   list(APPEND SSZ_PLATFORM_LIBS m)
 endif()
 
+set(SSZ_HACL_INCLUDE_DIRS
+  ${CMAKE_CURRENT_SOURCE_DIR}/external/hacl/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/external/hacl/karamel/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/external/hacl/karamel/krmllib/dist/minimal
+)
+
+add_library(ssz
+  src/ssz_types.c
+  src/ssz_serialize.c
+  src/ssz_deserialize.c
+  src/ssz_merkle.c
+  src/ssz_proof.c
+  src/ssz_hash.c
+  src/ssz_endian.c
+  external/hacl/src/Hacl_Hash_SHA2.c
+)
+
+target_include_directories(ssz
+  PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${SSZ_HACL_INCLUDE_DIRS}
+)
+
+# HACL*/karamel's lowstar_endianness.h uses be32toh/htobe32 etc. from <endian.h>.
+# In strict C99 mode (-std=c99), glibc does not expose these macros unless
+# _DEFAULT_SOURCE is defined.
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+  set_source_files_properties(
+    external/hacl/src/Hacl_Hash_SHA2.c
+    PROPERTIES COMPILE_DEFINITIONS _DEFAULT_SOURCE
+  )
+endif()
+
+target_link_libraries(ssz PUBLIC ${SSZ_PLATFORM_LIBS})
+
 enable_testing()
+
+add_executable(test_serialize tests/unit/test_serialize.c)
+target_link_libraries(test_serialize PRIVATE ssz)
+add_test(NAME test_serialize COMMAND test_serialize)
+
+add_executable(test_deserialize tests/unit/test_deserialize.c)
+target_link_libraries(test_deserialize PRIVATE ssz)
+add_test(NAME test_deserialize COMMAND test_deserialize)
+
+add_executable(test_merkle tests/unit/test_merkle.c)
+target_link_libraries(test_merkle PRIVATE ssz)
+add_test(NAME test_merkle COMMAND test_merkle)
+
+add_executable(test_proof tests/unit/test_proof.c)
+target_link_libraries(test_proof PRIVATE ssz)
+add_test(NAME test_proof COMMAND test_proof)
+
+add_executable(test_hash tests/unit/test_hash.c)
+target_link_libraries(test_hash PRIVATE ssz)
+add_test(NAME test_hash COMMAND test_hash)
+
+add_executable(test_types tests/unit/test_types.c)
+target_link_libraries(test_types PRIVATE ssz)
+add_test(NAME test_types COMMAND test_types)
 
 find_package(Doxygen QUIET)
 if(DOXYGEN_FOUND)
@@ -65,6 +126,6 @@ if(SSZ_BUILD_BENCH)
       ${CMAKE_CURRENT_SOURCE_DIR}/include
       ${CMAKE_CURRENT_SOURCE_DIR}/lib
     )
-    target_link_libraries(${bench_name} PRIVATE ${SSZ_PLATFORM_LIBS})
+    target_link_libraries(${bench_name} PRIVATE ssz ${SSZ_PLATFORM_LIBS})
   endforeach()
 endif()

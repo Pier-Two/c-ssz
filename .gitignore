@@ -57,6 +57,12 @@ dkms.conf
 
 .DS_Store
 
+# Coverage artifacts
+*.gcov
+*.gcda
+*.gcno
+coverage.info
+
 # Ignore all files in the tests folder without extensions 
 tests/*
 
@@ -65,9 +71,18 @@ tests/*
 
 # Allow .c files (and other source files) in the tests folder
 !tests/*.c
+!tests/unit/
+!tests/unit/*.c
+!tests/spec/
+!tests/spec/*.c
+!tests/regression/
+!tests/regression/*.c
 
 # Allow .h files in the tests folder (if headers exist)
 !tests/*.h
+!tests/unit/*.h
+!tests/spec/*.h
+!tests/regression/*.h
 
 # Ignore built binaries in bench folder
 bench/*
