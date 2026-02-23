@@ -1,984 +1,703 @@
-#include "ssz_deserialize.h"
-
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
 
-#include "ssz_constants.h"
-#include "ssz_types.h"
-#include "ssz_utils.h"
+#include "ssz_deserialize.h"
+#include "ssz_internal.h"
 
-/**
- * Deserializes an 8-bit unsigned integer from a single byte.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param out_value     Pointer to store the deserialized 8-bit value.
- * @return SSZ_SUCCESS on success, SSZ_ERROR_DESERIALIZATION on failure.
- */
-ssz_error_t ssz_deserialize_uint8(const uint8_t *buffer, size_t buffer_size, void *out_value)
+static bool ssz_internal_selector_allowed(
+    uint8_t selector,
+    const uint8_t *allowed_selectors,
+    uint32_t allowed_selector_count)
 {
-    if (buffer == NULL || out_value == NULL || buffer_size != SSZ_BYTE_SIZE_OF_UINT8)
+    for (uint32_t i = 0u; i < allowed_selector_count; i++)
     {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    *(uint8_t *)out_value = buffer[0];
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a 16-bit unsigned integer from two bytes.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param out_value     Pointer to store the deserialized 16-bit value.
- * @return SSZ_SUCCESS on success, SSZ_ERROR_DESERIALIZATION on failure.
- */
-ssz_error_t ssz_deserialize_uint16(const uint8_t *buffer, size_t buffer_size, void *out_value)
-{
-    if (buffer_size < 2 || buffer == NULL || out_value == NULL ||
-        buffer_size != SSZ_BYTE_SIZE_OF_UINT16)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    uint16_t val = (uint16_t)buffer[0] | ((uint16_t)buffer[1] << 8);
-    memcpy(out_value, &val, sizeof(val));
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a 32-bit unsigned integer from four bytes.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param out_value     Pointer to store the deserialized 32-bit value.
- * @return SSZ_SUCCESS on success, SSZ_ERROR_DESERIALIZATION on failure.
- */
-ssz_error_t ssz_deserialize_uint32(const uint8_t *buffer, size_t buffer_size, void *out_value)
-{
-    if (buffer == NULL || out_value == NULL || buffer_size != SSZ_BYTE_SIZE_OF_UINT32)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    uint32_t val = 0;
-    val |= (uint32_t)buffer[0];
-    val |= (uint32_t)buffer[1] << 8;
-    val |= (uint32_t)buffer[2] << 16;
-    val |= (uint32_t)buffer[3] << 24;
-    *(uint32_t *)out_value = val;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a 64-bit unsigned integer from eight bytes.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param out_value     Pointer to store the deserialized 64-bit value.
- * @return SSZ_SUCCESS on success, SSZ_ERROR_DESERIALIZATION on failure.
- */
-ssz_error_t ssz_deserialize_uint64(const uint8_t *buffer, size_t buffer_size, void *out_value)
-{
-    if (buffer == NULL || out_value == NULL || buffer_size != SSZ_BYTE_SIZE_OF_UINT64)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    uint64_t val = 0;
-    val |= (uint64_t)buffer[0];
-    val |= (uint64_t)buffer[1] << 8;
-    val |= (uint64_t)buffer[2] << 16;
-    val |= (uint64_t)buffer[3] << 24;
-    val |= (uint64_t)buffer[4] << 32;
-    val |= (uint64_t)buffer[5] << 40;
-    val |= (uint64_t)buffer[6] << 48;
-    val |= (uint64_t)buffer[7] << 56;
-    *(uint64_t *)out_value = val;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a 128-bit unsigned integer from sixteen bytes.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param out_value     Pointer to store the deserialized 128-bit value.
- * @return SSZ_SUCCESS on success, SSZ_ERROR_DESERIALIZATION on failure.
- */
-ssz_error_t ssz_deserialize_uint128(const uint8_t *buffer, size_t buffer_size, void *out_value)
-{
-    if (buffer == NULL || out_value == NULL || buffer_size != SSZ_BYTE_SIZE_OF_UINT128)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    static const uint32_t test_value = 1;
-    const uint8_t *endian_check = (const uint8_t *)&test_value;
-
-    if (endian_check[0] == 0x01)
-    {
-        memcpy(out_value, buffer, 16);
-    }
-    else
-    {
-        uint8_t *dest = (uint8_t *)out_value;
-
-        for (size_t i = 0; i < 16; i++)
+        if (allowed_selectors[i] == selector)
         {
-            dest[i] = buffer[15 - i];
+            return true;
+        }
+    }
+    return false;
+}
+
+static ssz_error_t ssz_internal_validate_compatible_union_schema(
+    const uint8_t *allowed_selectors,
+    uint32_t allowed_selector_count)
+{
+    if ((allowed_selectors == NULL) || (allowed_selector_count == 0u))
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+
+    for (uint32_t i = 0u; i < allowed_selector_count; i++)
+    {
+        if ((allowed_selectors[i] == 0u) || (allowed_selectors[i] > 127u))
+        {
+            return SSZ_ERR_SCHEMA_INVALID;
         }
     }
 
     return SSZ_SUCCESS;
 }
 
-/**
- * Deserializes a 256-bit unsigned integer from thirty-two bytes.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param out_value     Pointer to store the deserialized 256-bit value.
- * @return SSZ_SUCCESS on success, SSZ_ERROR_DESERIALIZATION on failure.
- */
-ssz_error_t ssz_deserialize_uint256(const uint8_t *buffer, size_t buffer_size, void *out_value)
+static ssz_error_t ssz_internal_deserialize_variable_sequence(
+    const uint8_t *in,
+    size_t in_len,
+    uint64_t element_count,
+    size_t min_element_size,
+    ssz_member_codec_t *codec)
 {
-    if (buffer == NULL || out_value == NULL || buffer_size != SSZ_BYTE_SIZE_OF_UINT256)
+    size_t fixed_region = 0u;
+
+    if (element_count == 0u)
     {
-        return SSZ_ERROR_DESERIALIZATION;
+        return (in_len == 0u) ? SSZ_SUCCESS : SSZ_ERR_OFFSET_INVALID;
+    }
+    if ((codec == NULL) || (codec->read == NULL) || (in == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (!ssz_internal_u64_to_size(element_count, NULL))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_internal_mul_overflow_size((size_t)element_count, SSZ_BYTES_PER_LENGTH_OFFSET, &fixed_region))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((fixed_region > in_len) || (fixed_region > UINT32_MAX))
+    {
+        return SSZ_ERR_OFFSET_INVALID;
     }
 
-    static const uint32_t test_value = 1;
-    const uint8_t endian_check = *(const uint8_t *)&test_value;
-
-    if (endian_check == 0x01)
+    uint32_t first_offset = ssz_internal_read_u32_le(in);
+    if ((size_t)first_offset != fixed_region)
     {
-        memcpy(out_value, buffer, 32);
+        return SSZ_ERR_OFFSET_INVALID;
     }
-    else
-    {
-        uint8_t *dest = (uint8_t *)out_value;
 
-        for (size_t i = 0; i < 32; i++)
+    uint32_t prev_offset = first_offset;
+    for (uint64_t i = 0u; i < element_count; i++)
+    {
+        size_t offset_pos = (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET;
+        uint32_t offset = ssz_internal_read_u32_le(in + offset_pos);
+
+        if (((size_t)offset < fixed_region) || ((size_t)offset > in_len) || (offset < prev_offset))
         {
-            dest[i] = buffer[31 - i];
+            return SSZ_ERR_OFFSET_INVALID;
+        }
+        prev_offset = offset;
+    }
+
+    for (uint64_t i = 0u; i < element_count; i++)
+    {
+        size_t offset_pos = (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET;
+        size_t start = (size_t)ssz_internal_read_u32_le(in + offset_pos);
+        size_t end = in_len;
+
+        if ((i + 1u) < element_count)
+        {
+            end = (size_t)ssz_internal_read_u32_le(in + offset_pos + SSZ_BYTES_PER_LENGTH_OFFSET);
+        }
+        if ((end < start) || ((end - start) < min_element_size))
+        {
+            return SSZ_ERR_OFFSET_INVALID;
+        }
+
+        ssz_error_t err = codec->read(codec->ctx, i, in + start, end - start);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
         }
     }
 
     return SSZ_SUCCESS;
 }
 
-/**
- * Deserializes a boolean value (0x00 => false, 0x01 => true).
- *
- * @param buffer      The input buffer containing the serialized data.
- * @param buffer_size The size of the input buffer.
- * @param out_value   Pointer to store the deserialized boolean value.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_boolean(const uint8_t *buffer, size_t buffer_size, bool *out_value)
+ssz_error_t ssz_deserialize_uint8(const uint8_t in[1], uint8_t *out_value)
 {
-    if (buffer == NULL || out_value == NULL || buffer_size < SSZ_BYTE_SIZE_OF_BOOL)
+    if ((in == NULL) || (out_value == NULL))
     {
-        return SSZ_ERROR_DESERIALIZATION;
+        return SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    if (buffer[0] == 0x00)
-    {
-        *out_value = false;
-    }
-    else if (buffer[0] == 0x01)
-    {
-        *out_value = true;
-    }
-    else
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
+    *out_value = in[0];
     return SSZ_SUCCESS;
 }
 
-/**
- * Deserializes a bitvector of exactly num_bits length.
- *
- * @param buffer      The input buffer containing the serialized data.
- * @param buffer_size The size of the input buffer.
- * @param num_bits    The number of bits in the bitvector.
- * @param out_bits    Pointer to store the deserialized bitvector.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
+ssz_error_t ssz_deserialize_uint16(const uint8_t in[2], uint16_t *out_value)
+{
+    if ((in == NULL) || (out_value == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    *out_value = ssz_internal_read_u16_le(in);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_deserialize_uint32(const uint8_t in[4], uint32_t *out_value)
+{
+    if ((in == NULL) || (out_value == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    *out_value = ssz_internal_read_u32_le(in);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_deserialize_uint64(const uint8_t in[8], uint64_t *out_value)
+{
+    if ((in == NULL) || (out_value == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    *out_value = ssz_internal_read_u64_le(in);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_deserialize_uint128(const uint8_t in[16], uint8_t out_value[16])
+{
+    if ((in == NULL) || (out_value == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    memcpy(out_value, in, 16u);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_deserialize_uint256(const uint8_t in[32], uint8_t out_value[32])
+{
+    if ((in == NULL) || (out_value == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    memcpy(out_value, in, 32u);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_deserialize_boolean(const uint8_t in[1], uint8_t *out_value)
+{
+    if ((in == NULL) || (out_value == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (in[0] > 1u)
+    {
+        return SSZ_ERR_ENCODING_INVALID;
+    }
+    *out_value = in[0];
+    return SSZ_SUCCESS;
+}
+
 ssz_error_t ssz_deserialize_bitvector(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t num_bits,
-    bool *out_bits)
+    const uint8_t *in,
+    size_t in_len,
+    uint64_t bit_count,
+    uint8_t *out_bits_le,
+    size_t out_bits_le_len)
 {
-    if (buffer == NULL || out_bits == NULL || num_bits == 0)
+    size_t required = 0u;
+
+    if (bit_count == 0u)
     {
-        return SSZ_ERROR_DESERIALIZATION;
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (!ssz_internal_bits_to_bytes(bit_count, &required))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((in == NULL) || (in_len != required))
+    {
+        return SSZ_ERR_ENCODING_INVALID;
+    }
+    if ((required != 0u) && ((out_bits_le == NULL) || (out_bits_le_len < required)))
+    {
+        return SSZ_ERR_BUFFER_TOO_SMALL;
     }
 
-    const size_t needed = (num_bits + 7) / 8;
-
-    if (needed != buffer_size)
+    if ((bit_count % 8u) != 0u)
     {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    const size_t full_bytes = num_bits / 8;
-    const size_t remainder_bits = num_bits % 8;
-    bool *out_ptr = out_bits;
-
-    for (size_t i = 0; i < full_bytes; ++i)
-    {
-        const uint8_t byte = buffer[i];
-        *out_ptr++ = (byte & 0x01) != 0;
-        *out_ptr++ = (byte & 0x02) != 0;
-        *out_ptr++ = (byte & 0x04) != 0;
-        *out_ptr++ = (byte & 0x08) != 0;
-        *out_ptr++ = (byte & 0x10) != 0;
-        *out_ptr++ = (byte & 0x20) != 0;
-        *out_ptr++ = (byte & 0x40) != 0;
-        *out_ptr++ = (byte & 0x80) != 0;
-    }
-
-    if (remainder_bits > 0)
-    {
-        const uint8_t byte = buffer[full_bytes];
-        uint8_t mask = ~((1 << remainder_bits) - 1);
-
-        if (byte & mask)
+        uint8_t mask = (uint8_t)((1u << (bit_count % 8u)) - 1u);
+        if ((in[required - 1u] & (uint8_t)(~mask)) != 0u)
         {
-            return SSZ_ERROR_DESERIALIZATION;
+            return SSZ_ERR_ENCODING_INVALID;
         }
+    }
 
-        for (size_t bit = 0; bit < remainder_bits; ++bit)
-        {
-            *out_ptr++ = (byte & (1 << bit)) != 0;
-        }
+    if (required != 0u)
+    {
+        memcpy(out_bits_le, in, required);
     }
 
     return SSZ_SUCCESS;
 }
 
-/**
- * Deserializes a bitlist with up to max_bits.
- *
- * This function reads a bitlist from the buffer, ensuring that the highest set bit
- * (the boundary bit) is within max_bits + 1. All bits above the boundary must be zero.
- * The bits up to boundary - 1 are considered the data bits.
- *
- * @param buffer           The input buffer containing the serialized data.
- * @param buffer_size      The size of the input buffer.
- * @param max_bits         The maximum number of bits in the bitlist.
- * @param out_bits         Pointer to store the deserialized bitlist.
- * @param out_actual_bits  Pointer to store the actual number of bits in the bitlist.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
 ssz_error_t ssz_deserialize_bitlist(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t max_bits,
-    bool *out_bits,
-    size_t *out_actual_bits)
+    const uint8_t *in,
+    size_t in_len,
+    uint64_t bit_limit,
+    uint8_t *out_bits_le,
+    size_t out_bits_le_len,
+    uint64_t *out_bit_len)
 {
-    if (buffer == NULL || out_bits == NULL || out_actual_bits == NULL || buffer_size == 0)
+    if (out_bit_len == NULL)
     {
-        return SSZ_ERROR_DESERIALIZATION;
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((in == NULL) || (in_len == 0u))
+    {
+        return SSZ_ERR_ENCODING_INVALID;
     }
 
-    const size_t max_bytes = (max_bits + 8) / 8;
-
-    if (buffer_size > max_bytes)
+    uint8_t last = in[in_len - 1u];
+    if (last == 0u)
     {
-        if (!is_zero(buffer + max_bytes, buffer_size - max_bytes))
+        return SSZ_ERR_ENCODING_INVALID;
+    }
+
+    uint8_t delimiter_pos = 0u;
+    for (uint8_t tmp = last; (tmp >>= 1u) != 0u;)
+    {
+        delimiter_pos++;
+    }
+
+    uint64_t prefix_bits = 0u;
+    if (!ssz_internal_u64_to_size((uint64_t)(in_len - 1u), NULL))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_internal_mul_overflow_u64((uint64_t)(in_len - 1u), 8u, &prefix_bits) ||
+        ssz_internal_add_overflow_u64(prefix_bits, delimiter_pos, &prefix_bits))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    if ((bit_limit != SSZ_NO_LIMIT) && (prefix_bits > bit_limit))
+    {
+        return SSZ_ERR_LIMIT_EXCEEDED;
+    }
+
+    size_t out_bytes = 0u;
+    if (!ssz_internal_bits_to_bytes(prefix_bits, &out_bytes))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((out_bytes != 0u) && ((out_bits_le == NULL) || (out_bits_le_len < out_bytes)))
+    {
+        return SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+
+    if (out_bytes != 0u)
+    {
+        if (delimiter_pos == 0u)
         {
-            return SSZ_ERROR_DESERIALIZATION;
+            memcpy(out_bits_le, in, in_len - 1u);
         }
-
-        buffer_size = max_bytes;
-    }
-
-    size_t boundary = SIZE_MAX;
-
-    for (size_t byte_i = buffer_size; byte_i > 0; byte_i--)
-    {
-        const size_t idx = byte_i - 1;
-        const uint8_t val = buffer[idx];
-
-        if (val != 0)
+        else
         {
-            const int bit = highest_bit_table[val];
-            boundary = (idx * 8) + (size_t)bit;
-            break;
+            memcpy(out_bits_le, in, in_len);
+            out_bits_le[out_bytes - 1u] &= (uint8_t)((1u << delimiter_pos) - 1u);
         }
     }
 
-    if (boundary == SIZE_MAX || boundary > max_bits)
+    *out_bit_len = prefix_bits;
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_deserialize_vector_fixed(
+    const uint8_t *in,
+    size_t in_len,
+    uint64_t element_count,
+    size_t element_size,
+    uint8_t *out_elements,
+    size_t out_elements_len)
+{
+    size_t required = 0u;
+
+    if (element_count == 0u)
     {
-        return SSZ_ERROR_DESERIALIZATION;
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (element_size == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (!ssz_internal_u64_to_size(element_count, NULL))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &required))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((in == NULL) || (in_len != required))
+    {
+        return SSZ_ERR_ENCODING_INVALID;
+    }
+    if ((required != 0u) && ((out_elements == NULL) || (out_elements_len < required)))
+    {
+        return SSZ_ERR_BUFFER_TOO_SMALL;
     }
 
-    const size_t boundary_byte = (boundary / 8) + 1;
-
-    if (boundary_byte < buffer_size)
+    if (required != 0u)
     {
-        if (!is_zero(buffer + boundary_byte, buffer_size - boundary_byte))
-        {
-            return SSZ_ERROR_DESERIALIZATION;
-        }
-    }
-
-    const uint8_t boundary_mask = (uint8_t)((1U << ((boundary % 8) + 1)) - 1);
-
-    if ((buffer[boundary / 8] & ~boundary_mask) != 0)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    const size_t data_bits = boundary;
-    *out_actual_bits = data_bits;
-
-    if (data_bits < max_bits)
-    {
-        memset(out_bits + data_bits, 0, (max_bits - data_bits) * sizeof(bool));
-    }
-
-    const size_t full_bytes = data_bits / 8;
-    const size_t rem_bits = data_bits % 8;
-    size_t i = 0;
-
-    for (; i < full_bytes; i++)
-    {
-        const uint8_t val = buffer[i];
-        out_bits[i * 8 + 0] = val & 0x01;
-        out_bits[i * 8 + 1] = val & 0x02;
-        out_bits[i * 8 + 2] = val & 0x04;
-        out_bits[i * 8 + 3] = val & 0x08;
-        out_bits[i * 8 + 4] = val & 0x10;
-        out_bits[i * 8 + 5] = val & 0x20;
-        out_bits[i * 8 + 6] = val & 0x40;
-        out_bits[i * 8 + 7] = val & 0x80;
-    }
-
-    if (rem_bits > 0)
-    {
-        const uint8_t val = buffer[full_bytes];
-
-        for (size_t bit = 0; bit < rem_bits; bit++)
-        {
-            out_bits[i * 8 + bit] = val & (1 << bit);
-        }
+        memcpy(out_elements, in, required);
     }
 
     return SSZ_SUCCESS;
 }
 
-/**
- * Deserializes a union by reading the first byte as a selector.
- *
- * @param buffer      The input buffer containing the serialized data.
- * @param buffer_size The size of the input buffer.
- * @param out_union   Pointer to store the deserialized union.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_union(const uint8_t *buffer, size_t buffer_size, ssz_union_t *out_union)
+ssz_error_t ssz_deserialize_vector_variable(
+    const uint8_t *in,
+    size_t in_len,
+    uint64_t element_count,
+    size_t min_element_size,
+    ssz_member_codec_t *codec)
 {
-    if (buffer == NULL || out_union == NULL || buffer_size < 1)
+    if (element_count == 0u)
     {
-        return SSZ_ERROR_DESERIALIZATION;
+        return SSZ_ERR_SCHEMA_INVALID;
     }
 
-    uint8_t selector = buffer[0];
+    return ssz_internal_deserialize_variable_sequence(
+        in,
+        in_len,
+        element_count,
+        min_element_size,
+        codec);
+}
 
-    if (selector > 127)
+ssz_error_t ssz_deserialize_list_fixed(
+    const uint8_t *in,
+    size_t in_len,
+    uint64_t element_limit,
+    size_t element_size,
+    uint8_t *out_elements,
+    size_t out_elements_len,
+    uint64_t *out_element_count)
+{
+    if (out_element_count == NULL)
     {
-        return SSZ_ERROR_DESERIALIZATION;
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (element_size == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if ((in_len % element_size) != 0u)
+    {
+        return SSZ_ERR_ENCODING_INVALID;
     }
 
-    out_union->selector = selector;
-
-    if (selector == 0)
+    size_t count = in_len / element_size;
+    if ((element_limit != SSZ_NO_LIMIT) && ((uint64_t)count > element_limit))
     {
-        out_union->data = NULL;
+        return SSZ_ERR_LIMIT_EXCEEDED;
+    }
+    if ((in == NULL) && (in_len != 0u))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((in_len != 0u) && ((out_elements == NULL) || (out_elements_len < in_len)))
+    {
+        return SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+
+    if (in_len != 0u)
+    {
+        memcpy(out_elements, in, in_len);
+    }
+
+    *out_element_count = (uint64_t)count;
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_deserialize_list_variable(
+    const uint8_t *in,
+    size_t in_len,
+    uint64_t element_limit,
+    size_t min_element_size,
+    ssz_member_codec_t *codec,
+    uint64_t *out_element_count)
+{
+    uint64_t element_count = 0u;
+
+    if (out_element_count == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((codec == NULL) || (codec->read == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    if (in_len == 0u)
+    {
+        *out_element_count = 0u;
+        return SSZ_SUCCESS;
+    }
+    if ((in == NULL) || (in_len < SSZ_BYTES_PER_LENGTH_OFFSET))
+    {
+        return SSZ_ERR_OFFSET_INVALID;
+    }
+
+    uint32_t first_offset = ssz_internal_read_u32_le(in);
+    if (((size_t)first_offset > in_len) || ((first_offset % SSZ_BYTES_PER_LENGTH_OFFSET) != 0u))
+    {
+        return SSZ_ERR_OFFSET_INVALID;
+    }
+
+    element_count = (uint64_t)(first_offset / SSZ_BYTES_PER_LENGTH_OFFSET);
+    if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
+    {
+        return SSZ_ERR_LIMIT_EXCEEDED;
+    }
+    if (element_count == 0u)
+    {
+        return SSZ_ERR_OFFSET_INVALID;
+    }
+
+    ssz_error_t err = ssz_internal_deserialize_variable_sequence(
+        in,
+        in_len,
+        element_count,
+        min_element_size,
+        codec);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+
+    *out_element_count = element_count;
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_deserialize_container(
+    const uint8_t *in,
+    size_t in_len,
+    const size_t *field_fixed_sizes,
+    uint32_t field_count,
+    ssz_member_codec_t *codec)
+{
+    size_t fixed_region = 0u;
+
+    if ((field_fixed_sizes == NULL) || (field_count == 0u))
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if ((codec == NULL) || (codec->read == NULL) || ((in == NULL) && (in_len != 0u)))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    for (uint32_t i = 0u; i < field_count; i++)
+    {
+        size_t fixed_size = field_fixed_sizes[i];
+        size_t contribution = (fixed_size == 0u) ? SSZ_BYTES_PER_LENGTH_OFFSET : fixed_size;
+        if (ssz_internal_add_overflow_size(fixed_region, contribution, &fixed_region))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+    }
+    if (fixed_region > in_len)
+    {
+        return SSZ_ERR_OFFSET_INVALID;
+    }
+
+    size_t cursor = 0u;
+    bool saw_variable = false;
+    uint32_t prev_offset = 0u;
+
+    for (uint32_t i = 0u; i < field_count; i++)
+    {
+        size_t fixed_size = field_fixed_sizes[i];
+
+        if (fixed_size == 0u)
+        {
+            uint32_t offset = ssz_internal_read_u32_le(in + cursor);
+            if ((size_t)offset > in_len)
+            {
+                return SSZ_ERR_OFFSET_INVALID;
+            }
+            if (!saw_variable)
+            {
+                if ((size_t)offset != fixed_region)
+                {
+                    return SSZ_ERR_OFFSET_INVALID;
+                }
+                saw_variable = true;
+            }
+            else if (offset < prev_offset)
+            {
+                return SSZ_ERR_OFFSET_INVALID;
+            }
+
+            prev_offset = offset;
+            cursor += SSZ_BYTES_PER_LENGTH_OFFSET;
+        }
+        else
+        {
+            if (cursor + fixed_size > fixed_region)
+            {
+                return SSZ_ERR_OFFSET_INVALID;
+            }
+            ssz_error_t err = codec->read(codec->ctx, i, in + cursor, fixed_size);
+            if (err != SSZ_SUCCESS)
+            {
+                return err;
+            }
+            cursor += fixed_size;
+        }
+    }
+
+    if (cursor != fixed_region)
+    {
+        return SSZ_ERR_OFFSET_INVALID;
+    }
+    if (!saw_variable)
+    {
+        return (fixed_region == in_len) ? SSZ_SUCCESS : SSZ_ERR_OFFSET_INVALID;
+    }
+
+    cursor = 0u;
+    for (uint32_t i = 0u; i < field_count; i++)
+    {
+        size_t fixed_size = field_fixed_sizes[i];
+        if (fixed_size != 0u)
+        {
+            cursor += fixed_size;
+            continue;
+        }
+
+        size_t start = (size_t)ssz_internal_read_u32_le(in + cursor);
+        size_t end = in_len;
+
+        size_t look_cursor = cursor + SSZ_BYTES_PER_LENGTH_OFFSET;
+        for (uint32_t j = i + 1u; j < field_count; j++)
+        {
+            if (field_fixed_sizes[j] == 0u)
+            {
+                end = (size_t)ssz_internal_read_u32_le(in + look_cursor);
+                break;
+            }
+            look_cursor += field_fixed_sizes[j];
+        }
+
+        if (end < start)
+        {
+            return SSZ_ERR_OFFSET_INVALID;
+        }
+
+        ssz_error_t err = codec->read(codec->ctx, i, in + start, end - start);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
+        }
+
+        cursor += SSZ_BYTES_PER_LENGTH_OFFSET;
+    }
+
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_deserialize_union(
+    const uint8_t *in,
+    size_t in_len,
+    uint32_t option_count,
+    bool has_none,
+    ssz_member_codec_t *codec,
+    uint8_t *out_selector)
+{
+    if (out_selector == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (option_count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (option_count > 256u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (has_none && (option_count < 2u))
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if ((in == NULL) || (in_len < 1u))
+    {
+        return SSZ_ERR_ENCODING_INVALID;
+    }
+
+    uint8_t selector = in[0];
+    if ((uint32_t)selector >= option_count)
+    {
+        return SSZ_ERR_SELECTOR_INVALID;
+    }
+
+    if (has_none && (selector == 0u))
+    {
+        if (in_len != 1u)
+        {
+            return SSZ_ERR_ENCODING_INVALID;
+        }
+        *out_selector = selector;
         return SSZ_SUCCESS;
     }
 
-    if (out_union->deserialize_fn == NULL)
+    if ((codec == NULL) || (codec->read == NULL))
     {
-        return SSZ_ERROR_DESERIALIZATION;
+        return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    const uint8_t *subtype_buf = &buffer[1];
-    size_t subtype_size = buffer_size - 1;
-    return out_union->deserialize_fn(subtype_buf, subtype_size, &out_union->data);
-}
-
-/**
- * Deserializes a vector of 8-bit unsigned integers.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param element_count The number of elements in the vector.
- * @param out_elements  Pointer to store the deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_vector_uint8(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t element_count,
-    uint8_t *out_elements)
-{
-    if (buffer == NULL || out_elements == NULL || element_count == 0)
+    ssz_error_t err = codec->read(codec->ctx, selector, in + 1u, in_len - 1u);
+    if (err != SSZ_SUCCESS)
     {
-        return SSZ_ERROR_DESERIALIZATION;
+        return err;
     }
 
-    size_t needed = element_count * sizeof(uint8_t);
-
-    if (buffer_size != needed)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    memcpy(out_elements, buffer, needed);
+    *out_selector = selector;
     return SSZ_SUCCESS;
 }
 
-/**
- * Deserializes a vector of 16-bit unsigned integers.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param element_count The number of elements in the vector.
- * @param out_elements  Pointer to store the deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_vector_uint16(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t element_count,
-    uint16_t *out_elements)
+ssz_error_t ssz_deserialize_compatible_union(
+    const uint8_t *in,
+    size_t in_len,
+    const uint8_t *allowed_selectors,
+    uint32_t allowed_selector_count,
+    ssz_member_codec_t *codec,
+    uint8_t *out_selector)
 {
-    if (buffer == NULL || out_elements == NULL || element_count == 0)
+    if (out_selector == NULL)
     {
-        return SSZ_ERROR_DESERIALIZATION;
+        return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    size_t needed = element_count * 2;
-
-    if (buffer_size != needed)
+    ssz_error_t schema_err =
+        ssz_internal_validate_compatible_union_schema(allowed_selectors, allowed_selector_count);
+    if (schema_err != SSZ_SUCCESS)
     {
-        return SSZ_ERROR_DESERIALIZATION;
+        return schema_err;
+    }
+    if ((in == NULL) || (in_len < 1u))
+    {
+        return SSZ_ERR_ENCODING_INVALID;
     }
 
-    for (size_t i = 0; i < element_count; i++)
+    uint8_t selector = in[0];
+    if ((selector == 0u) || (selector > 127u) ||
+        !ssz_internal_selector_allowed(selector, allowed_selectors, allowed_selector_count))
     {
-        ssz_error_t ret = ssz_deserialize_uint16(buffer + (i * 2), 2, &out_elements[i]);
-
-        if (ret != SSZ_SUCCESS)
-        {
-            return ret;
-        }
+        return SSZ_ERR_SELECTOR_INVALID;
+    }
+    if ((codec == NULL) || (codec->read == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a vector of 32-bit unsigned integers.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param element_count The number of elements in the vector.
- * @param out_elements  Pointer to store the deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_vector_uint32(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t element_count,
-    uint32_t *out_elements)
-{
-    if (buffer == NULL || out_elements == NULL || element_count == 0)
+    ssz_error_t err = codec->read(codec->ctx, selector, in + 1u, in_len - 1u);
+    if (err != SSZ_SUCCESS)
     {
-        return SSZ_ERROR_DESERIALIZATION;
+        return err;
     }
 
-    size_t needed = element_count * 4;
-
-    if (buffer_size != needed)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        ssz_error_t ret = ssz_deserialize_uint32(buffer + (i * 4), 4, &out_elements[i]);
-
-        if (ret != SSZ_SUCCESS)
-        {
-            return ret;
-        }
-    }
-
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a vector of 64-bit unsigned integers.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param element_count The number of elements in the vector.
- * @param out_elements  Pointer to store the deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_vector_uint64(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t element_count,
-    uint64_t *out_elements)
-{
-    if (buffer == NULL || out_elements == NULL || element_count == 0)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    size_t needed = element_count * 8;
-
-    if (buffer_size != needed)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        ssz_error_t ret = ssz_deserialize_uint64(buffer + (i * 8), 8, &out_elements[i]);
-
-        if (ret != SSZ_SUCCESS)
-        {
-            return ret;
-        }
-    }
-
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a vector of 128-bit unsigned integers.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param element_count The number of elements in the vector.
- * @param out_elements  Pointer to store the deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_vector_uint128(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t element_count,
-    void *out_elements)
-{
-    if (buffer == NULL || out_elements == NULL || element_count == 0)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    size_t needed = element_count * 16;
-
-    if (buffer_size != needed)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        uint8_t *element_ptr = (uint8_t *)out_elements + (i * 16);
-        ssz_error_t ret = ssz_deserialize_uint128(buffer + (i * 16), 16, element_ptr);
-
-        if (ret != SSZ_SUCCESS)
-        {
-            return ret;
-        }
-    }
-
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a vector of 256-bit unsigned integers.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param element_count The number of elements in the vector.
- * @param out_elements  Pointer to store the deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_vector_uint256(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t element_count,
-    void *out_elements)
-{
-    if (buffer == NULL || out_elements == NULL || element_count == 0)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    size_t needed = element_count * 32;
-
-    if (buffer_size != needed)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        uint8_t *element_ptr = (uint8_t *)out_elements + (i * 32);
-        ssz_error_t ret = ssz_deserialize_uint256(buffer + (i * 32), 32, element_ptr);
-
-        if (ret != SSZ_SUCCESS)
-        {
-            return ret;
-        }
-    }
-
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a vector of boolean values.
- *
- * @param buffer        The input buffer containing the serialized data.
- * @param buffer_size   The size of the input buffer.
- * @param element_count The number of elements in the vector.
- * @param out_elements  Pointer to store the deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_vector_bool(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t element_count,
-    bool *out_elements)
-{
-    if (buffer == NULL || out_elements == NULL || element_count == 0)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    if (buffer_size != element_count)
-    {
-        return SSZ_ERROR_DESERIALIZATION;
-    }
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        if (buffer[i] == 0x00)
-        {
-            out_elements[i] = false;
-        }
-        else if (buffer[i] == 0x01)
-        {
-            out_elements[i] = true;
-        }
-        else
-        {
-            return SSZ_ERROR_DESERIALIZATION;
-        }
-    }
-
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a list of 8-bit unsigned integers.
- *
- * @param buffer          The input buffer containing the serialized data.
- * @param buffer_size     The size of the input buffer.
- * @param max_length      The maximum number of elements allowed in the list.
- * @param out_elements    Pointer to store the deserialized elements.
- * @param out_actual_count Pointer to store the actual number of deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_list_uint8(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t max_length,
-    uint8_t *out_elements,
-    size_t *out_actual_count)
-{
-    if (!buffer || !out_elements || !out_actual_count)
-        return SSZ_ERROR_DESERIALIZATION;
-    size_t element_count = buffer_size;
-
-    if (element_count > max_length)
-        return SSZ_ERROR_DESERIALIZATION;
-    memcpy(out_elements, buffer, element_count);
-    *out_actual_count = element_count;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a list of 16-bit unsigned integers.
- *
- * @param buffer          The input buffer containing the serialized data.
- * @param buffer_size     The size of the input buffer.
- * @param max_length      The maximum number of elements allowed in the list.
- * @param out_elements    Pointer to store the deserialized elements.
- * @param out_actual_count Pointer to store the actual number of deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_list_uint16(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t max_length,
-    uint16_t *out_elements,
-    size_t *out_actual_count)
-{
-    if (!buffer || !out_elements || !out_actual_count)
-        return SSZ_ERROR_DESERIALIZATION;
-
-    if (buffer_size % 2 != 0)
-        return SSZ_ERROR_DESERIALIZATION;
-    size_t element_count = buffer_size / 2;
-
-    if (element_count > max_length)
-        return SSZ_ERROR_DESERIALIZATION;
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        ssz_error_t ret = ssz_deserialize_uint16(buffer + (i * 2), 2, &out_elements[i]);
-
-        if (ret != SSZ_SUCCESS)
-            return ret;
-    }
-
-    *out_actual_count = element_count;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a list of 32-bit unsigned integers.
- *
- * @param buffer          The input buffer containing the serialized data.
- * @param buffer_size     The size of the input buffer.
- * @param max_length      The maximum number of elements allowed in the list.
- * @param out_elements    Pointer to store the deserialized elements.
- * @param out_actual_count Pointer to store the actual number of deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_list_uint32(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t max_length,
-    uint32_t *out_elements,
-    size_t *out_actual_count)
-{
-    if (!buffer || !out_elements || !out_actual_count)
-        return SSZ_ERROR_DESERIALIZATION;
-
-    if (buffer_size % 4 != 0)
-        return SSZ_ERROR_DESERIALIZATION;
-    size_t element_count = buffer_size / 4;
-
-    if (element_count > max_length)
-        return SSZ_ERROR_DESERIALIZATION;
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        ssz_error_t ret = ssz_deserialize_uint32(buffer + (i * 4), 4, &out_elements[i]);
-
-        if (ret != SSZ_SUCCESS)
-            return ret;
-    }
-
-    *out_actual_count = element_count;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a list of 64-bit unsigned integers.
- *
- * @param buffer          The input buffer containing the serialized data.
- * @param buffer_size     The size of the input buffer.
- * @param max_length      The maximum number of elements allowed in the list.
- * @param out_elements    Pointer to store the deserialized elements.
- * @param out_actual_count Pointer to store the actual number of deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_list_uint64(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t max_length,
-    uint64_t *out_elements,
-    size_t *out_actual_count)
-{
-    if (!buffer || !out_elements || !out_actual_count)
-        return SSZ_ERROR_DESERIALIZATION;
-
-    if (buffer_size % 8 != 0)
-        return SSZ_ERROR_DESERIALIZATION;
-    size_t element_count = buffer_size / 8;
-
-    if (element_count > max_length)
-        return SSZ_ERROR_DESERIALIZATION;
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        ssz_error_t ret = ssz_deserialize_uint64(buffer + (i * 8), 8, &out_elements[i]);
-
-        if (ret != SSZ_SUCCESS)
-            return ret;
-    }
-
-    *out_actual_count = element_count;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a list of 128-bit unsigned integers.
- *
- * @param buffer          The input buffer containing the serialized data.
- * @param buffer_size     The size of the input buffer.
- * @param max_length      The maximum number of elements allowed in the list.
- * @param out_elements    Pointer to store the deserialized elements.
- * @param out_actual_count Pointer to store the actual number of deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_list_uint128(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t max_length,
-    void *out_elements,
-    size_t *out_actual_count)
-{
-    if (!buffer || !out_elements || !out_actual_count)
-        return SSZ_ERROR_DESERIALIZATION;
-
-    if (buffer_size % 16 != 0)
-        return SSZ_ERROR_DESERIALIZATION;
-    size_t element_count = buffer_size / 16;
-
-    if (element_count > max_length)
-        return SSZ_ERROR_DESERIALIZATION;
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        uint8_t *element_ptr = (uint8_t *)out_elements + (i * 16);
-        ssz_error_t ret = ssz_deserialize_uint128(buffer + (i * 16), 16, element_ptr);
-
-        if (ret != SSZ_SUCCESS)
-            return ret;
-    }
-
-    *out_actual_count = element_count;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a list of 256-bit unsigned integers.
- *
- * @param buffer          The input buffer containing the serialized data.
- * @param buffer_size     The size of the input buffer.
- * @param max_length      The maximum number of elements allowed in the list.
- * @param out_elements    Pointer to store the deserialized elements.
- * @param out_actual_count Pointer to store the actual number of deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_list_uint256(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t max_length,
-    void *out_elements,
-    size_t *out_actual_count)
-{
-    if (!buffer || !out_elements || !out_actual_count)
-        return SSZ_ERROR_DESERIALIZATION;
-
-    if (buffer_size % 32 != 0)
-        return SSZ_ERROR_DESERIALIZATION;
-    size_t element_count = buffer_size / 32;
-
-    if (element_count > max_length)
-        return SSZ_ERROR_DESERIALIZATION;
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        uint8_t *element_ptr = (uint8_t *)out_elements + (i * 32);
-        ssz_error_t ret = ssz_deserialize_uint256(buffer + (i * 32), 32, element_ptr);
-
-        if (ret != SSZ_SUCCESS)
-            return ret;
-    }
-
-    *out_actual_count = element_count;
-    return SSZ_SUCCESS;
-}
-
-/**
- * Deserializes a list of boolean values.
- *
- * @param buffer          The input buffer containing the serialized data.
- * @param buffer_size     The size of the input buffer.
- * @param max_length      The maximum number of elements allowed in the list.
- * @param out_elements    Pointer to store the deserialized elements.
- * @param out_actual_count Pointer to store the actual number of deserialized elements.
- *
- * @return SSZ_SUCCESS on success, or an appropriate error code on failure.
- */
-ssz_error_t ssz_deserialize_list_bool(
-    const uint8_t *buffer,
-    size_t buffer_size,
-    size_t max_length,
-    bool *out_elements,
-    size_t *out_actual_count)
-{
-    if (!buffer || !out_elements || !out_actual_count)
-        return SSZ_ERROR_DESERIALIZATION;
-    size_t element_count = buffer_size;
-
-    if (element_count > max_length)
-        return SSZ_ERROR_DESERIALIZATION;
-
-    for (size_t i = 0; i < element_count; i++)
-    {
-        if (buffer[i] == 0x00)
-        {
-            out_elements[i] = false;
-        }
-        else if (buffer[i] == 0x01)
-        {
-            out_elements[i] = true;
-        }
-        else
-        {
-            return SSZ_ERROR_DESERIALIZATION;
-        }
-    }
-
-    *out_actual_count = element_count;
+    *out_selector = selector;
     return SSZ_SUCCESS;
 }

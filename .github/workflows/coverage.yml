@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install lcov
         run: |
@@ -45,3 +47,45 @@ jobs:
 
       - name: Coverage summary
         run: lcov --summary build/coverage/coverage-filtered.info
+
+  coverage-32bit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install 32-bit toolchain and lcov
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib lcov
+
+      - name: Configure (32-bit with coverage)
+        run: cmake -S . -B build/coverage-32 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS='-m32 --coverage' -DCMAKE_EXE_LINKER_FLAGS='-m32 --coverage'
+
+      - name: Build
+        run: cmake --build build/coverage-32 --parallel
+
+      - name: Test
+        run: ctest --test-dir build/coverage-32 --output-on-failure
+
+      - name: Generate coverage data
+        run: lcov --capture --directory build/coverage-32 --output-file build/coverage-32/coverage.info --ignore-errors mismatch
+
+      - name: Filter coverage report
+        run: lcov --remove build/coverage-32/coverage.info '/usr/*' '*/tests/*' '*/bench/*' '*/lib/*' --output-file build/coverage-32/coverage-filtered.info --ignore-errors unused
+
+      - name: Generate HTML report
+        run: genhtml build/coverage-32/coverage-filtered.info --output-directory build/coverage-32/html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-32bit
+          path: build/coverage-32/html
+
+      - name: Coverage summary
+        run: lcov --summary build/coverage-32/coverage-filtered.info

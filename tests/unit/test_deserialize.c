@@ -1,0 +1,1195 @@
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "ssz.h"
+
+typedef bool (*test_fn_t)(void);
+
+typedef struct
+{
+    const char *name;
+    test_fn_t fn;
+} test_case_t;
+
+#define ASSERT_TRUE(cond)                                                                            \
+    do                                                                                               \
+    {                                                                                                \
+        if (!(cond))                                                                                 \
+        {                                                                                            \
+            fprintf(stderr, "Assertion failed at %s:%d: %s\n", __FILE__, __LINE__, #cond);       \
+            return false;                                                                            \
+        }                                                                                            \
+    } while (0)
+
+#define ASSERT_ERR(expr, expected)                                                                   \
+    do                                                                                               \
+    {                                                                                                \
+        ssz_error_t _actual = (expr);                                                                \
+        if (_actual != (expected))                                                                   \
+        {                                                                                            \
+            fprintf(stderr,                                                                           \
+                    "Assertion failed at %s:%d: %s returned %s (%d), expected %s (%d)\n",         \
+                    __FILE__,                                                                         \
+                    __LINE__,                                                                         \
+                    #expr,                                                                            \
+                    ssz_error_string(_actual),                                                        \
+                    (int)_actual,                                                                     \
+                    ssz_error_string((expected)),                                                     \
+                    (int)(expected));                                                                 \
+            return false;                                                                            \
+        }                                                                                            \
+    } while (0)
+
+#define ASSERT_MEM_EQ(actual, expected, len)                                                         \
+    do                                                                                               \
+    {                                                                                                \
+        if (memcmp((actual), (expected), (len)) != 0)                                               \
+        {                                                                                            \
+            fprintf(stderr,                                                                           \
+                    "Assertion failed at %s:%d: memory mismatch (%s vs %s, len=%zu)\n",           \
+                    __FILE__,                                                                         \
+                    __LINE__,                                                                         \
+                    #actual,                                                                          \
+                    #expected,                                                                        \
+                    (size_t)(len));                                                                   \
+            return false;                                                                            \
+        }                                                                                            \
+    } while (0)
+
+typedef struct
+{
+    uint64_t id;
+    const uint8_t *expected;
+    size_t expected_len;
+    bool seen;
+} read_expect_entry_t;
+
+typedef struct
+{
+    read_expect_entry_t *entries;
+    size_t entry_count;
+} read_expect_ctx_t;
+
+static ssz_error_t read_expect_callback(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
+{
+    read_expect_ctx_t *expect_ctx = (read_expect_ctx_t *)ctx;
+
+    if (expect_ctx == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    for (size_t i = 0u; i < expect_ctx->entry_count; i++)
+    {
+        if (expect_ctx->entries[i].id != member_id)
+        {
+            continue;
+        }
+
+        if (expect_ctx->entries[i].expected_len != data_len)
+        {
+            return SSZ_ERR_TYPE_MISMATCH;
+        }
+        if ((data_len != 0u) &&
+            ((data == NULL) || (expect_ctx->entries[i].expected == NULL) ||
+             (memcmp(data, expect_ctx->entries[i].expected, data_len) != 0)))
+        {
+            return SSZ_ERR_TYPE_MISMATCH;
+        }
+
+        expect_ctx->entries[i].seen = true;
+        return SSZ_SUCCESS;
+    }
+
+    return SSZ_ERR_INVALID_ARGUMENT;
+}
+
+static bool all_read_entries_seen(const read_expect_ctx_t *ctx)
+{
+    for (size_t i = 0u; i < ctx->entry_count; i++)
+    {
+        if (!ctx->entries[i].seen)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static ssz_error_t fail_if_called_read(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
+{
+    (void)ctx;
+    (void)member_id;
+    (void)data;
+    (void)data_len;
+    return SSZ_ERR_TYPE_MISMATCH;
+}
+
+typedef struct
+{
+    const ssz_error_t *errors;
+    size_t step_count;
+    size_t step_index;
+} scripted_read_ctx_t;
+
+static ssz_error_t scripted_read(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
+{
+    scripted_read_ctx_t *script = (scripted_read_ctx_t *)ctx;
+    (void)member_id;
+    (void)data;
+    (void)data_len;
+
+    if ((script == NULL) || (script->errors == NULL) || (script->step_index >= script->step_count))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    return script->errors[script->step_index++];
+}
+
+static ssz_member_codec_t make_scripted_read_codec(scripted_read_ctx_t *ctx)
+{
+    ssz_member_codec_t codec = {
+        .ctx = ctx,
+        .write = NULL,
+        .read = scripted_read,
+        .root = NULL,
+    };
+    return codec;
+}
+
+static bool test_deserialize_basic_round_trips(void)
+{
+    uint8_t out_u8 = 0u;
+    uint16_t out_u16 = 0u;
+    uint32_t out_u32 = 0u;
+    uint64_t out_u64 = 0u;
+    uint8_t out_u128[16] = {0u};
+    uint8_t out_u256[32] = {0u};
+    uint8_t out_bool = 0u;
+    uint8_t out_byte = 0u;
+    uint8_t out_bit = 0u;
+
+    uint8_t in_u8[1] = {0u};
+    uint8_t in_u16[2] = {0u};
+    uint8_t in_u32[4] = {0u};
+    uint8_t in_u64[8] = {0u};
+    uint8_t in_u128[16] = {
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+        0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF,
+    };
+    uint8_t in_u256[32] = {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
+    };
+    uint8_t in_bool[1] = {0u};
+
+    ASSERT_ERR(ssz_serialize_uint8(0xABu, in_u8), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_deserialize_uint8(in_u8, &out_u8), SSZ_SUCCESS);
+    ASSERT_TRUE(out_u8 == 0xABu);
+
+    ASSERT_ERR(ssz_serialize_uint16(UINT16_C(0xBEEF), in_u16), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_deserialize_uint16(in_u16, &out_u16), SSZ_SUCCESS);
+    ASSERT_TRUE(out_u16 == UINT16_C(0xBEEF));
+
+    ASSERT_ERR(ssz_serialize_uint32(UINT32_C(0x78563412), in_u32), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_deserialize_uint32(in_u32, &out_u32), SSZ_SUCCESS);
+    ASSERT_TRUE(out_u32 == UINT32_C(0x78563412));
+
+    ASSERT_ERR(ssz_serialize_uint64(UINT64_C(0x0102030405060708), in_u64), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_deserialize_uint64(in_u64, &out_u64), SSZ_SUCCESS);
+    ASSERT_TRUE(out_u64 == UINT64_C(0x0102030405060708));
+
+    ASSERT_ERR(ssz_deserialize_uint128(in_u128, out_u128), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(out_u128, in_u128, sizeof(in_u128));
+
+    ASSERT_ERR(ssz_deserialize_uint256(in_u256, out_u256), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(out_u256, in_u256, sizeof(in_u256));
+
+    ASSERT_ERR(ssz_serialize_boolean(1u, in_bool), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_deserialize_boolean(in_bool, &out_bool), SSZ_SUCCESS);
+    ASSERT_TRUE(out_bool == 1u);
+
+    ASSERT_ERR(ssz_deserialize_byte(in_u8, &out_byte), SSZ_SUCCESS);
+    ASSERT_TRUE(out_byte == 0xABu);
+
+    ASSERT_ERR(ssz_deserialize_bit(in_bool, &out_bit), SSZ_SUCCESS);
+    ASSERT_TRUE(out_bit == 1u);
+
+    return true;
+}
+
+static bool test_deserialize_boolean_canonical_enforcement(void)
+{
+    uint8_t out = 0u;
+
+    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0x00u}, &out), SSZ_SUCCESS);
+    ASSERT_TRUE(out == 0u);
+
+    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0x01u}, &out), SSZ_SUCCESS);
+    ASSERT_TRUE(out == 1u);
+
+    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0x02u}, &out), SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0x80u}, &out), SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0xFFu}, &out), SSZ_ERR_ENCODING_INVALID);
+
+    return true;
+}
+
+static bool test_deserialize_bitvector_padding_validation(void)
+{
+    const uint8_t valid[2] = {0x55u, 0x01u};
+    const uint8_t invalid_padding[2] = {0x55u, 0x81u};
+    uint8_t out[2] = {0u};
+
+    ASSERT_ERR(ssz_deserialize_bitvector(valid, sizeof(valid), 10u, out, sizeof(out)), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(out, valid, sizeof(valid));
+
+    ASSERT_ERR(ssz_deserialize_bitvector(invalid_padding, sizeof(invalid_padding), 10u, out, sizeof(out)),
+               SSZ_ERR_ENCODING_INVALID);
+
+    return true;
+}
+
+static bool test_deserialize_bitlist_delimiter_and_errors(void)
+{
+    const uint8_t encoded[2] = {0xAAu, 0x06u};
+    uint8_t out_bits[2] = {0u};
+    uint64_t out_bit_len = 0u;
+
+    ASSERT_ERR(ssz_deserialize_bitlist(
+                   encoded, sizeof(encoded), 10u, out_bits, sizeof(out_bits), &out_bit_len),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(out_bit_len == 10u);
+    ASSERT_MEM_EQ(out_bits, ((const uint8_t[2]){0xAAu, 0x02u}), 2u);
+
+    ASSERT_ERR(ssz_deserialize_bitlist(
+                   encoded, sizeof(encoded), 9u, out_bits, sizeof(out_bits), &out_bit_len),
+               SSZ_ERR_LIMIT_EXCEEDED);
+
+    ASSERT_ERR(ssz_deserialize_bitlist(
+                   (const uint8_t[1]){0x00u}, 1u, SSZ_NO_LIMIT, out_bits, sizeof(out_bits), &out_bit_len),
+               SSZ_ERR_ENCODING_INVALID);
+
+    return true;
+}
+
+static bool test_deserialize_vector_fixed_exact_scope(void)
+{
+    const uint8_t encoded[6] = {0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u};
+    uint8_t out[6] = {0u};
+
+    ASSERT_ERR(
+        ssz_deserialize_vector_fixed(encoded, sizeof(encoded), 3u, 2u, out, sizeof(out)), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(out, encoded, sizeof(encoded));
+
+    ASSERT_ERR(ssz_deserialize_vector_fixed(encoded, 5u, 3u, 2u, out, sizeof(out)),
+               SSZ_ERR_ENCODING_INVALID);
+
+    return true;
+}
+
+static bool test_deserialize_vector_variable_offsets_and_dispatch(void)
+{
+    const uint8_t encoded[18] = {
+        0x0Cu, 0x00u, 0x00u, 0x00u,
+        0x0Du, 0x00u, 0x00u, 0x00u,
+        0x0Fu, 0x00u, 0x00u, 0x00u,
+        0xA0u,
+        0xB0u, 0xB1u,
+        0xC0u, 0xC1u, 0xC2u,
+    };
+
+    read_expect_entry_t entries[] = {
+        {0u, (const uint8_t[]){0xA0u}, 1u, false},
+        {1u, (const uint8_t[]){0xB0u, 0xB1u}, 2u, false},
+        {2u, (const uint8_t[]){0xC0u, 0xC1u, 0xC2u}, 3u, false},
+    };
+    read_expect_ctx_t read_ctx = {
+        .entries = entries,
+        .entry_count = sizeof(entries) / sizeof(entries[0]),
+    };
+    ssz_member_codec_t codec = {
+        .ctx = &read_ctx,
+        .write = NULL,
+        .read = read_expect_callback,
+        .root = NULL,
+    };
+
+    ASSERT_ERR(ssz_deserialize_vector_variable(encoded, sizeof(encoded), 3u, 1u, &codec), SSZ_SUCCESS);
+    ASSERT_TRUE(all_read_entries_seen(&read_ctx));
+
+    const uint8_t non_monotonic[18] = {
+        0x0Cu, 0x00u, 0x00u, 0x00u,
+        0x0Bu, 0x00u, 0x00u, 0x00u,
+        0x0Fu, 0x00u, 0x00u, 0x00u,
+        0xA0u,
+        0xB0u, 0xB1u,
+        0xC0u, 0xC1u, 0xC2u,
+    };
+    ASSERT_ERR(ssz_deserialize_vector_variable(non_monotonic, sizeof(non_monotonic), 3u, 1u, &codec),
+               SSZ_ERR_OFFSET_INVALID);
+
+    const uint8_t out_of_bounds[18] = {
+        0x0Cu, 0x00u, 0x00u, 0x00u,
+        0x20u, 0x00u, 0x00u, 0x00u,
+        0x0Fu, 0x00u, 0x00u, 0x00u,
+        0xA0u,
+        0xB0u, 0xB1u,
+        0xC0u, 0xC1u, 0xC2u,
+    };
+    ASSERT_ERR(ssz_deserialize_vector_variable(out_of_bounds, sizeof(out_of_bounds), 3u, 1u, &codec),
+               SSZ_ERR_OFFSET_INVALID);
+
+    return true;
+}
+
+static bool test_deserialize_list_fixed_count_and_limits(void)
+{
+    const uint8_t encoded[4] = {0x10u, 0x11u, 0x20u, 0x21u};
+    uint8_t out[4] = {0u};
+    uint64_t count = 0u;
+
+    ASSERT_ERR(ssz_deserialize_list_fixed(
+                   encoded, sizeof(encoded), 2u, 2u, out, sizeof(out), &count),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(count == 2u);
+    ASSERT_MEM_EQ(out, encoded, sizeof(encoded));
+
+    ASSERT_ERR(ssz_deserialize_list_fixed(
+                   encoded, sizeof(encoded), 1u, 2u, out, sizeof(out), &count),
+               SSZ_ERR_LIMIT_EXCEEDED);
+
+    return true;
+}
+
+static bool test_deserialize_list_variable_count_limits_and_offsets(void)
+{
+    const uint8_t encoded[11] = {
+        0x08u, 0x00u, 0x00u, 0x00u,
+        0x0Au, 0x00u, 0x00u, 0x00u,
+        0xE0u, 0xE1u,
+        0xF0u,
+    };
+
+    read_expect_entry_t entries[] = {
+        {0u, (const uint8_t[]){0xE0u, 0xE1u}, 2u, false},
+        {1u, (const uint8_t[]){0xF0u}, 1u, false},
+    };
+    read_expect_ctx_t read_ctx = {
+        .entries = entries,
+        .entry_count = sizeof(entries) / sizeof(entries[0]),
+    };
+    ssz_member_codec_t codec = {
+        .ctx = &read_ctx,
+        .write = NULL,
+        .read = read_expect_callback,
+        .root = NULL,
+    };
+
+    uint64_t out_count = 0u;
+
+    ASSERT_ERR(ssz_deserialize_list_variable(encoded, sizeof(encoded), 2u, 1u, &codec, &out_count),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(out_count == 2u);
+    ASSERT_TRUE(all_read_entries_seen(&read_ctx));
+
+    ASSERT_ERR(ssz_deserialize_list_variable(encoded, sizeof(encoded), 1u, 1u, &codec, &out_count),
+               SSZ_ERR_LIMIT_EXCEEDED);
+
+    const uint8_t non_monotonic[11] = {
+        0x08u, 0x00u, 0x00u, 0x00u,
+        0x07u, 0x00u, 0x00u, 0x00u,
+        0xE0u, 0xE1u,
+        0xF0u,
+    };
+    ASSERT_ERR(ssz_deserialize_list_variable(non_monotonic,
+                                             sizeof(non_monotonic),
+                                             SSZ_NO_LIMIT,
+                                             1u,
+                                             &codec,
+                                             &out_count),
+               SSZ_ERR_OFFSET_INVALID);
+
+    const uint8_t first_offset_oob[8] = {
+        0x0Cu, 0x00u, 0x00u, 0x00u,
+        0x0Cu, 0x00u, 0x00u, 0x00u,
+    };
+    ASSERT_ERR(ssz_deserialize_list_variable(first_offset_oob,
+                                             sizeof(first_offset_oob),
+                                             SSZ_NO_LIMIT,
+                                             0u,
+                                             &codec,
+                                             &out_count),
+               SSZ_ERR_OFFSET_INVALID);
+
+    return true;
+}
+
+static bool test_deserialize_container_mixed_fields(void)
+{
+    const size_t field_fixed_sizes[3] = {1u, 0u, 2u};
+    const uint8_t encoded[10] = {
+        0xAAu,
+        0x07u, 0x00u, 0x00u, 0x00u,
+        0xCCu, 0xDDu,
+        0xB0u, 0xB1u, 0xB2u,
+    };
+
+    read_expect_entry_t entries[] = {
+        {0u, (const uint8_t[]){0xAAu}, 1u, false},
+        {1u, (const uint8_t[]){0xB0u, 0xB1u, 0xB2u}, 3u, false},
+        {2u, (const uint8_t[]){0xCCu, 0xDDu}, 2u, false},
+    };
+    read_expect_ctx_t read_ctx = {
+        .entries = entries,
+        .entry_count = sizeof(entries) / sizeof(entries[0]),
+    };
+    ssz_member_codec_t codec = {
+        .ctx = &read_ctx,
+        .write = NULL,
+        .read = read_expect_callback,
+        .root = NULL,
+    };
+
+    ASSERT_ERR(ssz_deserialize_container(encoded, sizeof(encoded), field_fixed_sizes, 3u, &codec),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(all_read_entries_seen(&read_ctx));
+
+    const uint8_t out_of_bounds_offset[8] = {
+        0xAAu,
+        0x09u, 0x00u, 0x00u, 0x00u,
+        0xCCu, 0xDDu,
+        0x00u,
+    };
+    ASSERT_ERR(ssz_deserialize_container(
+                   out_of_bounds_offset, sizeof(out_of_bounds_offset), field_fixed_sizes, 3u, &codec),
+               SSZ_ERR_OFFSET_INVALID);
+
+    const size_t variable_sizes[2] = {0u, 0u};
+    const uint8_t non_monotonic_offsets[8] = {
+        0x08u, 0x00u, 0x00u, 0x00u,
+        0x07u, 0x00u, 0x00u, 0x00u,
+    };
+    ASSERT_ERR(ssz_deserialize_container(
+                   non_monotonic_offsets, sizeof(non_monotonic_offsets), variable_sizes, 2u, &codec),
+               SSZ_ERR_OFFSET_INVALID);
+
+    return true;
+}
+
+static bool test_deserialize_union_cases(void)
+{
+    uint8_t selector = 0u;
+
+    ssz_member_codec_t forbidden_codec = {
+        .ctx = NULL,
+        .write = NULL,
+        .read = fail_if_called_read,
+        .root = NULL,
+    };
+
+    ASSERT_ERR(ssz_deserialize_union((const uint8_t[1]){0x00u},
+                                     1u,
+                                     3u,
+                                     true,
+                                     &forbidden_codec,
+                                     &selector),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(selector == 0u);
+
+    ASSERT_ERR(ssz_deserialize_union((const uint8_t[2]){0x00u, 0xAAu},
+                                     2u,
+                                     3u,
+                                     true,
+                                     &forbidden_codec,
+                                     &selector),
+               SSZ_ERR_ENCODING_INVALID);
+
+    read_expect_entry_t entries[] = {
+        {2u, (const uint8_t[]){0xDEu, 0xADu}, 2u, false},
+    };
+    read_expect_ctx_t read_ctx = {
+        .entries = entries,
+        .entry_count = sizeof(entries) / sizeof(entries[0]),
+    };
+    ssz_member_codec_t codec = {
+        .ctx = &read_ctx,
+        .write = NULL,
+        .read = read_expect_callback,
+        .root = NULL,
+    };
+
+    ASSERT_ERR(ssz_deserialize_union((const uint8_t[3]){0x02u, 0xDEu, 0xADu},
+                                     3u,
+                                     3u,
+                                     true,
+                                     &codec,
+                                     &selector),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(selector == 2u);
+    ASSERT_TRUE(all_read_entries_seen(&read_ctx));
+
+    return true;
+}
+
+static bool test_deserialize_compatible_union_valid_invalid(void)
+{
+    const uint8_t allowed[] = {1u, 2u, 7u};
+    uint8_t selector = 0u;
+
+    read_expect_entry_t entries[] = {
+        {7u, (const uint8_t[]){0x77u, 0x88u}, 2u, false},
+    };
+    read_expect_ctx_t read_ctx = {
+        .entries = entries,
+        .entry_count = sizeof(entries) / sizeof(entries[0]),
+    };
+    ssz_member_codec_t codec = {
+        .ctx = &read_ctx,
+        .write = NULL,
+        .read = read_expect_callback,
+        .root = NULL,
+    };
+
+    ASSERT_ERR(ssz_deserialize_compatible_union((const uint8_t[3]){0x07u, 0x77u, 0x88u},
+                                                3u,
+                                                allowed,
+                                                sizeof(allowed),
+                                                &codec,
+                                                &selector),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(selector == 7u);
+    ASSERT_TRUE(all_read_entries_seen(&read_ctx));
+
+    ASSERT_ERR(ssz_deserialize_compatible_union((const uint8_t[2]){0x00u, 0x00u},
+                                                2u,
+                                                allowed,
+                                                sizeof(allowed),
+                                                &codec,
+                                                &selector),
+               SSZ_ERR_SELECTOR_INVALID);
+
+    ASSERT_ERR(ssz_deserialize_compatible_union((const uint8_t[2]){0xC8u, 0x00u},
+                                                2u,
+                                                allowed,
+                                                sizeof(allowed),
+                                                &codec,
+                                                &selector),
+               SSZ_ERR_SELECTOR_INVALID);
+
+    ASSERT_ERR(ssz_deserialize_compatible_union((const uint8_t[2]){0x03u, 0x00u},
+                                                2u,
+                                                allowed,
+                                                sizeof(allowed),
+                                                &codec,
+                                                &selector),
+               SSZ_ERR_SELECTOR_INVALID);
+
+    return true;
+}
+
+static bool test_deserialize_progressive_wrappers(void)
+{
+    const size_t field_fixed_sizes[3] = {1u, 0u, 2u};
+    const uint8_t container_encoded[9] = {
+        0x01u,
+        0x07u, 0x00u, 0x00u, 0x00u,
+        0x20u, 0x21u,
+        0x10u, 0x11u,
+    };
+    read_expect_entry_t container_entries[] = {
+        {0u, (const uint8_t[]){0x01u}, 1u, false},
+        {1u, (const uint8_t[]){0x10u, 0x11u}, 2u, false},
+        {2u, (const uint8_t[]){0x20u, 0x21u}, 2u, false},
+    };
+    read_expect_ctx_t container_ctx = {
+        .entries = container_entries,
+        .entry_count = sizeof(container_entries) / sizeof(container_entries[0]),
+    };
+    ssz_member_codec_t container_codec = {
+        .ctx = &container_ctx,
+        .write = NULL,
+        .read = read_expect_callback,
+        .root = NULL,
+    };
+
+    ASSERT_ERR(ssz_deserialize_progressive_container(container_encoded,
+                                                     sizeof(container_encoded),
+                                                     field_fixed_sizes,
+                                                     3u,
+                                                     &container_codec),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(all_read_entries_seen(&container_ctx));
+
+    const uint8_t list_fixed_encoded[4] = {0x30u, 0x31u, 0x32u, 0x33u};
+    uint8_t list_fixed_out[4] = {0u};
+    uint64_t list_fixed_count = 0u;
+
+    ASSERT_ERR(ssz_deserialize_progressive_list_fixed(list_fixed_encoded,
+                                                      sizeof(list_fixed_encoded),
+                                                      2u,
+                                                      list_fixed_out,
+                                                      sizeof(list_fixed_out),
+                                                      &list_fixed_count),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(list_fixed_count == 2u);
+    ASSERT_MEM_EQ(list_fixed_out, list_fixed_encoded, sizeof(list_fixed_encoded));
+
+    const uint8_t list_variable_encoded[11] = {
+        0x08u, 0x00u, 0x00u, 0x00u,
+        0x09u, 0x00u, 0x00u, 0x00u,
+        0xA1u,
+        0xB1u, 0xB2u,
+    };
+    read_expect_entry_t list_entries[] = {
+        {0u, (const uint8_t[]){0xA1u}, 1u, false},
+        {1u, (const uint8_t[]){0xB1u, 0xB2u}, 2u, false},
+    };
+    read_expect_ctx_t list_ctx = {
+        .entries = list_entries,
+        .entry_count = sizeof(list_entries) / sizeof(list_entries[0]),
+    };
+    ssz_member_codec_t list_codec = {
+        .ctx = &list_ctx,
+        .write = NULL,
+        .read = read_expect_callback,
+        .root = NULL,
+    };
+    uint64_t list_count = 0u;
+
+    ASSERT_ERR(ssz_deserialize_progressive_list_variable(list_variable_encoded,
+                                                         sizeof(list_variable_encoded),
+                                                         1u,
+                                                         &list_codec,
+                                                         &list_count),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(list_count == 2u);
+    ASSERT_TRUE(all_read_entries_seen(&list_ctx));
+
+    const uint8_t bitlist_encoded[2] = {0x03u, 0x03u};
+    uint8_t bitlist_out[2] = {0u};
+    uint64_t bit_len = 0u;
+
+    ASSERT_ERR(ssz_deserialize_progressive_bitlist(bitlist_encoded,
+                                                   sizeof(bitlist_encoded),
+                                                   bitlist_out,
+                                                   sizeof(bitlist_out),
+                                                   &bit_len),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(bit_len == 9u);
+    ASSERT_MEM_EQ(bitlist_out, ((const uint8_t[2]){0x03u, 0x01u}), 2u);
+
+    return true;
+}
+
+static bool test_deserialize_error_cases(void)
+{
+    uint8_t out_u8 = 0u;
+    uint16_t out_u16 = 0u;
+    uint32_t out_u32 = 0u;
+    uint64_t out_u64 = 0u;
+    uint8_t out128[16] = {0u};
+    uint8_t out256[32] = {0u};
+    uint8_t out_bool = 0u;
+    uint64_t out_count = 0u;
+
+    ASSERT_ERR(ssz_deserialize_uint8(NULL, &out_u8), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_uint16(NULL, &out_u16), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_uint32(NULL, &out_u32), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_uint64(NULL, &out_u64), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_uint128(NULL, out128), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_uint256(NULL, out256), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_boolean(NULL, &out_bool), SSZ_ERR_INVALID_ARGUMENT);
+
+    ASSERT_ERR(ssz_deserialize_uint8((const uint8_t[1]){0x00u}, NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_uint16((const uint8_t[2]){0x00u, 0x00u}, NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_uint32((const uint8_t[4]){0u, 0u, 0u, 0u}, NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_uint64((const uint8_t[8]){0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u}, NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_uint128((const uint8_t[16]){0u}, NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_uint256((const uint8_t[32]){0u}, NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0u}, NULL), SSZ_ERR_INVALID_ARGUMENT);
+
+    ASSERT_ERR(ssz_deserialize_bitvector((const uint8_t[2]){0x00u, 0x00u}, 2u, 9u, NULL, 0u),
+               SSZ_ERR_BUFFER_TOO_SMALL);
+
+    ssz_member_codec_t null_codec = {
+        .ctx = NULL,
+        .write = NULL,
+        .read = NULL,
+        .root = NULL,
+    };
+
+    ASSERT_ERR(ssz_deserialize_list_variable((const uint8_t[1]){0x00u},
+                                             1u,
+                                             SSZ_NO_LIMIT,
+                                             0u,
+                                             &null_codec,
+                                             &out_count),
+               SSZ_ERR_INVALID_ARGUMENT);
+
+    return true;
+}
+
+static bool test_deserialize_bitfield_error_paths(void)
+{
+    uint8_t out_bits[2] = {0u};
+    uint64_t out_bit_len = 0u;
+
+    ASSERT_ERR(ssz_deserialize_bitvector((const uint8_t[1]){0x00u}, 1u, 0u, out_bits, sizeof(out_bits)),
+               SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(
+        ssz_deserialize_bitvector((const uint8_t[1]){0x00u}, 1u, UINT64_MAX, out_bits, sizeof(out_bits)),
+        SSZ_ERR_OVERFLOW);
+    ASSERT_ERR(ssz_deserialize_bitvector(NULL, 1u, 8u, out_bits, sizeof(out_bits)),
+               SSZ_ERR_ENCODING_INVALID);
+
+    ASSERT_ERR(ssz_deserialize_bitlist((const uint8_t[1]){0x01u},
+                                       1u,
+                                       SSZ_NO_LIMIT,
+                                       out_bits,
+                                       sizeof(out_bits),
+                                       NULL),
+               SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_bitlist(NULL,
+                                       1u,
+                                       SSZ_NO_LIMIT,
+                                       out_bits,
+                                       sizeof(out_bits),
+                                       &out_bit_len),
+               SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(ssz_deserialize_bitlist((const uint8_t[2]){0xFFu, 0x03u},
+                                       2u,
+                                       SSZ_NO_LIMIT,
+                                       NULL,
+                                       0u,
+                                       &out_bit_len),
+               SSZ_ERR_BUFFER_TOO_SMALL);
+
+    ASSERT_ERR(ssz_deserialize_bitlist((const uint8_t[2]){0xABu, 0x01u},
+                                       2u,
+                                       SSZ_NO_LIMIT,
+                                       out_bits,
+                                       sizeof(out_bits),
+                                       &out_bit_len),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(out_bit_len == 8u);
+    ASSERT_MEM_EQ(out_bits, ((const uint8_t[1]){0xABu}), 1u);
+
+    return true;
+}
+
+static bool test_deserialize_variable_sequence_error_paths(void)
+{
+    const ssz_error_t ok_errors[1] = {SSZ_SUCCESS};
+    scripted_read_ctx_t ok_ctx = {
+        .errors = ok_errors,
+        .step_count = 1u,
+        .step_index = 0u,
+    };
+    ssz_member_codec_t ok_codec = make_scripted_read_codec(&ok_ctx);
+
+    ASSERT_ERR(ssz_deserialize_vector_variable((const uint8_t[4]){0x04u, 0x00u, 0x00u, 0x00u},
+                                               4u,
+                                               0u,
+                                               0u,
+                                               &ok_codec),
+               SSZ_ERR_SCHEMA_INVALID);
+
+    ssz_member_codec_t null_read_codec = {
+        .ctx = NULL,
+        .write = NULL,
+        .read = NULL,
+        .root = NULL,
+    };
+    ASSERT_ERR(ssz_deserialize_vector_variable((const uint8_t[4]){0x04u, 0x00u, 0x00u, 0x00u},
+                                               4u,
+                                               1u,
+                                               0u,
+                                               &null_read_codec),
+               SSZ_ERR_INVALID_ARGUMENT);
+
+#if SIZE_MAX > UINT32_MAX
+    ASSERT_ERR(ssz_deserialize_vector_variable((const uint8_t[4]){0x04u, 0x00u, 0x00u, 0x00u},
+                                               4u,
+                                               ((uint64_t)SIZE_MAX / SSZ_BYTES_PER_LENGTH_OFFSET) + 1u,
+                                               0u,
+                                               &ok_codec),
+               SSZ_ERR_OVERFLOW);
+#endif
+
+    ASSERT_ERR(ssz_deserialize_vector_variable((const uint8_t[8]){0u},
+                                               8u,
+                                               3u,
+                                               0u,
+                                               &ok_codec),
+               SSZ_ERR_OFFSET_INVALID);
+
+    ASSERT_ERR(ssz_deserialize_vector_variable((const uint8_t[12]){
+                                                   0x08u, 0x00u, 0x00u, 0x00u,
+                                                   0x08u, 0x00u, 0x00u, 0x00u,
+                                                   0x08u, 0x00u, 0x00u, 0x00u,
+                                               },
+                                               12u,
+                                               3u,
+                                               0u,
+                                               &ok_codec),
+               SSZ_ERR_OFFSET_INVALID);
+
+    ASSERT_ERR(ssz_deserialize_vector_variable((const uint8_t[8]){
+                                                   0x08u, 0x00u, 0x00u, 0x00u,
+                                                   0x08u, 0x00u, 0x00u, 0x00u,
+                                               },
+                                               8u,
+                                               2u,
+                                               1u,
+                                               &ok_codec),
+               SSZ_ERR_OFFSET_INVALID);
+
+    const ssz_error_t fail_errors[1] = {SSZ_ERR_TYPE_MISMATCH};
+    scripted_read_ctx_t fail_ctx = {
+        .errors = fail_errors,
+        .step_count = 1u,
+        .step_index = 0u,
+    };
+    ssz_member_codec_t fail_codec = make_scripted_read_codec(&fail_ctx);
+    ASSERT_ERR(ssz_deserialize_vector_variable((const uint8_t[4]){0x04u, 0x00u, 0x00u, 0x00u},
+                                               4u,
+                                               1u,
+                                               0u,
+                                               &fail_codec),
+               SSZ_ERR_TYPE_MISMATCH);
+
+    return true;
+}
+
+static bool test_deserialize_collection_error_paths(void)
+{
+    uint8_t out[4] = {0u};
+    uint64_t out_count = 0u;
+
+    ASSERT_ERR(ssz_deserialize_vector_fixed((const uint8_t[1]){0x00u}, 1u, 0u, 1u, out, sizeof(out)),
+               SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(ssz_deserialize_vector_fixed((const uint8_t[1]){0x00u}, 1u, 1u, 0u, out, sizeof(out)),
+               SSZ_ERR_SCHEMA_INVALID);
+#if SIZE_MAX > UINT32_MAX
+    ASSERT_ERR(ssz_deserialize_vector_fixed((const uint8_t[1]){0x00u},
+                                            1u,
+                                            ((uint64_t)SIZE_MAX / 2u) + 1u,
+                                            2u,
+                                            out,
+                                            sizeof(out)),
+               SSZ_ERR_OVERFLOW);
+#endif
+    ASSERT_ERR(ssz_deserialize_vector_fixed((const uint8_t[2]){0x11u, 0x22u}, 2u, 2u, 1u, out, 1u),
+               SSZ_ERR_BUFFER_TOO_SMALL);
+
+    ASSERT_ERR(ssz_deserialize_list_fixed((const uint8_t[2]){0x00u, 0x01u}, 2u, SSZ_NO_LIMIT, 1u, out, sizeof(out), NULL),
+               SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_list_fixed((const uint8_t[1]){0x00u}, 1u, SSZ_NO_LIMIT, 0u, out, sizeof(out), &out_count),
+               SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(ssz_deserialize_list_fixed((const uint8_t[3]){0x00u, 0x01u, 0x02u},
+                                          3u,
+                                          SSZ_NO_LIMIT,
+                                          2u,
+                                          out,
+                                          sizeof(out),
+                                          &out_count),
+               SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(ssz_deserialize_list_fixed(NULL, 2u, SSZ_NO_LIMIT, 1u, out, sizeof(out), &out_count),
+               SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_list_fixed((const uint8_t[2]){0x00u, 0x01u}, 2u, SSZ_NO_LIMIT, 1u, out, 1u, &out_count),
+               SSZ_ERR_BUFFER_TOO_SMALL);
+
+    ASSERT_ERR(ssz_deserialize_list_variable((const uint8_t[4]){0x04u, 0x00u, 0x00u, 0x00u},
+                                             4u,
+                                             SSZ_NO_LIMIT,
+                                             0u,
+                                             &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = fail_if_called_read, .root = NULL},
+                                             NULL),
+               SSZ_ERR_INVALID_ARGUMENT);
+
+    const ssz_error_t ok_errors[1] = {SSZ_SUCCESS};
+    scripted_read_ctx_t ok_ctx = {
+        .errors = ok_errors,
+        .step_count = 1u,
+        .step_index = 0u,
+    };
+    ssz_member_codec_t ok_codec = make_scripted_read_codec(&ok_ctx);
+    ASSERT_ERR(ssz_deserialize_list_variable(NULL, 0u, SSZ_NO_LIMIT, 0u, &ok_codec, &out_count), SSZ_SUCCESS);
+    ASSERT_TRUE(out_count == 0u);
+
+    ASSERT_ERR(ssz_deserialize_list_variable((const uint8_t[3]){0x00u, 0x00u, 0x00u},
+                                             3u,
+                                             SSZ_NO_LIMIT,
+                                             0u,
+                                             &ok_codec,
+                                             &out_count),
+               SSZ_ERR_OFFSET_INVALID);
+    ASSERT_ERR(ssz_deserialize_list_variable((const uint8_t[4]){0x00u, 0x00u, 0x00u, 0x00u},
+                                             4u,
+                                             SSZ_NO_LIMIT,
+                                             0u,
+                                             &ok_codec,
+                                             &out_count),
+               SSZ_ERR_OFFSET_INVALID);
+
+    return true;
+}
+
+static bool test_deserialize_container_additional_error_paths(void)
+{
+    ASSERT_ERR(ssz_deserialize_container((const uint8_t[1]){0x00u}, 1u, NULL, 1u, NULL), SSZ_ERR_SCHEMA_INVALID);
+
+    const size_t one_fixed[1] = {1u};
+    ASSERT_ERR(ssz_deserialize_container((const uint8_t[1]){0x00u}, 1u, one_fixed, 1u, NULL),
+               SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_container(NULL,
+                                         1u,
+                                         one_fixed,
+                                         1u,
+                                         &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = fail_if_called_read, .root = NULL}),
+               SSZ_ERR_INVALID_ARGUMENT);
+
+    const size_t overflow_fixed_region[2] = {SIZE_MAX, 1u};
+    ASSERT_ERR(ssz_deserialize_container((const uint8_t[1]){0x00u},
+                                         1u,
+                                         overflow_fixed_region,
+                                         2u,
+                                         &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = fail_if_called_read, .root = NULL}),
+               SSZ_ERR_OVERFLOW);
+
+    const size_t two_fixed[2] = {4u, 4u};
+    ASSERT_ERR(ssz_deserialize_container((const uint8_t[4]){0x00u, 0x00u, 0x00u, 0x00u},
+                                         4u,
+                                         two_fixed,
+                                         2u,
+                                         &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = fail_if_called_read, .root = NULL}),
+               SSZ_ERR_OFFSET_INVALID);
+
+    const size_t variable_then_fixed[2] = {0u, 1u};
+    ASSERT_ERR(ssz_deserialize_container((const uint8_t[6]){
+                                             0x04u, 0x00u, 0x00u, 0x00u,
+                                             0xAAu,
+                                             0xBBu,
+                                         },
+                                         6u,
+                                         variable_then_fixed,
+                                         2u,
+                                         &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = fail_if_called_read, .root = NULL}),
+               SSZ_ERR_OFFSET_INVALID);
+
+    const ssz_error_t fixed_read_fail_errors[1] = {SSZ_ERR_TYPE_MISMATCH};
+    scripted_read_ctx_t fixed_read_fail_ctx = {
+        .errors = fixed_read_fail_errors,
+        .step_count = 1u,
+        .step_index = 0u,
+    };
+    ssz_member_codec_t fixed_read_fail_codec = make_scripted_read_codec(&fixed_read_fail_ctx);
+    ASSERT_ERR(ssz_deserialize_container((const uint8_t[1]){0xAAu}, 1u, one_fixed, 1u, &fixed_read_fail_codec),
+               SSZ_ERR_TYPE_MISMATCH);
+
+    const ssz_error_t fixed_ok_errors[1] = {SSZ_SUCCESS};
+    scripted_read_ctx_t fixed_ok_ctx = {
+        .errors = fixed_ok_errors,
+        .step_count = 1u,
+        .step_index = 0u,
+    };
+    ssz_member_codec_t fixed_ok_codec = make_scripted_read_codec(&fixed_ok_ctx);
+    ASSERT_ERR(ssz_deserialize_container((const uint8_t[2]){0xAAu, 0xBBu}, 2u, one_fixed, 1u, &fixed_ok_codec),
+               SSZ_ERR_OFFSET_INVALID);
+
+    const size_t mixed_with_two_variables[3] = {0u, 1u, 0u};
+    read_expect_entry_t entries[] = {
+        {0u, (const uint8_t[]){0xB0u}, 1u, false},
+        {1u, (const uint8_t[]){0xAAu}, 1u, false},
+        {2u, (const uint8_t[]){0xC0u}, 1u, false},
+    };
+    read_expect_ctx_t read_ctx = {
+        .entries = entries,
+        .entry_count = sizeof(entries) / sizeof(entries[0]),
+    };
+    ssz_member_codec_t expect_codec = {
+        .ctx = &read_ctx,
+        .write = NULL,
+        .read = read_expect_callback,
+        .root = NULL,
+    };
+    ASSERT_ERR(ssz_deserialize_container((const uint8_t[11]){
+                                             0x09u, 0x00u, 0x00u, 0x00u,
+                                             0xAAu,
+                                             0x0Au, 0x00u, 0x00u, 0x00u,
+                                             0xB0u,
+                                             0xC0u,
+                                         },
+                                         11u,
+                                         mixed_with_two_variables,
+                                         3u,
+                                         &expect_codec),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(all_read_entries_seen(&read_ctx));
+
+    const ssz_error_t variable_read_fail_errors[2] = {SSZ_SUCCESS, SSZ_ERR_TYPE_MISMATCH};
+    scripted_read_ctx_t variable_read_fail_ctx = {
+        .errors = variable_read_fail_errors,
+        .step_count = 2u,
+        .step_index = 0u,
+    };
+    ssz_member_codec_t variable_read_fail_codec = make_scripted_read_codec(&variable_read_fail_ctx);
+    ASSERT_ERR(ssz_deserialize_container((const uint8_t[11]){
+                                             0x09u, 0x00u, 0x00u, 0x00u,
+                                             0xAAu,
+                                             0x0Au, 0x00u, 0x00u, 0x00u,
+                                             0xB0u,
+                                             0xC0u,
+                                         },
+                                         11u,
+                                         mixed_with_two_variables,
+                                         3u,
+                                         &variable_read_fail_codec),
+               SSZ_ERR_TYPE_MISMATCH);
+
+    return true;
+}
+
+static bool test_deserialize_union_additional_error_paths(void)
+{
+    uint8_t selector = 0u;
+
+    ASSERT_ERR(ssz_deserialize_union((const uint8_t[1]){0x00u}, 1u, 2u, false, NULL, NULL),
+               SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_union((const uint8_t[1]){0x00u}, 1u, 0u, false, NULL, &selector),
+               SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(ssz_deserialize_union((const uint8_t[1]){0x00u}, 1u, 257u, false, NULL, &selector),
+               SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(ssz_deserialize_union((const uint8_t[1]){0x00u}, 1u, 1u, true, NULL, &selector),
+               SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(ssz_deserialize_union(NULL, 0u, 2u, false, NULL, &selector), SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(ssz_deserialize_union((const uint8_t[1]){0x02u}, 1u, 2u, false, NULL, &selector),
+               SSZ_ERR_SELECTOR_INVALID);
+    ASSERT_ERR(ssz_deserialize_union((const uint8_t[2]){0x01u, 0xAAu}, 2u, 2u, false, NULL, &selector),
+               SSZ_ERR_INVALID_ARGUMENT);
+
+    const ssz_error_t read_fail_errors[1] = {SSZ_ERR_TYPE_MISMATCH};
+    scripted_read_ctx_t read_fail_ctx = {
+        .errors = read_fail_errors,
+        .step_count = 1u,
+        .step_index = 0u,
+    };
+    ssz_member_codec_t read_fail_codec = make_scripted_read_codec(&read_fail_ctx);
+    ASSERT_ERR(ssz_deserialize_union((const uint8_t[2]){0x01u, 0xAAu},
+                                     2u,
+                                     2u,
+                                     false,
+                                     &read_fail_codec,
+                                     &selector),
+               SSZ_ERR_TYPE_MISMATCH);
+
+    const uint8_t allowed_valid[] = {1u, 2u};
+    ASSERT_ERR(ssz_deserialize_compatible_union((const uint8_t[1]){0x01u},
+                                                1u,
+                                                allowed_valid,
+                                                sizeof(allowed_valid),
+                                                NULL,
+                                                NULL),
+               SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_compatible_union((const uint8_t[1]){0x01u},
+                                                1u,
+                                                NULL,
+                                                1u,
+                                                NULL,
+                                                &selector),
+               SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(ssz_deserialize_compatible_union((const uint8_t[1]){0x01u},
+                                                1u,
+                                                (const uint8_t[]){0u, 2u},
+                                                2u,
+                                                NULL,
+                                                &selector),
+               SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(ssz_deserialize_compatible_union(NULL,
+                                                0u,
+                                                allowed_valid,
+                                                sizeof(allowed_valid),
+                                                NULL,
+                                                &selector),
+               SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(ssz_deserialize_compatible_union((const uint8_t[2]){0x01u, 0xAAu},
+                                                2u,
+                                                allowed_valid,
+                                                sizeof(allowed_valid),
+                                                NULL,
+                                                &selector),
+               SSZ_ERR_INVALID_ARGUMENT);
+
+    scripted_read_ctx_t compat_read_fail_ctx = {
+        .errors = read_fail_errors,
+        .step_count = 1u,
+        .step_index = 0u,
+    };
+    ssz_member_codec_t compat_read_fail_codec = make_scripted_read_codec(&compat_read_fail_ctx);
+    ASSERT_ERR(ssz_deserialize_compatible_union((const uint8_t[2]){0x01u, 0xAAu},
+                                                2u,
+                                                allowed_valid,
+                                                sizeof(allowed_valid),
+                                                &compat_read_fail_codec,
+                                                &selector),
+               SSZ_ERR_TYPE_MISMATCH);
+
+    return true;
+}
+
+int main(void)
+{
+    const test_case_t tests[] = {
+        {"deserialize_basic_round_trips", test_deserialize_basic_round_trips},
+        {"deserialize_boolean_canonical_enforcement", test_deserialize_boolean_canonical_enforcement},
+        {"deserialize_bitvector_padding_validation", test_deserialize_bitvector_padding_validation},
+        {"deserialize_bitlist_delimiter_and_errors", test_deserialize_bitlist_delimiter_and_errors},
+        {"deserialize_vector_fixed_exact_scope", test_deserialize_vector_fixed_exact_scope},
+        {"deserialize_vector_variable_offsets_and_dispatch", test_deserialize_vector_variable_offsets_and_dispatch},
+        {"deserialize_list_fixed_count_and_limits", test_deserialize_list_fixed_count_and_limits},
+        {"deserialize_list_variable_count_limits_and_offsets", test_deserialize_list_variable_count_limits_and_offsets},
+        {"deserialize_container_mixed_fields", test_deserialize_container_mixed_fields},
+        {"deserialize_union_cases", test_deserialize_union_cases},
+        {"deserialize_compatible_union_valid_invalid", test_deserialize_compatible_union_valid_invalid},
+        {"deserialize_progressive_wrappers", test_deserialize_progressive_wrappers},
+        {"deserialize_error_cases", test_deserialize_error_cases},
+        {"deserialize_bitfield_error_paths", test_deserialize_bitfield_error_paths},
+        {"deserialize_variable_sequence_error_paths", test_deserialize_variable_sequence_error_paths},
+        {"deserialize_collection_error_paths", test_deserialize_collection_error_paths},
+        {"deserialize_container_additional_error_paths", test_deserialize_container_additional_error_paths},
+        {"deserialize_union_additional_error_paths", test_deserialize_union_additional_error_paths},
+    };
+
+    size_t passed = 0u;
+    const size_t total = sizeof(tests) / sizeof(tests[0]);
+
+    for (size_t i = 0u; i < total; i++)
+    {
+        if (!tests[i].fn())
+        {
+            fprintf(stderr, "[FAIL] %s\n", tests[i].name);
+            return 1;
+        }
+        passed++;
+    }
+
+    printf("[OK] %zu/%zu deserialize tests passed\n", passed, total);
+    return 0;
+}
