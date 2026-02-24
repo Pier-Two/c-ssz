@@ -65,10 +65,12 @@ target_include_directories(ssz
 )
 
 # HACL*/karamel's lowstar_endianness.h uses be32toh/htobe32 etc. from <endian.h>.
-# In strict C99 mode (-std=c99), glibc does not expose these macros unless
-# _DEFAULT_SOURCE is defined.
-if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+# In strict C99 mode (-std=c99), glibc on Linux does not expose these macros unless
+# _DEFAULT_SOURCE is defined. src/ssz_hash.c includes HACL headers directly, so it
+# needs the same feature-test macro as Hacl_Hash_SHA2.c.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
   set_source_files_properties(
+    src/ssz_hash.c
     external/hacl/src/Hacl_Hash_SHA2.c
     PROPERTIES COMPILE_DEFINITIONS _DEFAULT_SOURCE
   )
@@ -143,6 +145,102 @@ target_include_directories(test_deserialize_internal PRIVATE
 target_link_libraries(test_deserialize_internal PRIVATE ${SSZ_PLATFORM_LIBS})
 add_test(NAME test_deserialize_internal COMMAND test_deserialize_internal)
 
+# --- Consensus-spec SSZ generic fixture tests ---
+set(SSZ_SPEC_FIXTURES_DIR
+  "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/general/phase0/ssz_generic"
+  CACHE PATH
+  "Path to consensus-spec SSZ generic fixtures root"
+)
+
+if(EXISTS "${SSZ_SPEC_FIXTURES_DIR}")
+  message(STATUS "Spec fixtures found at ${SSZ_SPEC_FIXTURES_DIR} — registering spec tests")
+
+  set(SSZ_SPEC_COMMON_SOURCES
+    tests/spec/spec_common.c
+    tests/spec/snappy_decode.c
+    tests/spec/yaml_parser.c
+  )
+
+  function(ssz_add_spec_test target_name fixture_handler source_file)
+    file(TO_CMAKE_PATH "${SSZ_SPEC_FIXTURES_DIR}/${fixture_handler}" SPEC_TESTS_DIR)
+
+    add_executable(${target_name}
+      ${source_file}
+      ${SSZ_SPEC_COMMON_SOURCES}
+    )
+
+    target_include_directories(${target_name} PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    )
+
+    target_compile_definitions(${target_name} PRIVATE TESTS_DIR="${SPEC_TESTS_DIR}")
+    target_link_libraries(${target_name} PRIVATE ssz)
+    add_test(NAME ${target_name} COMMAND ${target_name})
+  endfunction()
+
+  ssz_add_spec_test(
+    test_ssz_generic_uints
+    uints
+    tests/spec/test_ssz_generic_uints.c
+  )
+
+  ssz_add_spec_test(
+    test_ssz_generic_boolean
+    boolean
+    tests/spec/test_ssz_generic_boolean.c
+  )
+
+  ssz_add_spec_test(
+    test_ssz_generic_bitvector
+    bitvector
+    tests/spec/test_ssz_generic_bitvector.c
+  )
+
+  ssz_add_spec_test(
+    test_ssz_generic_bitlist
+    bitlist
+    tests/spec/test_ssz_generic_bitlist.c
+  )
+
+  ssz_add_spec_test(
+    test_ssz_generic_basic_vector
+    basic_vector
+    tests/spec/test_ssz_generic_basic_vector.c
+  )
+
+  ssz_add_spec_test(
+    test_ssz_generic_containers
+    containers
+    tests/spec/test_ssz_generic_containers.c
+  )
+
+  ssz_add_spec_test(
+    test_ssz_generic_compatible_unions
+    compatible_unions
+    tests/spec/test_ssz_generic_compatible_unions.c
+  )
+
+  ssz_add_spec_test(
+    test_ssz_generic_progressive_bitlist
+    progressive_bitlist
+    tests/spec/test_ssz_generic_progressive_bitlist.c
+  )
+
+  ssz_add_spec_test(
+    test_ssz_generic_basic_progressive_list
+    basic_progressive_list
+    tests/spec/test_ssz_generic_basic_progressive_list.c
+  )
+
+  ssz_add_spec_test(
+    test_ssz_generic_progressive_containers
+    progressive_containers
+    tests/spec/test_ssz_generic_progressive_containers.c
+  )
+else()
+  message(STATUS "Spec fixtures not found at ${SSZ_SPEC_FIXTURES_DIR} — skipping spec tests")
+endif()
+
 find_package(Doxygen QUIET)
 if(DOXYGEN_FOUND)
   add_custom_target(doxygen
@@ -168,5 +266,27 @@ if(SSZ_BUILD_BENCH)
       ${CMAKE_CURRENT_SOURCE_DIR}/lib
     )
     target_link_libraries(${bench_name} PRIVATE ssz ${SSZ_PLATFORM_LIBS})
+  endforeach()
+endif()
+
+# --- libFuzzer harnesses ---
+option(SSZ_BUILD_FUZZ "Build libFuzzer harnesses" OFF)
+if(SSZ_BUILD_FUZZ)
+  if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang|AppleClang")
+    message(FATAL_ERROR "SSZ_BUILD_FUZZ requires Clang or AppleClang.")
+  endif()
+
+  file(GLOB SSZ_FUZZ_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/fuzz/fuzz_*.c)
+  foreach(fuzz_src ${SSZ_FUZZ_SOURCES})
+    get_filename_component(fuzz_name ${fuzz_src} NAME_WE)
+    add_executable(${fuzz_name} ${fuzz_src} ${SSZ_COMMON_SOURCES})
+    target_include_directories(${fuzz_name} PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+      ${CMAKE_CURRENT_SOURCE_DIR}/src
+      ${SSZ_HACL_INCLUDE_DIRS}
+    )
+    target_compile_options(${fuzz_name} PRIVATE -fsanitize=fuzzer,address)
+    target_link_options(${fuzz_name} PRIVATE -fsanitize=fuzzer,address)
+    target_link_libraries(${fuzz_name} PRIVATE ${SSZ_PLATFORM_LIBS})
   endforeach()
 endif()

@@ -29,7 +29,12 @@ ssz_error_t ssz_hash_sha256(const uint8_t *data, size_t data_len, uint8_t out[32
         return SSZ_ERR_OVERFLOW;
     }
 
-    Hacl_Hash_SHA2_hash_256(out, (uint8_t *)(uintptr_t)data, (uint32_t)data_len);
+    /* Provide a valid pointer for zero-length input to avoid passing NULL into
+       HACL*, which triggers a pedantic UBSan finding (NULL + 0 is technically
+       undefined in C even though no memory is accessed). */
+    uint8_t empty = 0;
+    const uint8_t *src = (data != NULL) ? data : &empty;
+    Hacl_Hash_SHA2_hash_256(out, (uint8_t *)(uintptr_t)src, (uint32_t)data_len);
     return SSZ_SUCCESS;
 }
 

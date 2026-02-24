@@ -1,0 +1,324 @@
+name: Fuzz
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  fuzzer:
+    name: fuzzer
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm
+
+      - name: Configure
+        env:
+          CC: clang
+        run: cmake -S . -B build -DSSZ_BUILD_FUZZ=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run fuzzers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/fuzz-artifacts
+
+          mapfile -t fuzzers < <(find build -maxdepth 1 -type f -name 'fuzz_*' -perm -u+x | sort)
+          if [ "${#fuzzers[@]}" -eq 0 ]; then
+            echo "No fuzz executables found in build/."
+            exit 1
+          fi
+
+          for fuzzer in "${fuzzers[@]}"; do
+            name="$(basename "$fuzzer")"
+            echo "--- Running ${name} ---"
+            "$fuzzer" -max_total_time=60 -artifact_prefix=build/fuzz-artifacts/
+          done
+
+      - name: Build coverage-instrumented fuzzers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/fuzz-coverage/bin
+
+          include_flags=(
+            -Iinclude
+            -Iexternal/hacl/include
+            -Iexternal/hacl/karamel/include
+            -Iexternal/hacl/karamel/krmllib/dist/minimal
+          )
+          compile_flags=(
+            -std=c99
+            -Wall
+            -Wextra
+            -O1
+            -g
+            -D_DEFAULT_SOURCE
+            -fsanitize=fuzzer,address
+            -fprofile-instr-generate
+            -fcoverage-mapping
+          )
+          src_files=(src/*.c external/hacl/src/Hacl_Hash_SHA2.c)
+
+          mapfile -t harnesses < <(find fuzz -maxdepth 1 -type f -name 'fuzz_*.c' | sort)
+          if [ "${#harnesses[@]}" -eq 0 ]; then
+            echo "No fuzz harness sources found in fuzz/."
+            exit 1
+          fi
+
+          for harness in "${harnesses[@]}"; do
+            name="$(basename "${harness}" .c)"
+            echo "--- Building ${name} with coverage instrumentation ---"
+            clang "${compile_flags[@]}" "${include_flags[@]}" \
+              "${harness}" "${src_files[@]}" \
+              -lm -o "build/fuzz-coverage/bin/${name}"
+          done
+
+      - name: Run coverage-instrumented fuzzers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/fuzz-coverage/profiles build/fuzz-coverage/artifacts
+
+          mapfile -t fuzzers < <(find build/fuzz-coverage/bin -maxdepth 1 -type f -name 'fuzz_*' -perm -u+x | sort)
+          if [ "${#fuzzers[@]}" -eq 0 ]; then
+            echo "No coverage fuzz executables found in build/fuzz-coverage/bin."
+            exit 1
+          fi
+
+          for fuzzer in "${fuzzers[@]}"; do
+            name="$(basename "$fuzzer")"
+            echo "--- Running ${name} for coverage ---"
+            LLVM_PROFILE_FILE="build/fuzz-coverage/profiles/${name}.profraw" \
+              "$fuzzer" -max_total_time=60 -artifact_prefix=build/fuzz-coverage/artifacts/
+          done
+
+      - name: Generate fuzz coverage report
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/fuzz-coverage/html
+
+          mapfile -t profraws < <(find build/fuzz-coverage/profiles -maxdepth 1 -type f -name '*.profraw' | sort)
+          if [ "${#profraws[@]}" -eq 0 ]; then
+            echo "No .profraw files found in build/fuzz-coverage/profiles."
+            exit 1
+          fi
+
+          llvm-profdata merge -sparse "${profraws[@]}" -o build/fuzz-coverage/fuzz.profdata
+
+          mapfile -t bins < <(find build/fuzz-coverage/bin -maxdepth 1 -type f -name 'fuzz_*' -perm -u+x | sort)
+          if [ "${#bins[@]}" -eq 0 ]; then
+            echo "No coverage binaries found in build/fuzz-coverage/bin."
+            exit 1
+          fi
+
+          object_args=()
+          for ((i = 1; i < ${#bins[@]}; i++)); do
+            object_args+=( -object "${bins[i]}" )
+          done
+
+          src_files=(src/*.c)
+          llvm-cov show "${bins[0]}" "${object_args[@]}" \
+            -instr-profile=build/fuzz-coverage/fuzz.profdata \
+            --format=html \
+            --output-dir=build/fuzz-coverage/html \
+            "${src_files[@]}"
+
+          llvm-cov report "${bins[0]}" "${object_args[@]}" \
+            -instr-profile=build/fuzz-coverage/fuzz.profdata \
+            "${src_files[@]}"
+
+      - name: Upload fuzz coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-coverage-report
+          path: build/fuzz-coverage/html
+          if-no-files-found: error
+
+      - name: Upload crash artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash-artifacts
+          path: |
+            build/fuzz-artifacts/crash-*
+            build/fuzz-artifacts/leak-*
+            build/fuzz-artifacts/oom-*
+            build/fuzz-artifacts/timeout-*
+          if-no-files-found: ignore
+
+  fuzzer-32bit:
+    name: fuzzer-32bit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install clang and multilib toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm gcc-multilib g++-multilib
+
+      - name: Configure (32-bit)
+        env:
+          CC: clang
+        run: |
+          cmake -S . -B build32 \
+            -DSSZ_BUILD_FUZZ=ON \
+            -DCMAKE_C_FLAGS='-m32' \
+            -DCMAKE_EXE_LINKER_FLAGS='-m32'
+
+      - name: Build (32-bit)
+        run: cmake --build build32 --parallel
+
+      - name: Run fuzzers (32-bit)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build32/fuzz-artifacts
+
+          mapfile -t fuzzers < <(find build32 -maxdepth 1 -type f -name 'fuzz_*' -perm -u+x | sort)
+          if [ "${#fuzzers[@]}" -eq 0 ]; then
+            echo "No fuzz executables found in build32/."
+            exit 1
+          fi
+
+          for fuzzer in "${fuzzers[@]}"; do
+            name="$(basename "$fuzzer")"
+            echo "--- Running ${name} (32-bit) ---"
+            "$fuzzer" -max_total_time=60 -artifact_prefix=build32/fuzz-artifacts/
+          done
+
+      - name: Build coverage-instrumented fuzzers (32-bit)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build32/fuzz-coverage/bin
+
+          include_flags=(
+            -Iinclude
+            -Iexternal/hacl/include
+            -Iexternal/hacl/karamel/include
+            -Iexternal/hacl/karamel/krmllib/dist/minimal
+          )
+          compile_flags=(
+            -std=c99
+            -Wall
+            -Wextra
+            -O1
+            -g
+            -D_DEFAULT_SOURCE
+            -m32
+            -fsanitize=fuzzer,address
+            -fprofile-instr-generate
+            -fcoverage-mapping
+          )
+          src_files=(src/*.c external/hacl/src/Hacl_Hash_SHA2.c)
+
+          mapfile -t harnesses < <(find fuzz -maxdepth 1 -type f -name 'fuzz_*.c' | sort)
+          if [ "${#harnesses[@]}" -eq 0 ]; then
+            echo "No fuzz harness sources found in fuzz/."
+            exit 1
+          fi
+
+          for harness in "${harnesses[@]}"; do
+            name="$(basename "${harness}" .c)"
+            echo "--- Building ${name} with 32-bit coverage instrumentation ---"
+            clang "${compile_flags[@]}" "${include_flags[@]}" \
+              "${harness}" "${src_files[@]}" \
+              -lm -o "build32/fuzz-coverage/bin/${name}"
+          done
+
+      - name: Run coverage-instrumented fuzzers (32-bit)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build32/fuzz-coverage/profiles build32/fuzz-coverage/artifacts
+
+          mapfile -t fuzzers < <(find build32/fuzz-coverage/bin -maxdepth 1 -type f -name 'fuzz_*' -perm -u+x | sort)
+          if [ "${#fuzzers[@]}" -eq 0 ]; then
+            echo "No coverage fuzz executables found in build32/fuzz-coverage/bin."
+            exit 1
+          fi
+
+          for fuzzer in "${fuzzers[@]}"; do
+            name="$(basename "$fuzzer")"
+            echo "--- Running ${name} for 32-bit coverage ---"
+            LLVM_PROFILE_FILE="build32/fuzz-coverage/profiles/${name}.profraw" \
+              "$fuzzer" -max_total_time=60 -artifact_prefix=build32/fuzz-coverage/artifacts/
+          done
+
+      - name: Generate fuzz coverage report (32-bit)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build32/fuzz-coverage/html
+
+          mapfile -t profraws < <(find build32/fuzz-coverage/profiles -maxdepth 1 -type f -name '*.profraw' | sort)
+          if [ "${#profraws[@]}" -eq 0 ]; then
+            echo "No .profraw files found in build32/fuzz-coverage/profiles."
+            exit 1
+          fi
+
+          llvm-profdata merge -sparse "${profraws[@]}" -o build32/fuzz-coverage/fuzz.profdata
+
+          mapfile -t bins < <(find build32/fuzz-coverage/bin -maxdepth 1 -type f -name 'fuzz_*' -perm -u+x | sort)
+          if [ "${#bins[@]}" -eq 0 ]; then
+            echo "No coverage binaries found in build32/fuzz-coverage/bin."
+            exit 1
+          fi
+
+          object_args=()
+          for ((i = 1; i < ${#bins[@]}; i++)); do
+            object_args+=( -object "${bins[i]}" )
+          done
+
+          src_files=(src/*.c)
+          llvm-cov show "${bins[0]}" "${object_args[@]}" \
+            -instr-profile=build32/fuzz-coverage/fuzz.profdata \
+            --format=html \
+            --output-dir=build32/fuzz-coverage/html \
+            "${src_files[@]}"
+
+          llvm-cov report "${bins[0]}" "${object_args[@]}" \
+            -instr-profile=build32/fuzz-coverage/fuzz.profdata \
+            "${src_files[@]}"
+
+      - name: Upload fuzz coverage report (32-bit)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-coverage-report-32bit
+          path: build32/fuzz-coverage/html
+          if-no-files-found: error
+
+      - name: Upload crash artifacts (32-bit)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash-artifacts-32bit
+          path: |
+            build32/fuzz-artifacts/crash-*
+            build32/fuzz-artifacts/leak-*
+            build32/fuzz-artifacts/oom-*
+            build32/fuzz-artifacts/timeout-*
+          if-no-files-found: ignore

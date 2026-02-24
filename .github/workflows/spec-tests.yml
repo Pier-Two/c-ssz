@@ -7,23 +7,36 @@ on:
 
 jobs:
   generate-fixtures:
-    name: Generate Fixtures Gate
+    name: Generate Fixtures
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Verify fixture directories
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Generate consensus-spec fixtures
         run: |
           set -euo pipefail
-          test -d tests/fixtures/general/phase0/ssz_generic/basic_vector
-          test -d tests/fixtures/general/phase0/ssz_generic/bitlist
-          test -d tests/fixtures/general/phase0/ssz_generic/bitvector
-          test -d tests/fixtures/general/phase0/ssz_generic/boolean
-          test -d tests/fixtures/general/phase0/ssz_generic/uints
-          test -d tests/fixtures/mainnet/phase0/ssz_static/BeaconState/ssz_random
+          # Spec tests only consume ssz_generic fixtures.
+          rm -rf tests/fixtures
+          cd external/consensus-specs
+          uv sync --all-extras
+          uv run python -m pysetup.generate_specs --all-forks
+          uv run --extra generator --no-editable --reinstall-package=eth-consensus-specs \
+            python -m tests.generators.main --output ../../tests/fixtures --runners ssz_generic
+
+      - name: Upload fixtures artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: consensus-spec-fixtures
+          path: tests/fixtures/
+          if-no-files-found: error
 
   linux-spec-test:
     name: Linux Spec (${{ matrix.compiler }}, ${{ matrix.arch }}-bit)
@@ -39,6 +52,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-fixtures
+          path: tests/fixtures/
 
       - name: Install toolchain packages
         run: |
@@ -86,6 +107,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-fixtures
+          path: tests/fixtures/
 
       - name: Configure
         run: cmake -S . -B build/macos-spec -DCMAKE_BUILD_TYPE=Debug
@@ -105,6 +134,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-fixtures
+          path: tests/fixtures/
 
       - name: Configure
         run: cmake -S . -B build/windows-spec -DCMAKE_BUILD_TYPE=Debug
@@ -119,7 +156,7 @@ jobs:
     name: Sanitizer Suite (${{ matrix.name }})
     runs-on: ubuntu-latest
     needs: [generate-fixtures]
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -152,6 +189,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download fixtures
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-fixtures
+          path: tests/fixtures/
 
       - name: Install runtime packages
         run: |
