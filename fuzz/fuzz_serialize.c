@@ -184,6 +184,10 @@ static ssz_error_t fuzz_test_member_write(
     {
         len = (state->call_count == 0u) ? 1u : 2u;
     }
+    else if (state->mode == 9u)
+    {
+        len = (state->call_count == 0u) ? 1u : SIZE_MAX;
+    }
 
     if (out == NULL)
     {
@@ -205,6 +209,12 @@ static ssz_error_t fuzz_test_member_write(
     {
         state->call_count++;
         return SSZ_ERR_TYPE_MISMATCH;
+    }
+    if (state->mode == 9u)
+    {
+        *out_written = SIZE_MAX;
+        state->call_count++;
+        return SSZ_SUCCESS;
     }
     if (out_cap < len)
     {
@@ -345,8 +355,28 @@ static void fuzz_cover_serialize_errors(void)
             .read = NULL,
             .root = NULL,
         };
+        fuzz_test_write_ctx_t ctx_cursor_overflow = {
+            .len = 2u,
+            .mode = 9u,
+            .call_count = 0u,
+        };
+        ssz_member_codec_t codec_cursor_overflow = {
+            .ctx = &ctx_cursor_overflow,
+            .write = fuzz_test_member_write,
+            .read = NULL,
+            .root = NULL,
+        };
 
         (void)ssz_serialize_vector_variable(1u, NULL, out, sizeof(out), &out_len);
+        (void)ssz_serialize_vector_variable((uint64_t)SIZE_MAX, &codec_ok, out, sizeof(out), &out_len);
+#if UINT64_MAX > SIZE_MAX
+        (void)ssz_serialize_vector_variable(
+            (uint64_t)SIZE_MAX + 1u,
+            &codec_ok,
+            out,
+            sizeof(out),
+            &out_len);
+#endif
         (void)ssz_serialize_vector_variable(2u, &codec_size_err, out, sizeof(out), &out_len);
         (void)ssz_serialize_vector_variable(2u, &codec_size_max, out, sizeof(out), &out_len);
         (void)ssz_serialize_vector_variable(2u, &codec_u32_max, out, sizeof(out), &out_len);
@@ -355,11 +385,29 @@ static void fuzz_cover_serialize_errors(void)
         (void)ssz_serialize_vector_variable(1u, &codec_write_err, out, sizeof(out), &out_len);
         (void)ssz_serialize_vector_variable(1u, &codec_short_write, out, sizeof(out), &out_len);
         (void)ssz_serialize_vector_variable(1u, &codec_cursor_mismatch, out, sizeof(out), &out_len);
+        (void)ssz_serialize_vector_variable(1u, &codec_cursor_overflow, out, sizeof(out), &out_len);
 
         (void)ssz_serialize_list_fixed(NULL, 2u, SSZ_NO_LIMIT, 2u, out, sizeof(out), &out_len);
+        (void)ssz_serialize_list_fixed(elems, (uint64_t)SIZE_MAX, SSZ_NO_LIMIT, 2u, out, sizeof(out), &out_len);
+#if UINT64_MAX > SIZE_MAX
+        (void)ssz_serialize_list_fixed(
+            elems,
+            (uint64_t)SIZE_MAX + 1u,
+            SSZ_NO_LIMIT,
+            1u,
+            out,
+            sizeof(out),
+            &out_len);
+#endif
         (void)ssz_serialize_list_fixed(elems, 2u, SSZ_NO_LIMIT, 2u, out, 1u, &out_len);
 
         (void)ssz_serialize_list_variable(2u, SSZ_NO_LIMIT, NULL, out, sizeof(out), &out_len);
+        (void)ssz_serialize_list_variable((uint64_t)SIZE_MAX, SSZ_NO_LIMIT, &codec_ok, out, sizeof(out),
+                                          &out_len);
+#if UINT64_MAX > SIZE_MAX
+        (void)ssz_serialize_list_variable((uint64_t)SIZE_MAX + 1u, SSZ_NO_LIMIT, &codec_ok, out,
+                                          sizeof(out), &out_len);
+#endif
         (void)ssz_serialize_list_variable(2u, SSZ_NO_LIMIT, &codec_size_err, out, sizeof(out), &out_len);
         (void)ssz_serialize_list_variable(2u, SSZ_NO_LIMIT, &codec_size_max, out, sizeof(out), &out_len);
         (void)ssz_serialize_list_variable(2u, SSZ_NO_LIMIT, &codec_u32_max, out, sizeof(out), &out_len);
@@ -383,6 +431,13 @@ static void fuzz_cover_serialize_errors(void)
             1u,
             SSZ_NO_LIMIT,
             &codec_cursor_mismatch,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_list_variable(
+            1u,
+            SSZ_NO_LIMIT,
+            &codec_cursor_overflow,
             out,
             sizeof(out),
             &out_len);
@@ -410,6 +465,13 @@ static void fuzz_cover_serialize_errors(void)
             field_fixed_sizes_var,
             1u,
             &codec_short_write,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_container(
+            field_fixed_sizes_var,
+            1u,
+            &codec_cursor_overflow,
             out,
             sizeof(out),
             &out_len);

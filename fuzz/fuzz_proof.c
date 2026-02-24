@@ -122,10 +122,13 @@ static void fuzz_cover_proof_errors(void)
     ssz_gindex_t indices_multi[2] = {2u, 4u};
     ssz_gindex_t indices_one[1] = {2u};
     ssz_gindex_t helper_input[3] = {10u, 4u, 7u};
+    ssz_gindex_t helper_dupes[4] = {8u, 4u, 8u, 4u};
     ssz_gindex_t helper_out[64] = {0u};
     size_t helper_len = 0u;
     ssz_gindex_t scratch_indices[128] = {0u};
     ssz_chunk_t scratch_nodes[128] = {{{0u}}};
+    ssz_chunk_t bad_expected_root = {{0u}};
+    bad_expected_root.bytes[0] = 0xFFu;
 
     ssz_hash_fn_t hash_err_2to1 = {
         .hash = fuzz_custom_hash,
@@ -252,6 +255,13 @@ static void fuzz_cover_proof_errors(void)
                                  &helper_len,
                                  scratch_indices,
                                  sizeof(scratch_indices) / sizeof(scratch_indices[0]));
+    (void)ssz_get_helper_indices(helper_dupes,
+                                 4u,
+                                 helper_out,
+                                 sizeof(helper_out) / sizeof(helper_out[0]),
+                                 &helper_len,
+                                 scratch_indices,
+                                 sizeof(scratch_indices) / sizeof(scratch_indices[0]));
 
     (void)ssz_calculate_merkle_root(NULL, proof_nodes, 1u, 2u, ssz_hash_default(), &out_root);
     (void)ssz_calculate_merkle_root(&leaf, proof_nodes, 1u, 2u, ssz_hash_default(), NULL);
@@ -277,6 +287,36 @@ static void fuzz_cover_proof_errors(void)
                                           128u,
                                           ssz_hash_default(),
                                           &out_root);
+    (void)ssz_calculate_multi_merkle_root(leaves_multi,
+                                          indices_multi,
+                                          2u,
+                                          proof_nodes,
+                                          2u,
+                                          scratch_indices,
+                                          scratch_nodes,
+                                          1u,
+                                          ssz_hash_default(),
+                                          &out_root);
+    (void)ssz_calculate_multi_merkle_root(leaves_multi,
+                                          (ssz_gindex_t[1]){0u},
+                                          1u,
+                                          proof_nodes,
+                                          0u,
+                                          scratch_indices,
+                                          scratch_nodes,
+                                          8u,
+                                          ssz_hash_default(),
+                                          &out_root);
+    (void)ssz_calculate_multi_merkle_root((ssz_chunk_t[2]){{{1u}}, {{2u}}},
+                                          (ssz_gindex_t[2]){2u, 2u},
+                                          2u,
+                                          proof_nodes,
+                                          1u,
+                                          scratch_indices,
+                                          scratch_nodes,
+                                          16u,
+                                          ssz_hash_default(),
+                                          &out_root);
 
     (void)ssz_verify_merkle_proof(NULL, proof_nodes, 1u, 2u, &out_root, ssz_hash_default());
     (void)ssz_verify_merkle_multiproof(leaves_multi,
@@ -288,6 +328,16 @@ static void fuzz_cover_proof_errors(void)
                                        scratch_indices,
                                        scratch_nodes,
                                        128u,
+                                       ssz_hash_default());
+    (void)ssz_verify_merkle_multiproof((ssz_chunk_t[1]){{{0x11u}}},
+                                       (ssz_gindex_t[1]){2u},
+                                       1u,
+                                       (ssz_chunk_t[1]){{{0x22u}}},
+                                       1u,
+                                       &bad_expected_root,
+                                       scratch_indices,
+                                       scratch_nodes,
+                                       16u,
                                        ssz_hash_default());
 }
 
