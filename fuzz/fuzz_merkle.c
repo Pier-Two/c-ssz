@@ -249,6 +249,7 @@ static void fuzz_cover_merkle_errors(void)
     uint8_t bits_ok[2] = {0u};
     uint8_t bits_bad[1] = {0xFEu};
     uint8_t elements[32] = {0u};
+    uint8_t bitlist_2chunk[64] = {0u};
     uint8_t active_valid[1] = {0x03u};
     uint8_t active_zero[1] = {0u};
     uint8_t active_bad_count[1] = {0x01u};
@@ -330,6 +331,8 @@ static void fuzz_cover_merkle_errors(void)
                                      &out_root);
     (void)ssz_hash_tree_root_bitlist(NULL, 0u, 0u, UINT64_MAX - 7u, ssz_hash_default(), &out_root);
     (void)ssz_hash_tree_root_bitlist(bits_ok, 1u, 8u, SSZ_NO_LIMIT, &hash_err_2to1, &out_root);
+    (void)ssz_hash_tree_root_bitlist(bitlist_2chunk, sizeof(bitlist_2chunk), 512u, SSZ_NO_LIMIT,
+                                     &hash_err_2to1, &out_root);
 
     (void)ssz_hash_tree_root_vector_fixed(elements, 1u, 1u, ssz_hash_default(), NULL);
 #if UINT64_MAX > SIZE_MAX
@@ -367,7 +370,8 @@ static void fuzz_cover_merkle_errors(void)
     (void)ssz_hash_tree_root_list_fixed(elements, (uint64_t)SIZE_MAX, SSZ_NO_LIMIT, 1u,
                                         ssz_hash_default(), &out_root);
     (void)ssz_hash_tree_root_list_fixed(NULL, 1u, SSZ_NO_LIMIT, 1u, ssz_hash_default(), &out_root);
-    (void)ssz_hash_tree_root_list_fixed(elements, 1u, UINT64_MAX, 32u, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_list_fixed(elements, 1u, UINT64_MAX - 1u, 32u, ssz_hash_default(),
+                                        &out_root);
     (void)ssz_hash_tree_root_list_fixed(elements, 1u, SSZ_NO_LIMIT, 1u, &hash_err_2to1, &out_root);
 
     (void)ssz_hash_tree_root_list_composite(1u, SSZ_NO_LIMIT, &codec_ok, ssz_hash_default(), NULL);
