@@ -248,7 +248,7 @@ static void fuzz_cover_merkle_errors(void)
     uint8_t value256[32] = {0u};
     uint8_t bits_ok[2] = {0u};
     uint8_t bits_bad[1] = {0xFEu};
-    uint8_t elements[8] = {0u};
+    uint8_t elements[32] = {0u};
     uint8_t active_valid[1] = {0x03u};
     uint8_t active_zero[1] = {0u};
     uint8_t active_bad_count[1] = {0x01u};
