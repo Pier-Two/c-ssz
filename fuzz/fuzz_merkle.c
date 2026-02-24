@@ -95,6 +95,41 @@ static void fuzz_fill_chunks(fuzz_input_t *input, ssz_chunk_t *chunks, size_t ch
     }
 }
 
+static size_t fuzz_make_active_fields(
+    uint8_t *active_fields,
+    size_t active_fields_cap,
+    uint32_t field_count)
+{
+    if ((active_fields == NULL) || (active_fields_cap == 0u))
+    {
+        return 0u;
+    }
+
+    for (size_t i = 0u; i < active_fields_cap; i++)
+    {
+        active_fields[i] = 0u;
+    }
+    if (field_count == 0u)
+    {
+        return 0u;
+    }
+
+    size_t active_fields_len = (size_t)((field_count + 7u) / 8u);
+    if (active_fields_len > active_fields_cap)
+    {
+        return 0u;
+    }
+
+    for (uint32_t i = 0u; i < field_count; i++)
+    {
+        size_t byte_index = (size_t)(i / 8u);
+        uint8_t bit_mask = (uint8_t)(1u << (i % 8u));
+        active_fields[byte_index] = (uint8_t)(active_fields[byte_index] | bit_mask);
+    }
+
+    return active_fields_len;
+}
+
 static ssz_error_t fuzz_member_root(const void *ctx, uint64_t member_id, ssz_chunk_t *out_root)
 {
     const fuzz_root_ctx_t *state = (const fuzz_root_ctx_t *)ctx;
@@ -140,7 +175,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     const ssz_hash_fn_t *hash_fn = ssz_hash_default();
     uint8_t api_selector = fuzz_take_u8(&input);
 
-    switch (api_selector % 20u)
+    switch (api_selector % 27u)
     {
         case 0u:
         {
@@ -423,7 +458,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
             break;
         }
 
-        default:
+        case 19u:
         {
             ssz_chunk_t root = {{0u}};
             fuzz_fill_bytes(&input, root.bytes, SSZ_BYTES_PER_CHUNK);
@@ -439,6 +474,176 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
                 active_fields_len,
                 hash_fn,
                 &out_root);
+            break;
+        }
+
+        case 20u:
+        {
+            ssz_chunk_t roots[16] = {{{0u}}};
+            size_t root_count = fuzz_take_size_bounded(&input, 16u);
+            fuzz_fill_chunks(&input, roots, root_count);
+
+            uint8_t selector = fuzz_take_u8(&input);
+            bool has_none = (fuzz_take_u8(&input) & 1u) != 0u;
+            uint8_t normal_selector = (uint8_t)((selector & 15u) + 1u);
+
+            fuzz_root_ctx_t root_ctx = {
+                .roots = roots,
+                .root_count = root_count,
+                .mode = fuzz_take_u8(&input),
+            };
+            ssz_member_codec_t codec = {
+                .ctx = &root_ctx,
+                .write = NULL,
+                .read = NULL,
+                .root = fuzz_member_root,
+            };
+
+            ssz_chunk_t out_root;
+            (void)ssz_hash_tree_root_union(0u, true, &codec, hash_fn, &out_root);
+            (void)ssz_hash_tree_root_union(selector, has_none, &codec, hash_fn, &out_root);
+            (void)ssz_hash_tree_root_union(normal_selector, false, &codec, hash_fn, &out_root);
+            break;
+        }
+
+        case 21u:
+        {
+            uint32_t field_count = (uint32_t)(fuzz_take_u64_bounded(&input, 7u) + 1u);
+            ssz_chunk_t roots[8] = {{{0u}}};
+            fuzz_fill_chunks(&input, roots, field_count);
+
+            uint8_t active_fields[1] = {0u};
+            size_t active_fields_len =
+                fuzz_make_active_fields(active_fields, sizeof(active_fields), field_count);
+
+            fuzz_root_ctx_t root_ctx = {
+                .roots = roots,
+                .root_count = field_count,
+                .mode = (uint8_t)(fuzz_take_u8(&input) & 2u),
+            };
+            ssz_member_codec_t codec = {
+                .ctx = &root_ctx,
+                .write = NULL,
+                .read = NULL,
+                .root = fuzz_member_root,
+            };
+
+            ssz_chunk_t out_root;
+            (void)ssz_hash_tree_root_progressive_container(
+                field_count,
+                active_fields,
+                active_fields_len,
+                &codec,
+                hash_fn,
+                &out_root);
+            break;
+        }
+
+        case 22u:
+        {
+            uint64_t element_count = fuzz_take_u64_bounded(&input, 16u);
+            size_t element_size = fuzz_take_size_bounded(&input, 31u) + 1u;
+            size_t total_bytes = (size_t)element_count * element_size;
+
+            uint8_t elements[512] = {0u};
+            fuzz_fill_bytes(&input, elements, total_bytes);
+
+            ssz_chunk_t out_root;
+            (void)ssz_hash_tree_root_progressive_list_fixed(
+                elements,
+                element_count,
+                element_size,
+                hash_fn,
+                &out_root);
+            break;
+        }
+
+        case 23u:
+        {
+            uint64_t element_count = fuzz_take_u64_bounded(&input, 16u);
+            ssz_chunk_t roots[16] = {{{0u}}};
+            fuzz_fill_chunks(&input, roots, sizeof(roots) / sizeof(roots[0]));
+
+            fuzz_root_ctx_t root_ctx = {
+                .roots = roots,
+                .root_count = sizeof(roots) / sizeof(roots[0]),
+                .mode = (uint8_t)(fuzz_take_u8(&input) & 2u),
+            };
+            ssz_member_codec_t codec = {
+                .ctx = &root_ctx,
+                .write = NULL,
+                .read = NULL,
+                .root = fuzz_member_root,
+            };
+
+            ssz_chunk_t out_root;
+            (void)ssz_hash_tree_root_progressive_list_composite(
+                element_count,
+                &codec,
+                hash_fn,
+                &out_root);
+            break;
+        }
+
+        case 24u:
+        {
+            uint8_t bits[128] = {0u};
+            uint64_t bit_len = fuzz_take_u64_bounded(&input, 1024u);
+            size_t required_bits_len = (size_t)((bit_len + 7u) / 8u);
+            size_t bits_len = fuzz_take_size_bounded(&input, sizeof(bits));
+            if (((fuzz_take_u8(&input) & 1u) == 0u) && (bits_len < required_bits_len) &&
+                (required_bits_len <= sizeof(bits)))
+            {
+                bits_len = required_bits_len;
+            }
+            fuzz_fill_bytes(&input, bits, bits_len);
+
+            if ((bit_len != 0u) && ((bit_len % 8u) != 0u) && (required_bits_len != 0u) &&
+                (required_bits_len <= bits_len))
+            {
+                uint8_t mask = (uint8_t)((1u << (bit_len % 8u)) - 1u);
+                bits[required_bits_len - 1u] = (uint8_t)(bits[required_bits_len - 1u] & mask);
+            }
+
+            ssz_chunk_t out_root;
+            (void)ssz_hash_tree_root_progressive_bitlist(
+                bits,
+                bits_len,
+                bit_len,
+                hash_fn,
+                &out_root);
+            break;
+        }
+
+        case 25u:
+        {
+            uint32_t count = (uint32_t)(fuzz_take_u64_bounded(&input, 7u) + 1u);
+            ssz_chunk_t roots[8] = {{{0u}}};
+            fuzz_fill_chunks(&input, roots, count);
+
+            uint8_t active_fields[1] = {0u};
+            size_t active_fields_len =
+                fuzz_make_active_fields(active_fields, sizeof(active_fields), count);
+
+            ssz_chunk_t out_root;
+            (void)ssz_hash_tree_root_progressive_container_roots(
+                roots,
+                count,
+                active_fields,
+                active_fields_len,
+                hash_fn,
+                &out_root);
+            break;
+        }
+
+        case 26u:
+        {
+            uint64_t count = fuzz_take_u64_bounded(&input, 16u);
+            ssz_chunk_t roots[16] = {{{0u}}};
+            fuzz_fill_chunks(&input, roots, (size_t)count);
+
+            ssz_chunk_t out_root;
+            (void)ssz_hash_tree_root_progressive_list_roots(roots, count, hash_fn, &out_root);
             break;
         }
     }
