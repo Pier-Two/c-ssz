@@ -346,6 +346,11 @@ static void fuzz_cover_merkle_errors(void)
     (void)ssz_hash_tree_root_vector_composite(1u, NULL, ssz_hash_default(), &out_root);
     (void)ssz_hash_tree_root_vector_composite(1u, &codec_no_root, ssz_hash_default(), &out_root);
     (void)ssz_hash_tree_root_vector_composite(1u, &codec_fail, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_vector_composite(
+        (UINT64_C(1) << 63u) + 1u,
+        &codec_ok,
+        ssz_hash_default(),
+        &out_root);
 
 #if UINT64_MAX > SIZE_MAX
     (void)ssz_hash_tree_root_vector_roots(roots, (uint64_t)SIZE_MAX + 1u, ssz_hash_default(),
@@ -371,8 +376,20 @@ static void fuzz_cover_merkle_errors(void)
                                             &out_root);
     (void)ssz_hash_tree_root_list_composite(2u, SSZ_NO_LIMIT, &codec_fail_after_first,
                                             ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_list_composite(
+        (UINT64_C(1) << 63u) + 1u,
+        SSZ_NO_LIMIT,
+        &codec_ok,
+        ssz_hash_default(),
+        &out_root);
 
     (void)ssz_hash_tree_root_list_roots(roots, 1u, SSZ_NO_LIMIT, ssz_hash_default(), NULL);
+    (void)ssz_hash_tree_root_list_roots(
+        roots,
+        1u,
+        (UINT64_C(1) << 63u) + 1u,
+        ssz_hash_default(),
+        &out_root);
 #if UINT64_MAX > SIZE_MAX
     (void)ssz_hash_tree_root_list_roots(roots, (uint64_t)SIZE_MAX + 1u, SSZ_NO_LIMIT,
                                         ssz_hash_default(), &out_root);
@@ -383,6 +400,7 @@ static void fuzz_cover_merkle_errors(void)
     (void)ssz_hash_tree_root_union(1u, false, NULL, ssz_hash_default(), &out_root);
     (void)ssz_hash_tree_root_union(1u, false, &codec_no_root, ssz_hash_default(), &out_root);
     (void)ssz_hash_tree_root_union(1u, false, &codec_fail, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_union(1u, false, &codec_ok, &hash_err_2to1, &out_root);
 
     (void)ssz_merkleize(roots, 1u, SSZ_NO_LIMIT, ssz_hash_default(), NULL);
     (void)ssz_merkleize(NULL, 1u, SSZ_NO_LIMIT, ssz_hash_default(), &out_root);
@@ -391,8 +409,10 @@ static void fuzz_cover_merkle_errors(void)
 
     (void)ssz_mix_in_length(NULL, 1u, ssz_hash_default(), &out_root);
     (void)ssz_mix_in_length(&root, 1u, ssz_hash_default(), NULL);
+    (void)ssz_mix_in_length(&root, 1u, &hash_err_2to1, &out_root);
     (void)ssz_mix_in_selector(NULL, 1u, ssz_hash_default(), &out_root);
     (void)ssz_mix_in_selector(&root, 1u, ssz_hash_default(), NULL);
+    (void)ssz_mix_in_selector(&root, 1u, &hash_err_2to1, &out_root);
 
     (void)ssz_merkleize_progressive(roots, 1u, ssz_hash_default(), NULL);
     (void)ssz_merkleize_progressive(NULL, 1u, ssz_hash_default(), &out_root);

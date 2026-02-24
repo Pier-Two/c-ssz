@@ -14,6 +14,12 @@ typedef struct
     uint8_t mode;
 } fuzz_codec_ctx_t;
 
+typedef struct
+{
+    uint8_t *buffer;
+    size_t buffer_len;
+} fuzz_mutate_ctx_t;
+
 static uint8_t fuzz_take_u8(fuzz_input_t *input)
 {
     if ((input == NULL) || (input->remaining == 0u))
@@ -105,6 +111,33 @@ static ssz_error_t fuzz_member_read(
     }
 }
 
+static ssz_error_t fuzz_member_read_mutate(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
+{
+    fuzz_mutate_ctx_t *state = (fuzz_mutate_ctx_t *)ctx;
+    (void)data;
+    (void)data_len;
+
+    if (state == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    if ((member_id == 2u) && (state->buffer != NULL) && (state->buffer_len >= 8u))
+    {
+        /* Mutate the second variable offset after the first pass offset checks. */
+        state->buffer[4] = 4u;
+        state->buffer[5] = 0u;
+        state->buffer[6] = 0u;
+        state->buffer[7] = 0u;
+    }
+
+    return SSZ_SUCCESS;
+}
+
 static void fuzz_cover_deserialize_errors(void)
 {
     uint8_t in[32] = {0u};
@@ -138,6 +171,20 @@ static void fuzz_cover_deserialize_errors(void)
     uint8_t bad_bool[1] = {2u};
     uint8_t bad_mask[1] = {0xFEu};
     uint8_t bitlist_data[2] = {0xAAu, 0x01u};
+    uint8_t compat_in_valid[2] = {1u, 0u};
+    uint8_t container_offset_oob[8] = {9u, 0u, 0u, 0u, 9u, 0u, 0u, 0u};
+    uint8_t container_offset_order[8] = {8u, 0u, 0u, 0u, 4u, 0u, 0u, 0u};
+    uint8_t container_last_var[12] = {12u, 0u, 0u, 0u, 12u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    fuzz_mutate_ctx_t mutate_ctx = {
+        .buffer = container_last_var,
+        .buffer_len = sizeof(container_last_var),
+    };
+    ssz_member_codec_t codec_mutate = {
+        .ctx = &mutate_ctx,
+        .write = NULL,
+        .read = fuzz_member_read_mutate,
+        .root = NULL,
+    };
 
     (void)ssz_deserialize_boolean(in, NULL);
     (void)ssz_deserialize_uint8(in, NULL);
@@ -178,6 +225,10 @@ static void fuzz_cover_deserialize_errors(void)
     (void)ssz_deserialize_vector_variable(in, 4u, 1u, 0u, NULL);
     (void)ssz_deserialize_vector_variable(in, 4u, 1u, 0u, &codec_no_read);
     (void)ssz_deserialize_vector_variable(in, 4u, UINT64_MAX, 0u, &codec);
+    (void)ssz_deserialize_vector_variable(in, 4u, (uint64_t)SIZE_MAX, 0u, &codec);
+#if UINT64_MAX > SIZE_MAX
+    (void)ssz_deserialize_vector_variable(in, 4u, (uint64_t)SIZE_MAX + 1u, 0u, &codec);
+#endif
 
     (void)ssz_deserialize_list_fixed(in, 4u, SSZ_NO_LIMIT, 1u, out_bits, sizeof(out_bits), NULL);
     (void)ssz_deserialize_list_fixed(in, 3u, SSZ_NO_LIMIT, 2u, out_bits, sizeof(out_bits), &out_element_count);
@@ -193,6 +244,24 @@ static void fuzz_cover_deserialize_errors(void)
     (void)ssz_deserialize_container(NULL, 1u, (size_t[1]){1u}, 1u, &codec);
     (void)ssz_deserialize_container(in, 1u, (size_t[1]){1u}, 1u, &codec_no_read);
     (void)ssz_deserialize_container(in, 1u, (size_t[2]){SIZE_MAX, 1u}, 2u, &codec);
+    (void)ssz_deserialize_container(
+        container_offset_oob,
+        sizeof(container_offset_oob),
+        (size_t[2]){0u, 0u},
+        2u,
+        &codec);
+    (void)ssz_deserialize_container(
+        container_offset_order,
+        sizeof(container_offset_order),
+        (size_t[2]){0u, 0u},
+        2u,
+        &codec);
+    (void)ssz_deserialize_container(
+        container_last_var,
+        sizeof(container_last_var),
+        (size_t[3]){0u, 0u, 4u},
+        3u,
+        &codec_mutate);
 
     (void)ssz_deserialize_union(in, 1u, 2u, false, &codec, NULL);
     (void)ssz_deserialize_union(in, 2u, 2u, false, NULL, &out_selector);
@@ -201,6 +270,13 @@ static void fuzz_cover_deserialize_errors(void)
     (void)ssz_deserialize_compatible_union(in, 1u, (uint8_t[1]){1u}, 1u, &codec, NULL);
     (void)ssz_deserialize_compatible_union(in, 1u, (uint8_t[1]){1u}, 1u, NULL, &out_selector);
     (void)ssz_deserialize_compatible_union(in, 1u, (uint8_t[1]){1u}, 1u, &codec_no_read, &out_selector);
+    (void)ssz_deserialize_compatible_union(
+        compat_in_valid,
+        sizeof(compat_in_valid),
+        (uint8_t[1]){1u},
+        1u,
+        &codec_no_read,
+        &out_selector);
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
