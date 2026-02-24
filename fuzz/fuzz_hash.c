@@ -95,6 +95,27 @@ static ssz_error_t fuzz_custom_hash(
     return SSZ_SUCCESS;
 }
 
+static ssz_error_t fuzz_custom_hash_err(
+    const void *ctx,
+    const uint8_t *data,
+    size_t data_len,
+    uint8_t out[32])
+{
+    (void)ctx;
+    (void)data;
+    (void)data_len;
+
+    if (out != NULL)
+    {
+        for (size_t i = 0u; i < 32u; i++)
+        {
+            out[i] = 0u;
+        }
+    }
+
+    return SSZ_ERR_HASH_FAILURE;
+}
+
 static ssz_error_t fuzz_custom_2to1(
     const void *ctx,
     const ssz_chunk_t *left,
@@ -199,6 +220,11 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 
             (void)ssz_hash_sha256(input.ptr, data_len, out);
             (void)ssz_hash_sha256(NULL, 0u, out);
+            (void)ssz_hash_sha256(NULL, 1u, out);
+            (void)ssz_hash_sha256(input.ptr, data_len, NULL);
+#if SIZE_MAX > UINT32_MAX
+            (void)ssz_hash_sha256(input.ptr, (size_t)UINT32_MAX + 1u, out);
+#endif
             break;
         }
 
@@ -307,7 +333,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
             fuzz_fill_chunks(&input, pairs, pair_count * 2u);
 
             ssz_hash_fn_t hash_fn = {
-                .hash = fuzz_custom_hash,
+                .hash = fuzz_custom_hash_err,
                 .hash_2to1 = NULL,
                 .hash_2to1_batch = NULL,
                 .ctx = NULL,
@@ -342,6 +368,13 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
             (void)ssz_hash_2to1_batch(ssz_hash_default(), NULL, 1u, batch_out);
             (void)ssz_hash_2to1_batch(ssz_hash_default(), pairs, 1u, NULL);
             (void)ssz_hash_2to1_batch(NULL, pairs, 1u, batch_out);
+#if SIZE_MAX > UINT32_MAX
+            (void)ssz_hash_2to1_batch(
+                ssz_hash_default(),
+                pairs,
+                (SIZE_MAX / 2u) + 1u,
+                batch_out);
+#endif
             break;
         }
     }

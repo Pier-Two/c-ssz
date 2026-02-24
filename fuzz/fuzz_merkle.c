@@ -16,6 +16,12 @@ typedef struct
     uint8_t mode;
 } fuzz_root_ctx_t;
 
+typedef struct
+{
+    uint8_t mode;
+    uint64_t fail_member;
+} fuzz_test_root_ctx_t;
+
 static uint8_t fuzz_take_u8(fuzz_input_t *input)
 {
     if ((input == NULL) || (input->remaining == 0u))
@@ -158,6 +164,307 @@ static ssz_error_t fuzz_member_root(const void *ctx, uint64_t member_id, ssz_chu
 
     *out_root = state->roots[member_id];
     return SSZ_SUCCESS;
+}
+
+static ssz_error_t fuzz_custom_hash(
+    const void *ctx,
+    const uint8_t *data,
+    size_t data_len,
+    uint8_t out[32])
+{
+    (void)ctx;
+    (void)data;
+    (void)data_len;
+
+    if (out == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    for (size_t i = 0u; i < 32u; i++)
+    {
+        out[i] = 0x11u;
+    }
+
+    return SSZ_SUCCESS;
+}
+
+static ssz_error_t fuzz_custom_hash_err(
+    const void *ctx,
+    const uint8_t *data,
+    size_t data_len,
+    uint8_t out[32])
+{
+    (void)ctx;
+    (void)data;
+    (void)data_len;
+    (void)out;
+    return SSZ_ERR_HASH_FAILURE;
+}
+
+static ssz_error_t fuzz_custom_2to1_err(
+    const void *ctx,
+    const ssz_chunk_t *left,
+    const ssz_chunk_t *right,
+    ssz_chunk_t *out)
+{
+    (void)ctx;
+    (void)left;
+    (void)right;
+    (void)out;
+    return SSZ_ERR_HASH_FAILURE;
+}
+
+static ssz_error_t fuzz_test_member_root(
+    const void *ctx,
+    uint64_t member_id,
+    ssz_chunk_t *out_root)
+{
+    const fuzz_test_root_ctx_t *state = (const fuzz_test_root_ctx_t *)ctx;
+
+    if ((state == NULL) || (out_root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (state->mode == 1u)
+    {
+        return SSZ_ERR_TYPE_MISMATCH;
+    }
+    if ((state->mode == 2u) && (member_id >= state->fail_member))
+    {
+        return SSZ_ERR_TYPE_MISMATCH;
+    }
+
+    for (size_t i = 0u; i < SSZ_BYTES_PER_CHUNK; i++)
+    {
+        out_root->bytes[i] = (uint8_t)(member_id + i);
+    }
+    return SSZ_SUCCESS;
+}
+
+static void fuzz_cover_merkle_errors(void)
+{
+    uint8_t value128[16] = {0u};
+    uint8_t value256[32] = {0u};
+    uint8_t bits_ok[2] = {0u};
+    uint8_t bits_bad[1] = {0xFEu};
+    uint8_t elements[8] = {0u};
+    uint8_t active_valid[1] = {0x03u};
+    uint8_t active_zero[1] = {0u};
+    uint8_t active_bad_count[1] = {0x01u};
+    uint8_t active_long[33] = {0u};
+
+    ssz_chunk_t roots[4] = {{{0u}}};
+    ssz_chunk_t out_root;
+    ssz_chunk_t root = {{0u}};
+
+    fuzz_test_root_ctx_t root_ctx_ok = {
+        .mode = 0u,
+        .fail_member = UINT64_MAX,
+    };
+    fuzz_test_root_ctx_t root_ctx_fail = {
+        .mode = 1u,
+        .fail_member = 0u,
+    };
+    fuzz_test_root_ctx_t root_ctx_fail_after_first = {
+        .mode = 2u,
+        .fail_member = 1u,
+    };
+    ssz_member_codec_t codec_ok = {
+        .ctx = &root_ctx_ok,
+        .write = NULL,
+        .read = NULL,
+        .root = fuzz_test_member_root,
+    };
+    ssz_member_codec_t codec_fail = {
+        .ctx = &root_ctx_fail,
+        .write = NULL,
+        .read = NULL,
+        .root = fuzz_test_member_root,
+    };
+    ssz_member_codec_t codec_fail_after_first = {
+        .ctx = &root_ctx_fail_after_first,
+        .write = NULL,
+        .read = NULL,
+        .root = fuzz_test_member_root,
+    };
+    ssz_member_codec_t codec_no_root = {
+        .ctx = &root_ctx_ok,
+        .write = NULL,
+        .read = NULL,
+        .root = NULL,
+    };
+    ssz_hash_fn_t hash_err_2to1 = {
+        .hash = fuzz_custom_hash,
+        .hash_2to1 = fuzz_custom_2to1_err,
+        .hash_2to1_batch = NULL,
+        .ctx = NULL,
+    };
+    ssz_hash_fn_t hash_err = {
+        .hash = fuzz_custom_hash_err,
+        .hash_2to1 = NULL,
+        .hash_2to1_batch = NULL,
+        .ctx = NULL,
+    };
+
+    (void)ssz_hash_tree_root_uint8(1u, NULL);
+    (void)ssz_hash_tree_root_uint16(1u, NULL);
+    (void)ssz_hash_tree_root_uint32(1u, NULL);
+    (void)ssz_hash_tree_root_uint64(1u, NULL);
+    (void)ssz_hash_tree_root_uint128(NULL, &out_root);
+    (void)ssz_hash_tree_root_uint128(value128, NULL);
+    (void)ssz_hash_tree_root_uint256(NULL, &out_root);
+    (void)ssz_hash_tree_root_uint256(value256, NULL);
+
+    (void)ssz_hash_tree_root_bitvector(bits_ok, 1u, 8u, ssz_hash_default(), NULL);
+    (void)ssz_hash_tree_root_bitvector(bits_ok, SIZE_MAX, UINT64_MAX, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_bitvector(bits_ok,
+                                       SIZE_MAX,
+                                       UINT64_MAX - 7u,
+                                       ssz_hash_default(),
+                                       &out_root);
+    (void)ssz_hash_tree_root_bitvector(bits_bad, 1u, 1u, ssz_hash_default(), &out_root);
+
+    (void)ssz_hash_tree_root_bitlist(bits_ok, 1u, 8u, SSZ_NO_LIMIT, ssz_hash_default(), NULL);
+    (void)ssz_hash_tree_root_bitlist(bits_ok, SIZE_MAX, UINT64_MAX, SSZ_NO_LIMIT, ssz_hash_default(),
+                                     &out_root);
+    (void)ssz_hash_tree_root_bitlist(NULL, 0u, 0u, UINT64_MAX - 7u, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_bitlist(bits_ok, 1u, 8u, SSZ_NO_LIMIT, &hash_err_2to1, &out_root);
+
+    (void)ssz_hash_tree_root_vector_fixed(elements, 1u, 1u, ssz_hash_default(), NULL);
+#if UINT64_MAX > SIZE_MAX
+    (void)ssz_hash_tree_root_vector_fixed(elements, (uint64_t)SIZE_MAX + 1u, 1u, ssz_hash_default(),
+                                          &out_root);
+#endif
+    (void)ssz_hash_tree_root_vector_fixed(elements, (uint64_t)SIZE_MAX, 2u, ssz_hash_default(),
+                                          &out_root);
+    (void)ssz_hash_tree_root_vector_fixed(elements, (uint64_t)SIZE_MAX, 1u, ssz_hash_default(),
+                                          &out_root);
+    (void)ssz_hash_tree_root_vector_fixed(NULL, 1u, 1u, ssz_hash_default(), &out_root);
+
+    (void)ssz_hash_tree_root_vector_composite(1u, &codec_ok, ssz_hash_default(), NULL);
+    (void)ssz_hash_tree_root_vector_composite(1u, NULL, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_vector_composite(1u, &codec_no_root, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_vector_composite(1u, &codec_fail, ssz_hash_default(), &out_root);
+
+#if UINT64_MAX > SIZE_MAX
+    (void)ssz_hash_tree_root_vector_roots(roots, (uint64_t)SIZE_MAX + 1u, ssz_hash_default(),
+                                          &out_root);
+#endif
+
+    (void)ssz_hash_tree_root_list_fixed(elements, 1u, SSZ_NO_LIMIT, 1u, ssz_hash_default(), NULL);
+#if UINT64_MAX > SIZE_MAX
+    (void)ssz_hash_tree_root_list_fixed(elements, (uint64_t)SIZE_MAX + 1u, SSZ_NO_LIMIT, 1u,
+                                        ssz_hash_default(), &out_root);
+#endif
+    (void)ssz_hash_tree_root_list_fixed(elements, (uint64_t)SIZE_MAX, SSZ_NO_LIMIT, 2u,
+                                        ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_list_fixed(elements, (uint64_t)SIZE_MAX, SSZ_NO_LIMIT, 1u,
+                                        ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_list_fixed(NULL, 1u, SSZ_NO_LIMIT, 1u, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_list_fixed(elements, 1u, UINT64_MAX, 32u, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_list_fixed(elements, 1u, SSZ_NO_LIMIT, 1u, &hash_err_2to1, &out_root);
+
+    (void)ssz_hash_tree_root_list_composite(1u, SSZ_NO_LIMIT, &codec_ok, ssz_hash_default(), NULL);
+    (void)ssz_hash_tree_root_list_composite(1u, SSZ_NO_LIMIT, NULL, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_list_composite(1u, SSZ_NO_LIMIT, &codec_no_root, ssz_hash_default(),
+                                            &out_root);
+    (void)ssz_hash_tree_root_list_composite(2u, SSZ_NO_LIMIT, &codec_fail_after_first,
+                                            ssz_hash_default(), &out_root);
+
+    (void)ssz_hash_tree_root_list_roots(roots, 1u, SSZ_NO_LIMIT, ssz_hash_default(), NULL);
+#if UINT64_MAX > SIZE_MAX
+    (void)ssz_hash_tree_root_list_roots(roots, (uint64_t)SIZE_MAX + 1u, SSZ_NO_LIMIT,
+                                        ssz_hash_default(), &out_root);
+#endif
+    (void)ssz_hash_tree_root_list_roots(roots, 1u, SSZ_NO_LIMIT, &hash_err_2to1, &out_root);
+
+    (void)ssz_hash_tree_root_union(1u, false, &codec_ok, ssz_hash_default(), NULL);
+    (void)ssz_hash_tree_root_union(1u, false, NULL, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_union(1u, false, &codec_no_root, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_union(1u, false, &codec_fail, ssz_hash_default(), &out_root);
+
+    (void)ssz_merkleize(roots, 1u, SSZ_NO_LIMIT, ssz_hash_default(), NULL);
+    (void)ssz_merkleize(NULL, 1u, SSZ_NO_LIMIT, ssz_hash_default(), &out_root);
+    (void)ssz_merkleize(roots, 1u, (UINT64_C(1) << 63u) + 1u, ssz_hash_default(), &out_root);
+    (void)ssz_merkleize(roots, 1u, SSZ_NO_LIMIT, &hash_err_2to1, &out_root);
+
+    (void)ssz_mix_in_length(NULL, 1u, ssz_hash_default(), &out_root);
+    (void)ssz_mix_in_length(&root, 1u, ssz_hash_default(), NULL);
+    (void)ssz_mix_in_selector(NULL, 1u, ssz_hash_default(), &out_root);
+    (void)ssz_mix_in_selector(&root, 1u, ssz_hash_default(), NULL);
+
+    (void)ssz_merkleize_progressive(roots, 1u, ssz_hash_default(), NULL);
+    (void)ssz_merkleize_progressive(NULL, 1u, ssz_hash_default(), &out_root);
+    (void)ssz_merkleize_progressive(roots, 2u, &hash_err, &out_root);
+
+    (void)ssz_mix_in_active_fields(NULL, active_valid, 1u, ssz_hash_default(), &out_root);
+    (void)ssz_mix_in_active_fields(&root, active_valid, 1u, ssz_hash_default(), NULL);
+    (void)ssz_mix_in_active_fields(&root, active_long, sizeof(active_long), ssz_hash_default(),
+                                   &out_root);
+    (void)ssz_mix_in_active_fields(&root, NULL, 1u, ssz_hash_default(), &out_root);
+
+    (void)ssz_hash_tree_root_progressive_container(2u, active_valid, 1u, &codec_ok, ssz_hash_default(),
+                                                   NULL);
+    (void)ssz_hash_tree_root_progressive_container(2u, active_valid, 1u, NULL, ssz_hash_default(),
+                                                   &out_root);
+    (void)ssz_hash_tree_root_progressive_container(2u, active_valid, 1u, &codec_no_root,
+                                                   ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_progressive_container(0u, active_valid, 1u, &codec_ok, ssz_hash_default(),
+                                                   &out_root);
+    (void)ssz_hash_tree_root_progressive_container(2u, NULL, 1u, &codec_ok, ssz_hash_default(),
+                                                   &out_root);
+    (void)ssz_hash_tree_root_progressive_container(2u, active_long, sizeof(active_long), &codec_ok,
+                                                   ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_progressive_container(2u, active_zero, 1u, &codec_ok, ssz_hash_default(),
+                                                   &out_root);
+    (void)ssz_hash_tree_root_progressive_container(2u, active_bad_count, 1u, &codec_ok,
+                                                   ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_progressive_container(2u, active_valid, 1u, &codec_fail_after_first,
+                                                   ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_progressive_container(2u, active_valid, 1u, &codec_ok, &hash_err_2to1,
+                                                   &out_root);
+
+    (void)ssz_hash_tree_root_progressive_list_fixed(elements, 1u, 1u, ssz_hash_default(), NULL);
+    (void)ssz_hash_tree_root_progressive_list_fixed(elements, 1u, 0u, ssz_hash_default(), &out_root);
+#if UINT64_MAX > SIZE_MAX
+    (void)ssz_hash_tree_root_progressive_list_fixed(elements, (uint64_t)SIZE_MAX + 1u, 1u,
+                                                    ssz_hash_default(), &out_root);
+#endif
+    (void)ssz_hash_tree_root_progressive_list_fixed(elements, (uint64_t)SIZE_MAX, 2u,
+                                                    ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_progressive_list_fixed(NULL, 1u, 1u, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_progressive_list_fixed(elements, (uint64_t)SIZE_MAX, 1u,
+                                                    ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_progressive_list_fixed(elements, 2u, 1u, &hash_err_2to1, &out_root);
+
+    (void)ssz_hash_tree_root_progressive_list_composite(1u, &codec_ok, ssz_hash_default(), NULL);
+    (void)ssz_hash_tree_root_progressive_list_composite(1u, NULL, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_progressive_list_composite(1u, &codec_no_root, ssz_hash_default(),
+                                                        &out_root);
+    (void)ssz_hash_tree_root_progressive_list_composite(2u, &codec_fail_after_first,
+                                                        ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_progressive_list_composite(2u, &codec_ok, &hash_err_2to1, &out_root);
+
+    (void)ssz_hash_tree_root_progressive_bitlist(bits_ok, 1u, 8u, ssz_hash_default(), NULL);
+    (void)ssz_hash_tree_root_progressive_bitlist(bits_ok, SIZE_MAX, UINT64_MAX, ssz_hash_default(),
+                                                 &out_root);
+    (void)ssz_hash_tree_root_progressive_bitlist(bits_bad, 1u, 1u, ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_progressive_bitlist(bits_ok, 1u, 8u, &hash_err_2to1, &out_root);
+
+    (void)ssz_hash_tree_root_progressive_container_roots(roots, 2u, active_valid, 1u,
+                                                         ssz_hash_default(), NULL);
+    (void)ssz_hash_tree_root_progressive_container_roots(roots, 0u, active_valid, 1u,
+                                                         ssz_hash_default(), &out_root);
+    (void)ssz_hash_tree_root_progressive_container_roots(roots, 2u, active_valid, 1u, &hash_err_2to1,
+                                                         &out_root);
+
+    (void)ssz_hash_tree_root_progressive_list_roots(roots, 2u, ssz_hash_default(), NULL);
+#if UINT64_MAX > SIZE_MAX
+    (void)ssz_hash_tree_root_progressive_list_roots(roots, (uint64_t)SIZE_MAX + 1u,
+                                                    ssz_hash_default(), &out_root);
+#endif
+    (void)ssz_hash_tree_root_progressive_list_roots(roots, 2u, &hash_err_2to1, &out_root);
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
@@ -647,6 +954,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
             break;
         }
     }
+
+    fuzz_cover_merkle_errors();
 
     return 0;
 }

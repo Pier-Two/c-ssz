@@ -105,6 +105,104 @@ static ssz_error_t fuzz_member_read(
     }
 }
 
+static void fuzz_cover_deserialize_errors(void)
+{
+    uint8_t in[32] = {0u};
+    uint8_t out_u8 = 0u;
+    uint16_t out_u16 = 0u;
+    uint32_t out_u32 = 0u;
+    uint64_t out_u64 = 0u;
+    uint8_t out_u128[16] = {0u};
+    uint8_t out_u256[32] = {0u};
+    uint8_t out_bits[32] = {0u};
+    uint64_t out_bit_len = 0u;
+    uint64_t out_element_count = 0u;
+    uint8_t out_selector = 0u;
+
+    fuzz_codec_ctx_t codec_ctx = {
+        .mode = 0u,
+    };
+    ssz_member_codec_t codec = {
+        .ctx = &codec_ctx,
+        .write = NULL,
+        .read = fuzz_member_read,
+        .root = NULL,
+    };
+    ssz_member_codec_t codec_no_read = {
+        .ctx = &codec_ctx,
+        .write = NULL,
+        .read = NULL,
+        .root = NULL,
+    };
+
+    uint8_t bad_bool[1] = {2u};
+    uint8_t bad_mask[1] = {0xFEu};
+    uint8_t bitlist_data[2] = {0xAAu, 0x01u};
+
+    (void)ssz_deserialize_boolean(in, NULL);
+    (void)ssz_deserialize_uint8(in, NULL);
+    (void)ssz_deserialize_uint16(in, NULL);
+    (void)ssz_deserialize_uint32(in, NULL);
+    (void)ssz_deserialize_uint64(in, NULL);
+    (void)ssz_deserialize_uint128(in, NULL);
+    (void)ssz_deserialize_uint256(in, NULL);
+    (void)ssz_deserialize_boolean(bad_bool, &out_u8);
+
+    (void)ssz_deserialize_uint8(NULL, &out_u8);
+    (void)ssz_deserialize_uint16(NULL, &out_u16);
+    (void)ssz_deserialize_uint32(NULL, &out_u32);
+    (void)ssz_deserialize_uint64(NULL, &out_u64);
+    (void)ssz_deserialize_uint128(NULL, out_u128);
+    (void)ssz_deserialize_uint256(NULL, out_u256);
+
+    (void)ssz_deserialize_bitvector(in, 1u, 0u, out_bits, sizeof(out_bits));
+    (void)ssz_deserialize_bitvector(in, 1u, UINT64_MAX, out_bits, sizeof(out_bits));
+    (void)ssz_deserialize_bitvector(NULL, 1u, 8u, out_bits, sizeof(out_bits));
+    (void)ssz_deserialize_bitvector(in, 1u, 8u, NULL, 1u);
+    (void)ssz_deserialize_bitvector(bad_mask, 1u, 1u, out_bits, sizeof(out_bits));
+
+    (void)ssz_deserialize_bitlist(in, 1u, SSZ_NO_LIMIT, out_bits, sizeof(out_bits), NULL);
+    (void)ssz_deserialize_bitlist(NULL, 0u, SSZ_NO_LIMIT, out_bits, sizeof(out_bits), &out_bit_len);
+    (void)ssz_deserialize_bitlist((uint8_t[1]){0u}, 1u, SSZ_NO_LIMIT, out_bits, sizeof(out_bits), &out_bit_len);
+    (void)ssz_deserialize_bitlist(bitlist_data, 2u, SSZ_NO_LIMIT, NULL, 0u, &out_bit_len);
+
+    (void)ssz_deserialize_vector_fixed(in, 4u, 0u, 1u, out_bits, sizeof(out_bits));
+    (void)ssz_deserialize_vector_fixed(in, 4u, 1u, 0u, out_bits, sizeof(out_bits));
+    (void)ssz_deserialize_vector_fixed(in, 4u, UINT64_MAX, 2u, out_bits, sizeof(out_bits));
+    (void)ssz_deserialize_vector_fixed(NULL, 4u, 1u, 4u, out_bits, sizeof(out_bits));
+    (void)ssz_deserialize_vector_fixed(in, 4u, 1u, 4u, NULL, 0u);
+
+    (void)ssz_deserialize_vector_variable(in, 0u, 0u, 0u, &codec);
+    (void)ssz_deserialize_vector_variable(in, 1u, 0u, 0u, &codec);
+    (void)ssz_deserialize_vector_variable(NULL, 4u, 1u, 0u, &codec);
+    (void)ssz_deserialize_vector_variable(in, 4u, 1u, 0u, NULL);
+    (void)ssz_deserialize_vector_variable(in, 4u, 1u, 0u, &codec_no_read);
+    (void)ssz_deserialize_vector_variable(in, 4u, UINT64_MAX, 0u, &codec);
+
+    (void)ssz_deserialize_list_fixed(in, 4u, SSZ_NO_LIMIT, 1u, out_bits, sizeof(out_bits), NULL);
+    (void)ssz_deserialize_list_fixed(in, 3u, SSZ_NO_LIMIT, 2u, out_bits, sizeof(out_bits), &out_element_count);
+    (void)ssz_deserialize_list_fixed(NULL, 4u, SSZ_NO_LIMIT, 2u, out_bits, sizeof(out_bits), &out_element_count);
+    (void)ssz_deserialize_list_fixed(in, 4u, SSZ_NO_LIMIT, 2u, NULL, 0u, &out_element_count);
+
+    (void)ssz_deserialize_list_variable(in, 4u, SSZ_NO_LIMIT, 0u, &codec, NULL);
+    (void)ssz_deserialize_list_variable(in, 4u, SSZ_NO_LIMIT, 0u, NULL, &out_element_count);
+    (void)ssz_deserialize_list_variable(in, 4u, SSZ_NO_LIMIT, 0u, &codec_no_read, &out_element_count);
+    (void)ssz_deserialize_list_variable(NULL, 4u, SSZ_NO_LIMIT, 0u, &codec, &out_element_count);
+
+    (void)ssz_deserialize_container(in, 0u, NULL, 1u, &codec);
+    (void)ssz_deserialize_container(NULL, 1u, (size_t[1]){1u}, 1u, &codec);
+    (void)ssz_deserialize_container(in, 1u, (size_t[1]){1u}, 1u, &codec_no_read);
+    (void)ssz_deserialize_container(in, 1u, (size_t[2]){SIZE_MAX, 1u}, 2u, &codec);
+
+    (void)ssz_deserialize_union(in, 1u, 2u, false, &codec, NULL);
+    (void)ssz_deserialize_union(in, 2u, 2u, false, NULL, &out_selector);
+    (void)ssz_deserialize_union(in, 2u, 2u, false, &codec_no_read, &out_selector);
+
+    (void)ssz_deserialize_compatible_union(in, 1u, (uint8_t[1]){1u}, 1u, &codec, NULL);
+    (void)ssz_deserialize_compatible_union(in, 1u, (uint8_t[1]){1u}, 1u, NULL, &out_selector);
+    (void)ssz_deserialize_compatible_union(in, 1u, (uint8_t[1]){1u}, 1u, &codec_no_read, &out_selector);
+}
+
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
     if ((data == NULL) || (size == 0u))
@@ -428,6 +526,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
             break;
         }
     }
+
+    fuzz_cover_deserialize_errors();
 
     return 0;
 }
