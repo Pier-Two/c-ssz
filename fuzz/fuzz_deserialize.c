@@ -281,6 +281,7 @@ static void fuzz_cover_deserialize_errors(void)
     (void)ssz_deserialize_vector_fixed(in, 4u, 0u, 1u, out_bits, sizeof(out_bits));
     (void)ssz_deserialize_vector_fixed(in, 4u, 1u, 0u, out_bits, sizeof(out_bits));
     (void)ssz_deserialize_vector_fixed(in, 4u, UINT64_MAX, 2u, out_bits, sizeof(out_bits));
+    (void)ssz_deserialize_vector_fixed(in, 4u, 65536u, 65537u, out_bits, sizeof(out_bits));
     (void)ssz_deserialize_vector_fixed(NULL, 4u, 1u, 4u, out_bits, sizeof(out_bits));
     (void)ssz_deserialize_vector_fixed(in, 4u, 1u, 4u, NULL, 0u);
 
