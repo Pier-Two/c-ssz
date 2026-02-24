@@ -20,6 +20,15 @@ typedef struct
     size_t buffer_len;
 } fuzz_mutate_ctx_t;
 
+typedef struct
+{
+    size_t *field_fixed_sizes;
+    uint32_t field_count;
+    uint64_t trigger_member_id;
+    uint32_t target_index;
+    size_t replacement_size;
+} fuzz_field_size_mutate_ctx_t;
+
 static uint8_t fuzz_take_u8(fuzz_input_t *input)
 {
     if ((input == NULL) || (input->remaining == 0u))
@@ -138,6 +147,29 @@ static ssz_error_t fuzz_member_read_mutate(
     return SSZ_SUCCESS;
 }
 
+static ssz_error_t fuzz_member_read_mutate_field_size(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
+{
+    fuzz_field_size_mutate_ctx_t *state = (fuzz_field_size_mutate_ctx_t *)ctx;
+    (void)data;
+    (void)data_len;
+
+    if ((state == NULL) || (state->field_fixed_sizes == NULL) || (state->target_index >= state->field_count))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    if (member_id == state->trigger_member_id)
+    {
+        state->field_fixed_sizes[state->target_index] = state->replacement_size;
+    }
+
+    return SSZ_SUCCESS;
+}
+
 static void fuzz_cover_deserialize_errors(void)
 {
     uint8_t in[32] = {0u};
@@ -175,14 +207,47 @@ static void fuzz_cover_deserialize_errors(void)
     uint8_t container_offset_oob[8] = {9u, 0u, 0u, 0u, 9u, 0u, 0u, 0u};
     uint8_t container_offset_order[8] = {8u, 0u, 0u, 0u, 4u, 0u, 0u, 0u};
     uint8_t container_last_var[12] = {12u, 0u, 0u, 0u, 12u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    uint8_t container_fixed_overflow[5] = {0u};
+    uint8_t container_cursor_mismatch[5] = {0u, 2u, 0u, 0u, 0u};
+
+    size_t container_fixed_overflow_sizes[2] = {4u, 1u};
+    size_t container_cursor_mismatch_sizes[2] = {1u, 1u};
+
     fuzz_mutate_ctx_t mutate_ctx = {
         .buffer = container_last_var,
         .buffer_len = sizeof(container_last_var),
     };
+    fuzz_field_size_mutate_ctx_t fixed_overflow_ctx = {
+        .field_fixed_sizes = container_fixed_overflow_sizes,
+        .field_count = 2u,
+        .trigger_member_id = 0u,
+        .target_index = 1u,
+        .replacement_size = 4u,
+    };
+    fuzz_field_size_mutate_ctx_t cursor_mismatch_ctx = {
+        .field_fixed_sizes = container_cursor_mismatch_sizes,
+        .field_count = 2u,
+        .trigger_member_id = 0u,
+        .target_index = 1u,
+        .replacement_size = 0u,
+    };
+
     ssz_member_codec_t codec_mutate = {
         .ctx = &mutate_ctx,
         .write = NULL,
         .read = fuzz_member_read_mutate,
+        .root = NULL,
+    };
+    ssz_member_codec_t codec_mutate_fixed_overflow = {
+        .ctx = &fixed_overflow_ctx,
+        .write = NULL,
+        .read = fuzz_member_read_mutate_field_size,
+        .root = NULL,
+    };
+    ssz_member_codec_t codec_mutate_cursor_mismatch = {
+        .ctx = &cursor_mismatch_ctx,
+        .write = NULL,
+        .read = fuzz_member_read_mutate_field_size,
         .root = NULL,
     };
 
@@ -244,6 +309,18 @@ static void fuzz_cover_deserialize_errors(void)
     (void)ssz_deserialize_container(NULL, 1u, (size_t[1]){1u}, 1u, &codec);
     (void)ssz_deserialize_container(in, 1u, (size_t[1]){1u}, 1u, &codec_no_read);
     (void)ssz_deserialize_container(in, 1u, (size_t[2]){SIZE_MAX, 1u}, 2u, &codec);
+    (void)ssz_deserialize_container(
+        container_fixed_overflow,
+        sizeof(container_fixed_overflow),
+        container_fixed_overflow_sizes,
+        2u,
+        &codec_mutate_fixed_overflow);
+    (void)ssz_deserialize_container(
+        container_cursor_mismatch,
+        sizeof(container_cursor_mismatch),
+        container_cursor_mismatch_sizes,
+        2u,
+        &codec_mutate_cursor_mismatch);
     (void)ssz_deserialize_container(
         container_offset_oob,
         sizeof(container_offset_oob),
