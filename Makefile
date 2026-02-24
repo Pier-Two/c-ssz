@@ -68,6 +68,25 @@ bench:
 	cmake -S . -B $(BUILD_DIR) -DSSZ_BUILD_BENCH=ON
 	cmake --build $(BUILD_DIR) --parallel
 
+fuzz:
+	CC=clang cmake -S . -B $(BUILD_DIR) -DSSZ_BUILD_FUZZ=ON
+	cmake --build $(BUILD_DIR) --parallel
+	@set -e; \
+	mkdir -p $(BUILD_DIR)/fuzz-artifacts; \
+	found=0; \
+	for fuzzer in $(BUILD_DIR)/fuzz_*; do \
+	  if [ ! -x "$$fuzzer" ]; then \
+	    continue; \
+	  fi; \
+	  found=1; \
+	  echo "--- Running $$(basename "$$fuzzer") ---"; \
+	  "$$fuzzer" -max_total_time=10 -artifact_prefix=$(BUILD_DIR)/fuzz-artifacts/; \
+	done; \
+	if [ "$$found" -eq 0 ]; then \
+	  echo "No fuzz executables found in $(BUILD_DIR)."; \
+	  exit 1; \
+	fi
+
 # ── Docker builds ────────────────────────────────────────────────
 
 docker-32bit:

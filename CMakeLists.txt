@@ -268,3 +268,25 @@ if(SSZ_BUILD_BENCH)
     target_link_libraries(${bench_name} PRIVATE ssz ${SSZ_PLATFORM_LIBS})
   endforeach()
 endif()
+
+# --- libFuzzer harnesses ---
+option(SSZ_BUILD_FUZZ "Build libFuzzer harnesses" OFF)
+if(SSZ_BUILD_FUZZ)
+  if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang|AppleClang")
+    message(FATAL_ERROR "SSZ_BUILD_FUZZ requires Clang or AppleClang.")
+  endif()
+
+  file(GLOB SSZ_FUZZ_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/fuzz/fuzz_*.c)
+  foreach(fuzz_src ${SSZ_FUZZ_SOURCES})
+    get_filename_component(fuzz_name ${fuzz_src} NAME_WE)
+    add_executable(${fuzz_name} ${fuzz_src} ${SSZ_COMMON_SOURCES})
+    target_include_directories(${fuzz_name} PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+      ${CMAKE_CURRENT_SOURCE_DIR}/src
+      ${SSZ_HACL_INCLUDE_DIRS}
+    )
+    target_compile_options(${fuzz_name} PRIVATE -fsanitize=fuzzer,address)
+    target_link_options(${fuzz_name} PRIVATE -fsanitize=fuzzer,address)
+    target_link_libraries(${fuzz_name} PRIVATE ${SSZ_PLATFORM_LIBS})
+  endforeach()
+endif()
