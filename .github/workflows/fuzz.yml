@@ -1,0 +1,61 @@
+name: Fuzz
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  fuzzer:
+    name: fuzzer
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang
+
+      - name: Configure
+        env:
+          CC: clang
+        run: cmake -S . -B build -DSSZ_BUILD_FUZZ=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run fuzzers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/fuzz-artifacts
+
+          mapfile -t fuzzers < <(find build -maxdepth 1 -type f -name 'fuzz_*' -perm -u+x | sort)
+          if [ "${#fuzzers[@]}" -eq 0 ]; then
+            echo "No fuzz executables found in build/."
+            exit 1
+          fi
+
+          for fuzzer in "${fuzzers[@]}"; do
+            name="$(basename "$fuzzer")"
+            echo "--- Running ${name} ---"
+            "$fuzzer" -max_total_time=60 -artifact_prefix=build/fuzz-artifacts/
+          done
+
+      - name: Upload crash artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash-artifacts
+          path: |
+            build/fuzz-artifacts/crash-*
+            build/fuzz-artifacts/leak-*
+            build/fuzz-artifacts/oom-*
+            build/fuzz-artifacts/timeout-*
+          if-no-files-found: ignore
