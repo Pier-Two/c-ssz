@@ -47,10 +47,6 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
 {
     size_t fixed_region = 0u;
 
-    if (element_count == 0u)
-    {
-        return (in_len == 0u) ? SSZ_SUCCESS : SSZ_ERR_OFFSET_INVALID;
-    }
     if ((codec == NULL) || (codec->read == NULL) || (in == NULL))
     {
         return SSZ_ERR_INVALID_ARGUMENT;
@@ -259,10 +255,6 @@ ssz_error_t ssz_deserialize_bitlist(
     }
 
     uint64_t prefix_bits = 0u;
-    if (!ssz_internal_u64_to_size((uint64_t)(in_len - 1u), NULL))
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
     if (ssz_internal_mul_overflow_u64((uint64_t)(in_len - 1u), 8u, &prefix_bits) ||
         ssz_internal_add_overflow_u64(prefix_bits, delimiter_pos, &prefix_bits))
     {

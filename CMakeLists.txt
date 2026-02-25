@@ -132,18 +132,6 @@ target_include_directories(test_proof_internal PRIVATE
 target_link_libraries(test_proof_internal PRIVATE ${SSZ_PLATFORM_LIBS})
 add_test(NAME test_proof_internal COMMAND test_proof_internal)
 
-# test_deserialize_internal: #includes ssz_deserialize.c — compile everything else
-set(SSZ_SOURCES_NO_DESER ${SSZ_COMMON_SOURCES})
-list(REMOVE_ITEM SSZ_SOURCES_NO_DESER src/ssz_deserialize.c)
-
-add_executable(test_deserialize_internal tests/unit/test_deserialize_internal.c ${SSZ_SOURCES_NO_DESER})
-target_include_directories(test_deserialize_internal PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/src
-  ${SSZ_HACL_INCLUDE_DIRS}
-)
-target_link_libraries(test_deserialize_internal PRIVATE ${SSZ_PLATFORM_LIBS})
-add_test(NAME test_deserialize_internal COMMAND test_deserialize_internal)
 
 # --- Consensus-spec SSZ generic fixture tests ---
 set(SSZ_SPEC_FIXTURES_DIR

@@ -341,6 +341,30 @@ static void fuzz_cover_deserialize_errors(void)
         3u,
         &codec_mutate);
 
+    /* Container with {variable, fixed, variable} layout exercises
+       the second-pass fixed-field skip and look_cursor scan. */
+    {
+        /* field 0: variable (offset at bytes 0-3)
+           field 1: fixed, 2 bytes (bytes 4-5)
+           field 2: variable (offset at bytes 6-9)
+           fixed region = 4 + 2 + 4 = 10
+           field 0 payload: bytes 10-11
+           field 2 payload: bytes 12-13 */
+        uint8_t vfv_in[14] = {
+            10u, 0u, 0u, 0u,   /* offset for field 0 = 10 */
+            0xAAu, 0xBBu,      /* fixed field 1 data */
+            12u, 0u, 0u, 0u,   /* offset for field 2 = 12 */
+            0x01u, 0x02u,      /* field 0 payload */
+            0x03u, 0x04u,      /* field 2 payload */
+        };
+        (void)ssz_deserialize_container(
+            vfv_in,
+            sizeof(vfv_in),
+            (size_t[3]){0u, 2u, 0u},
+            3u,
+            &codec);
+    }
+
     (void)ssz_deserialize_union(in, 1u, 2u, false, &codec, NULL);
     (void)ssz_deserialize_union(in, 2u, 2u, false, NULL, &out_selector);
     (void)ssz_deserialize_union(in, 2u, 2u, false, &codec_no_read, &out_selector);
