@@ -27,6 +27,8 @@ typedef struct
     uint64_t count;
 } ssz_internal_codec_reader_ctx_t;
 
+#define SSZ_INTERNAL_FAST_MERKLE_MAX_LEAVES UINT64_C(4096)
+
 static ssz_error_t ssz_internal_read_chunk_leaf(
     const void *ctx,
     uint64_t index,
@@ -131,6 +133,130 @@ static ssz_error_t ssz_internal_build_zero_hashes(
     return SSZ_SUCCESS;
 }
 
+static ssz_error_t ssz_internal_merkleize_reader_fast(
+    ssz_internal_leaf_reader_t reader,
+    const void *reader_ctx,
+    uint64_t source_start,
+    uint64_t leaf_count,
+    uint64_t tree_size,
+    const ssz_hash_fn_t *hash_fn,
+    const ssz_chunk_t zero_hashes[64],
+    ssz_chunk_t *out_root)
+{
+    size_t tree_size_sz = 0u;
+    size_t leaf_count_sz = 0u;
+    uint64_t source_end = 0u;
+    size_t source_start_sz = 0u;
+    size_t width = 0u;
+
+    if (!ssz_internal_u64_to_size(tree_size, &tree_size_sz) ||
+        !ssz_internal_u64_to_size(leaf_count, &leaf_count_sz))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (tree_size_sz == 0u)
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_internal_add_overflow_u64(source_start, leaf_count, &source_end))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (!ssz_internal_u64_to_size(source_start, &source_start_sz))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    size_t parent_cap = (tree_size_sz > 1u) ? (tree_size_sz >> 1u) : 1u;
+    ssz_chunk_t level_storage[tree_size_sz];
+    ssz_chunk_t parent_storage[parent_cap];
+    ssz_chunk_t *current = level_storage;
+    ssz_chunk_t *next = parent_storage;
+    bool has_initial_level = false;
+
+    if (reader == ssz_internal_read_chunk_leaf)
+    {
+        const ssz_internal_chunk_reader_ctx_t *chunk_reader =
+            (const ssz_internal_chunk_reader_ctx_t *)reader_ctx;
+        if ((chunk_reader != NULL) && ((chunk_reader->chunks != NULL) || (leaf_count == 0u)) &&
+            (source_start <= chunk_reader->count) && ((chunk_reader->count - source_start) >= leaf_count))
+        {
+            const ssz_chunk_t *source_chunks = chunk_reader->chunks + source_start_sz;
+            if (tree_size_sz == 1u)
+            {
+                *out_root = source_chunks[0];
+                return SSZ_SUCCESS;
+            }
+
+            size_t pair_count = tree_size_sz >> 1u;
+            ssz_error_t err = ssz_hash_2to1_batch(hash_fn, source_chunks, pair_count, next);
+            if (err != SSZ_SUCCESS)
+            {
+                return err;
+            }
+            current = next;
+            next = level_storage;
+            width = pair_count;
+            has_initial_level = true;
+        }
+    }
+
+    if (!has_initial_level && (reader == ssz_internal_read_bytes_leaf))
+    {
+        const ssz_internal_bytes_reader_ctx_t *bytes_reader = (const ssz_internal_bytes_reader_ctx_t *)reader_ctx;
+        size_t source_offset = 0u;
+        size_t copy_len = 0u;
+
+        if ((bytes_reader != NULL) && ((bytes_reader->bytes != NULL) || (bytes_reader->byte_len == 0u)) &&
+            !ssz_internal_mul_overflow_size(source_start_sz, SSZ_BYTES_PER_CHUNK, &source_offset) &&
+            !ssz_internal_mul_overflow_size(tree_size_sz, SSZ_BYTES_PER_CHUNK, &copy_len) &&
+            (source_offset <= bytes_reader->byte_len) &&
+            (copy_len <= (bytes_reader->byte_len - source_offset)))
+        {
+            memcpy(current, bytes_reader->bytes + source_offset, copy_len);
+            has_initial_level = true;
+            width = tree_size_sz;
+        }
+    }
+
+    if (!has_initial_level)
+    {
+        uint64_t source_index = source_start;
+        for (size_t i = 0u; i < leaf_count_sz; i++)
+        {
+            ssz_error_t err = reader(reader_ctx, source_index, &current[i]);
+            if (err != SSZ_SUCCESS)
+            {
+                return err;
+            }
+            source_index++;
+        }
+        for (size_t i = leaf_count_sz; i < tree_size_sz; i++)
+        {
+            current[i] = zero_hashes[0];
+        }
+        width = tree_size_sz;
+    }
+
+    while (width > 1u)
+    {
+        size_t pair_count = width >> 1u;
+        ssz_error_t err = ssz_hash_2to1_batch(hash_fn, current, pair_count, next);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
+        }
+
+        ssz_chunk_t *tmp = current;
+        current = next;
+        next = tmp;
+        width = pair_count;
+    }
+
+    *out_root = current[0];
+    return SSZ_SUCCESS;
+}
+
 static ssz_error_t ssz_internal_merkleize_subtree(
     ssz_internal_leaf_reader_t reader,
     const void *reader_ctx,
@@ -157,6 +283,24 @@ static ssz_error_t ssz_internal_merkleize_subtree(
             return SSZ_ERR_OVERFLOW;
         }
         return reader(reader_ctx, source_index, out_root);
+    }
+
+    if ((subtree_size <= SSZ_INTERNAL_FAST_MERKLE_MAX_LEAVES) &&
+        ((leaf_count - node_start) >= subtree_size))
+    {
+        uint64_t subtree_source_start = 0u;
+        if (ssz_internal_add_overflow_u64(source_start, node_start, &subtree_source_start))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+        return ssz_internal_merkleize_reader_fast(reader,
+                                                  reader_ctx,
+                                                  subtree_source_start,
+                                                  subtree_size,
+                                                  subtree_size,
+                                                  hash_fn,
+                                                  zero_hashes,
+                                                  out_root);
     }
 
     uint64_t half = subtree_size >> 1u;
@@ -244,6 +388,24 @@ static ssz_error_t ssz_internal_merkleize_reader(
     if (err != SSZ_SUCCESS)
     {
         return err;
+    }
+
+    if (leaf_count == 0u)
+    {
+        *out_root = zero_hashes[depth];
+        return SSZ_SUCCESS;
+    }
+
+    if ((leaf_count == tree_size) && (tree_size <= SSZ_INTERNAL_FAST_MERKLE_MAX_LEAVES))
+    {
+        return ssz_internal_merkleize_reader_fast(reader,
+                                                  reader_ctx,
+                                                  source_start,
+                                                  leaf_count,
+                                                  tree_size,
+                                                  hash_fn,
+                                                  zero_hashes,
+                                                  out_root);
     }
 
     return ssz_internal_merkleize_subtree(reader,

@@ -1,6 +1,6 @@
 [submodule "external/consensus-specs"]
 	path = external/consensus-specs
 	url = https://github.com/ethereum/consensus-specs.git
-[submodule "external/hacl"]
-	path = external/hacl
-	url = https://github.com/cryspen/hacl-packages
+[submodule "external/aws-lc"]
+	path = external/aws-lc
+	url = https://github.com/aws/aws-lc.git

@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#include "Hacl_Hash_SHA2.h"
+#include <openssl/sha.h>
 
 #include "ssz_hash.h"
 #include "ssz_internal.h"
@@ -30,11 +30,11 @@ ssz_error_t ssz_hash_sha256(const uint8_t *data, size_t data_len, uint8_t out[32
     }
 
     /* Provide a valid pointer for zero-length input to avoid passing NULL into
-       HACL*, which triggers a pedantic UBSan finding (NULL + 0 is technically
+       SHA256, which triggers a pedantic UBSan finding (NULL + 0 is technically
        undefined in C even though no memory is accessed). */
     uint8_t empty = 0;
     const uint8_t *src = (data != NULL) ? data : &empty;
-    Hacl_Hash_SHA2_hash_256(out, (uint8_t *)(uintptr_t)src, (uint32_t)data_len);
+    SHA256(src, data_len, out);
     return SSZ_SUCCESS;
 }
 
@@ -80,6 +80,27 @@ ssz_error_t ssz_hash_2to1(
         return ssz_internal_normalize_hash_error(err);
     }
 
+    if (resolved == &ssz_internal_default_hash_fn)
+    {
+        const uint8_t *left_bytes = left->bytes;
+        const uint8_t *right_bytes = right->bytes;
+        uint8_t *out_bytes = out->bytes;
+
+        if ((right_bytes == left_bytes + SSZ_BYTES_PER_CHUNK) &&
+            ((out_bytes + SSZ_BYTES_PER_CHUNK <= left_bytes) ||
+             (out_bytes >= left_bytes + (SSZ_BYTES_PER_CHUNK * 2u))))
+        {
+            SHA256(left_bytes, SSZ_BYTES_PER_CHUNK * 2u, out_bytes);
+            return SSZ_SUCCESS;
+        }
+
+        uint8_t pair_data[64];
+        memcpy(pair_data, left_bytes, SSZ_BYTES_PER_CHUNK);
+        memcpy(pair_data + SSZ_BYTES_PER_CHUNK, right_bytes, SSZ_BYTES_PER_CHUNK);
+        SHA256(pair_data, sizeof(pair_data), out_bytes);
+        return SSZ_SUCCESS;
+    }
+
     uint8_t pair_data[64];
     memcpy(pair_data, left->bytes, SSZ_BYTES_PER_CHUNK);
     memcpy(pair_data + SSZ_BYTES_PER_CHUNK, right->bytes, SSZ_BYTES_PER_CHUNK);
@@ -114,6 +135,50 @@ ssz_error_t ssz_hash_2to1_batch(
     if (pair_count > (SIZE_MAX / 2u))
     {
         return SSZ_ERR_OVERFLOW;
+    }
+
+    if ((resolved->hash_2to1 == NULL) && (pair_count != 0u))
+    {
+        bool use_default_sha256 = (resolved == &ssz_internal_default_hash_fn);
+        size_t pairs_bytes_len = 0u;
+        size_t out_bytes_len = 0u;
+        bool overlap = true;
+
+        if (!ssz_internal_mul_overflow_size(pair_count, SSZ_BYTES_PER_CHUNK * 2u, &pairs_bytes_len) &&
+            !ssz_internal_mul_overflow_size(pair_count, SSZ_BYTES_PER_CHUNK, &out_bytes_len))
+        {
+            const uint8_t *pairs_begin = (const uint8_t *)pairs;
+            const uint8_t *pairs_end = pairs_begin + pairs_bytes_len;
+            uint8_t *out_begin = (uint8_t *)out;
+            uint8_t *out_end = out_begin + out_bytes_len;
+            overlap = (out_begin < pairs_end) && (pairs_begin < out_end);
+        }
+
+        if (!overlap)
+        {
+            if (use_default_sha256)
+            {
+                for (size_t i = 0u; i < pair_count; i++)
+                {
+                    const uint8_t *pair_bytes = (const uint8_t *)&pairs[i * 2u];
+                    SHA256(pair_bytes, SSZ_BYTES_PER_CHUNK * 2u, out[i].bytes);
+                }
+            }
+            else
+            {
+                for (size_t i = 0u; i < pair_count; i++)
+                {
+                    const uint8_t *pair_bytes = (const uint8_t *)&pairs[i * 2u];
+                    ssz_error_t err =
+                        resolved->hash(resolved->ctx, pair_bytes, SSZ_BYTES_PER_CHUNK * 2u, out[i].bytes);
+                    if (err != SSZ_SUCCESS)
+                    {
+                        return ssz_internal_normalize_hash_error(err);
+                    }
+                }
+            }
+            return SSZ_SUCCESS;
+        }
     }
 
     for (size_t i = 0u; i < pair_count; i++)
