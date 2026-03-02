@@ -1,8 +1,39 @@
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "ssz_internal.h"
 #include "ssz_merkle.h"
+
+/* Portable 32-byte-aligned allocation for ssz_chunk_t arrays (C99). */
+static void *ssz_internal_alloc_aligned32(size_t size)
+{
+    if (size == 0u)
+    {
+        size = 1u;
+    }
+    size_t total = size + 32u + sizeof(void *);
+    if (total < size)
+    {
+        return NULL;
+    }
+    void *raw = malloc(total);
+    if (raw == NULL)
+    {
+        return NULL;
+    }
+    uintptr_t addr = ((uintptr_t)raw + sizeof(void *) + 31u) & ~(uintptr_t)31u;
+    ((void **)addr)[-1] = raw;
+    return (void *)addr;
+}
+
+static void ssz_internal_free_aligned32(void *ptr)
+{
+    if (ptr != NULL)
+    {
+        free(((void **)ptr)[-1]);
+    }
+}
 
 typedef ssz_error_t (*ssz_internal_leaf_reader_t)(
     const void *ctx,
@@ -184,16 +215,16 @@ static ssz_error_t ssz_internal_merkleize_reader_fast(
         return SSZ_ERR_OVERFLOW;
     }
 
-    level_storage = (ssz_chunk_t *)malloc(level_storage_bytes);
+    level_storage = (ssz_chunk_t *)ssz_internal_alloc_aligned32(level_storage_bytes);
     if (level_storage == NULL)
     {
         return SSZ_ERR_OVERFLOW;
     }
 
-    parent_storage = (ssz_chunk_t *)malloc(parent_storage_bytes);
+    parent_storage = (ssz_chunk_t *)ssz_internal_alloc_aligned32(parent_storage_bytes);
     if (parent_storage == NULL)
     {
-        free(level_storage);
+        ssz_internal_free_aligned32(level_storage);
         return SSZ_ERR_OVERFLOW;
     }
 
@@ -284,8 +315,8 @@ static ssz_error_t ssz_internal_merkleize_reader_fast(
 
     *out_root = current[0];
 cleanup:
-    free(parent_storage);
-    free(level_storage);
+    ssz_internal_free_aligned32(parent_storage);
+    ssz_internal_free_aligned32(level_storage);
     return ret;
 }
 
