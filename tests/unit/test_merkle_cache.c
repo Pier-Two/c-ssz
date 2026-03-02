@@ -482,10 +482,10 @@ static bool test_no_limit_growth_preserves_left_subtree_work(void)
 
 static bool test_cached_vs_stateless_equivalence(void)
 {
-    const uint64_t element_limit = 40u;
+#define ELEMENT_LIMIT 40u
     const size_t element_size = 1u;
-    const uint64_t counts[] = {0u, 1u, 15u, 32u, 33u, 40u};
-    uint8_t bytes[element_limit];
+    const uint64_t counts[] = {0u, 1u, 15u, 32u, 33u, ELEMENT_LIMIT};
+    uint8_t bytes[ELEMENT_LIMIT];
     const ssz_merkle_cache_config_t cfg = {
         .initial_leaf_count = 0u,
         .leaf_limit = 2u,
@@ -508,16 +508,17 @@ static bool test_cached_vs_stateless_equivalence(void)
         ssz_chunk_t expected_root;
 
         ASSERT_ERR(ssz_merkle_cache_sync_packed_list_fixed(
-                       cache, bytes, count, element_limit, element_size),
+                       cache, bytes, count, ELEMENT_LIMIT, element_size),
                    SSZ_SUCCESS);
         ASSERT_ERR(ssz_merkle_cache_root(cache, &cached_root), SSZ_SUCCESS);
         ASSERT_ERR(ssz_hash_tree_root_list_fixed(
-                       bytes, count, element_limit, element_size, NULL, &expected_root),
+                       bytes, count, ELEMENT_LIMIT, element_size, NULL, &expected_root),
                    SSZ_SUCCESS);
         ASSERT_CHUNK_EQ(cached_root, expected_root);
     }
 
     ssz_merkle_cache_destroy(cache);
+#undef ELEMENT_LIMIT
     return true;
 }
 
