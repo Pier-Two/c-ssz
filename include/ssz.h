@@ -9,6 +9,7 @@
 #include "ssz_deserialize.h"
 #include "ssz_hash.h"
 #include "ssz_merkle.h"
+#include "ssz_merkle_cache.h"
 #include "ssz_proof.h"
 #include "ssz_serialize.h"
 #include "ssz_types.h"

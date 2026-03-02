@@ -99,6 +99,7 @@ static size_t g_exec_header_list_encoded_len = 0u;
 static bench_read_sink_t g_exec_header_read_sink;
 static bench_exec_header_list_read_ctx_t g_exec_header_list_read_ctx;
 static ssz_member_codec_t g_exec_header_list_read_codec;
+static ssz_member_codec_t g_exec_header_list_hash_codec;
 
 #define BENCH_EXPECT_OK(expr)                                                                        \
     do                                                                                               \
@@ -246,6 +247,98 @@ static ssz_error_t bench_exec_header_list_member_read(
                                      &read_ctx->container_read_codec);
 }
 
+static ssz_error_t bench_hash_tree_root_fixed_bytes(
+    const uint8_t *bytes,
+    size_t byte_len,
+    ssz_chunk_t *out_root)
+{
+    return ssz_hash_tree_root_vector_fixed(bytes, (uint64_t)byte_len, 1u, NULL, out_root);
+}
+
+static ssz_error_t bench_exec_header_field_root(
+    const void *ctx,
+    uint64_t member_id,
+    ssz_chunk_t *out_root)
+{
+    const bench_execution_payload_header_t *header = (const bench_execution_payload_header_t *)ctx;
+    if ((header == NULL) || (out_root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    switch (member_id)
+    {
+    case 0u:
+        return bench_hash_tree_root_fixed_bytes(header->parent_hash, sizeof(header->parent_hash), out_root);
+    case 1u:
+        return bench_hash_tree_root_fixed_bytes(header->fee_recipient, sizeof(header->fee_recipient), out_root);
+    case 2u:
+        return bench_hash_tree_root_fixed_bytes(header->state_root, sizeof(header->state_root), out_root);
+    case 3u:
+        return bench_hash_tree_root_fixed_bytes(header->receipts_root, sizeof(header->receipts_root), out_root);
+    case 4u:
+        return bench_hash_tree_root_fixed_bytes(header->logs_bloom, sizeof(header->logs_bloom), out_root);
+    case 5u:
+        return bench_hash_tree_root_fixed_bytes(header->prev_randao, sizeof(header->prev_randao), out_root);
+    case 6u:
+        return bench_hash_tree_root_fixed_bytes(header->block_number, sizeof(header->block_number), out_root);
+    case 7u:
+        return bench_hash_tree_root_fixed_bytes(header->gas_limit, sizeof(header->gas_limit), out_root);
+    case 8u:
+        return bench_hash_tree_root_fixed_bytes(header->gas_used, sizeof(header->gas_used), out_root);
+    case 9u:
+        return bench_hash_tree_root_fixed_bytes(header->timestamp, sizeof(header->timestamp), out_root);
+    case ARENA_EXEC_HEADER_EXTRA_DATA_FIELD_ID:
+        return ssz_hash_tree_root_list_fixed(header->extra_data,
+                                             (uint64_t)sizeof(header->extra_data),
+                                             ARENA_EXEC_HEADER_EXTRA_DATA_MAX_LEN,
+                                             1u,
+                                             NULL,
+                                             out_root);
+    case 11u:
+        return bench_hash_tree_root_fixed_bytes(header->base_fee_per_gas, sizeof(header->base_fee_per_gas), out_root);
+    case 12u:
+        return bench_hash_tree_root_fixed_bytes(header->block_hash, sizeof(header->block_hash), out_root);
+    case 13u:
+        return bench_hash_tree_root_fixed_bytes(header->transactions_root, sizeof(header->transactions_root), out_root);
+    case 14u:
+        return bench_hash_tree_root_fixed_bytes(header->withdrawals_root, sizeof(header->withdrawals_root), out_root);
+    case 15u:
+        return bench_hash_tree_root_fixed_bytes(header->blob_gas_used, sizeof(header->blob_gas_used), out_root);
+    case 16u:
+        return bench_hash_tree_root_fixed_bytes(header->excess_blob_gas, sizeof(header->excess_blob_gas), out_root);
+    default:
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+}
+
+static ssz_error_t bench_exec_header_list_member_root(
+    const void *ctx,
+    uint64_t member_id,
+    ssz_chunk_t *out_root)
+{
+    const bench_exec_header_list_write_ctx_t *hash_ctx = (const bench_exec_header_list_write_ctx_t *)ctx;
+    if ((hash_ctx == NULL) || (out_root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (member_id >= hash_ctx->count)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    const bench_execution_payload_header_t *header = &hash_ctx->headers[member_id];
+    const ssz_member_codec_t field_codec = (ssz_member_codec_t){
+        .ctx = (void *)header,
+        .write = NULL,
+        .read = NULL,
+        .root = bench_exec_header_field_root,
+    };
+
+    return ssz_hash_tree_root_container(
+        ARENA_EXEC_HEADER_FIELD_COUNT, &field_codec, NULL, out_root);
+}
+
 static void bench_init_arena_compare_data(void)
 {
     if (g_init_state != 0)
@@ -285,6 +378,12 @@ static void bench_init_arena_compare_data(void)
         .write = bench_exec_header_list_member_write,
         .read = NULL,
         .root = NULL,
+    };
+    g_exec_header_list_hash_codec = (ssz_member_codec_t){
+        .ctx = &g_exec_header_list_write_ctx,
+        .write = NULL,
+        .read = NULL,
+        .root = bench_exec_header_list_member_root,
     };
 
     err = ssz_serialize_list_variable(ARENA_EXEC_HEADER_COUNT,
@@ -439,6 +538,24 @@ UBENCH(arena_compare, execution_payload_header_list_1000_decode)
 
     ubench_do_nothing((void *)&g_exec_header_read_sink);
     ubench_do_nothing((void *)&out_count);
+}
+
+UBENCH(arena_compare, execution_payload_header_list_1000_hash_tree_root)
+{
+    bench_init_arena_compare_data();
+    if (g_init_state != 1)
+    {
+        return;
+    }
+
+    ssz_chunk_t root;
+    BENCH_EXPECT_OK(ssz_hash_tree_root_list_composite(ARENA_EXEC_HEADER_COUNT,
+                                                      ARENA_EXEC_HEADER_LIMIT,
+                                                      &g_exec_header_list_hash_codec,
+                                                      NULL,
+                                                      &root));
+
+    ubench_do_nothing((void *)&root);
 }
 
 UBENCH_MAIN();

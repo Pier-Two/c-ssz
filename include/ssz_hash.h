@@ -27,6 +27,19 @@ ssz_error_t ssz_hash_2to1_batch(
     size_t pair_count,
     ssz_chunk_t *out);
 
+ssz_error_t ssz_hash_2to1_batch_raw(
+    const ssz_hash_fn_t *hash_fn,
+    const uint8_t *pairs64,
+    size_t pair_count,
+    ssz_chunk_t *out);
+
+ssz_error_t ssz_hash_2to1_batch_inplace(
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *nodes,
+    size_t pair_count);
+
+const ssz_chunk_t *ssz_hash_default_zero_hashes(void);
+
 #ifdef __cplusplus
 }
 #endif

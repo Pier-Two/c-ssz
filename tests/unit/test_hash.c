@@ -231,6 +231,32 @@ static bool test_hash_default_provider(void)
     return true;
 }
 
+static bool test_hash_default_zero_hashes_match_runtime_computation(void)
+{
+    const ssz_chunk_t *static_zero_hashes = ssz_hash_default_zero_hashes();
+    ssz_chunk_t runtime_zero_hashes[64];
+    uint8_t pair[SSZ_BYTES_PER_CHUNK * 2u];
+
+    ASSERT_TRUE(static_zero_hashes != NULL);
+
+    memset(runtime_zero_hashes[0].bytes, 0u, SSZ_BYTES_PER_CHUNK);
+    for (size_t depth = 1u; depth < 64u; depth++)
+    {
+        memcpy(pair, runtime_zero_hashes[depth - 1u].bytes, SSZ_BYTES_PER_CHUNK);
+        memcpy(pair + SSZ_BYTES_PER_CHUNK, runtime_zero_hashes[depth - 1u].bytes, SSZ_BYTES_PER_CHUNK);
+        ASSERT_ERR(ssz_hash_sha256(pair, sizeof(pair), runtime_zero_hashes[depth].bytes), SSZ_SUCCESS);
+    }
+
+    for (size_t depth = 0u; depth < 64u; depth++)
+    {
+        ASSERT_MEM_EQ(static_zero_hashes[depth].bytes,
+                      runtime_zero_hashes[depth].bytes,
+                      SSZ_BYTES_PER_CHUNK);
+    }
+
+    return true;
+}
+
 static bool test_hash_2to1_batch_cases(void)
 {
     const ssz_chunk_t pairs_one[2] = {make_chunk(0x10u), make_chunk(0x20u)};
@@ -413,6 +439,8 @@ int main(void)
         {"hash_sha256_known_vectors", test_hash_sha256_known_vectors},
         {"hash_2to1_matches_concat_sha256", test_hash_2to1_matches_concat_sha256},
         {"hash_default_provider", test_hash_default_provider},
+        {"hash_default_zero_hashes_match_runtime_computation",
+         test_hash_default_zero_hashes_match_runtime_computation},
         {"hash_2to1_batch_cases", test_hash_2to1_batch_cases},
         {"hash_2to1_null_hash_fn_fallback", test_hash_2to1_null_hash_fn_fallback},
         {"hash_sha256_error_paths", test_hash_sha256_error_paths},

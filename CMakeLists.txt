@@ -59,6 +59,7 @@ add_library(ssz
   src/ssz_serialize.c
   src/ssz_deserialize.c
   src/ssz_merkle.c
+  src/ssz_merkle_cache.c
   src/ssz_proof.c
   src/ssz_hash.c
   src/ssz_endian.c
@@ -87,6 +88,10 @@ add_executable(test_merkle tests/unit/test_merkle.c)
 target_link_libraries(test_merkle PRIVATE ssz)
 add_test(NAME test_merkle COMMAND test_merkle)
 
+add_executable(test_merkle_cache tests/unit/test_merkle_cache.c)
+target_link_libraries(test_merkle_cache PRIVATE ssz)
+add_test(NAME test_merkle_cache COMMAND test_merkle_cache)
+
 add_executable(test_proof tests/unit/test_proof.c)
 target_link_libraries(test_proof PRIVATE ssz)
 add_test(NAME test_proof COMMAND test_proof)
@@ -108,6 +113,7 @@ set(SSZ_COMMON_SOURCES
   src/ssz_serialize.c
   src/ssz_deserialize.c
   src/ssz_merkle.c
+  src/ssz_merkle_cache.c
   src/ssz_proof.c
   src/ssz_hash.c
   src/ssz_endian.c
