@@ -10,12 +10,20 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
-set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(BUILD_LIBSSL OFF CACHE BOOL "" FORCE)
-set(BUILD_TOOL OFF CACHE BOOL "" FORCE)
-set(DISABLE_GO ON CACHE BOOL "" FORCE)
-set(DISABLE_PERL ON CACHE BOOL "" FORCE)
-add_subdirectory(external/aws-lc)
+option(SSZ_USE_SYSTEM_CRYPTO "Use system libcrypto (OpenSSL/LibreSSL) instead of AWS-LC" OFF)
+
+if(SSZ_USE_SYSTEM_CRYPTO)
+  find_package(OpenSSL REQUIRED)
+  set(SSZ_CRYPTO_LIB OpenSSL::Crypto)
+else()
+  set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+  set(BUILD_LIBSSL OFF CACHE BOOL "" FORCE)
+  set(BUILD_TOOL OFF CACHE BOOL "" FORCE)
+  set(DISABLE_GO ON CACHE BOOL "" FORCE)
+  set(DISABLE_PERL ON CACHE BOOL "" FORCE)
+  add_subdirectory(external/aws-lc)
+  set(SSZ_CRYPTO_LIB crypto)
+endif()
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
   add_compile_options(-Wall -Wextra -O3 -g)
@@ -63,7 +71,7 @@ target_include_directories(ssz
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(ssz PUBLIC ${SSZ_PLATFORM_LIBS} crypto)
+target_link_libraries(ssz PUBLIC ${SSZ_PLATFORM_LIBS} ${SSZ_CRYPTO_LIB})
 
 enable_testing()
 
@@ -114,7 +122,7 @@ target_include_directories(test_proof_internal PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-target_link_libraries(test_proof_internal PRIVATE ${SSZ_PLATFORM_LIBS} crypto)
+target_link_libraries(test_proof_internal PRIVATE ${SSZ_PLATFORM_LIBS} ${SSZ_CRYPTO_LIB})
 add_test(NAME test_proof_internal COMMAND test_proof_internal)
 
 
@@ -263,6 +271,6 @@ if(SSZ_BUILD_FUZZ)
     )
     target_compile_options(${fuzz_name} PRIVATE -fsanitize=fuzzer,address)
     target_link_options(${fuzz_name} PRIVATE -fsanitize=fuzzer,address)
-    target_link_libraries(${fuzz_name} PRIVATE ${SSZ_PLATFORM_LIBS} crypto)
+    target_link_libraries(${fuzz_name} PRIVATE ${SSZ_PLATFORM_LIBS} ${SSZ_CRYPTO_LIB})
   endforeach()
 endif()

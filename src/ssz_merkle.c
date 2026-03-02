@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 
 #include "ssz_internal.h"
@@ -148,6 +149,15 @@ static ssz_error_t ssz_internal_merkleize_reader_fast(
     uint64_t source_end = 0u;
     size_t source_start_sz = 0u;
     size_t width = 0u;
+    size_t parent_cap = 0u;
+    size_t level_storage_bytes = 0u;
+    size_t parent_storage_bytes = 0u;
+    ssz_chunk_t *level_storage = NULL;
+    ssz_chunk_t *parent_storage = NULL;
+    ssz_chunk_t *current = NULL;
+    ssz_chunk_t *next = NULL;
+    bool has_initial_level = false;
+    ssz_error_t ret = SSZ_SUCCESS;
 
     if (!ssz_internal_u64_to_size(tree_size, &tree_size_sz) ||
         !ssz_internal_u64_to_size(leaf_count, &leaf_count_sz))
@@ -167,12 +177,28 @@ static ssz_error_t ssz_internal_merkleize_reader_fast(
         return SSZ_ERR_OVERFLOW;
     }
 
-    size_t parent_cap = (tree_size_sz > 1u) ? (tree_size_sz >> 1u) : 1u;
-    ssz_chunk_t level_storage[tree_size_sz];
-    ssz_chunk_t parent_storage[parent_cap];
-    ssz_chunk_t *current = level_storage;
-    ssz_chunk_t *next = parent_storage;
-    bool has_initial_level = false;
+    parent_cap = (tree_size_sz > 1u) ? (tree_size_sz >> 1u) : 1u;
+    if (ssz_internal_mul_overflow_size(tree_size_sz, sizeof(*level_storage), &level_storage_bytes) ||
+        ssz_internal_mul_overflow_size(parent_cap, sizeof(*parent_storage), &parent_storage_bytes))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    level_storage = (ssz_chunk_t *)malloc(level_storage_bytes);
+    if (level_storage == NULL)
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    parent_storage = (ssz_chunk_t *)malloc(parent_storage_bytes);
+    if (parent_storage == NULL)
+    {
+        free(level_storage);
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    current = level_storage;
+    next = parent_storage;
 
     if (reader == ssz_internal_read_chunk_leaf)
     {
@@ -185,14 +211,15 @@ static ssz_error_t ssz_internal_merkleize_reader_fast(
             if (tree_size_sz == 1u)
             {
                 *out_root = source_chunks[0];
-                return SSZ_SUCCESS;
+                goto cleanup;
             }
 
             size_t pair_count = tree_size_sz >> 1u;
             ssz_error_t err = ssz_hash_2to1_batch(hash_fn, source_chunks, pair_count, next);
             if (err != SSZ_SUCCESS)
             {
-                return err;
+                ret = err;
+                goto cleanup;
             }
             current = next;
             next = level_storage;
@@ -227,7 +254,8 @@ static ssz_error_t ssz_internal_merkleize_reader_fast(
             ssz_error_t err = reader(reader_ctx, source_index, &current[i]);
             if (err != SSZ_SUCCESS)
             {
-                return err;
+                ret = err;
+                goto cleanup;
             }
             source_index++;
         }
@@ -244,7 +272,8 @@ static ssz_error_t ssz_internal_merkleize_reader_fast(
         ssz_error_t err = ssz_hash_2to1_batch(hash_fn, current, pair_count, next);
         if (err != SSZ_SUCCESS)
         {
-            return err;
+            ret = err;
+            goto cleanup;
         }
 
         ssz_chunk_t *tmp = current;
@@ -254,7 +283,10 @@ static ssz_error_t ssz_internal_merkleize_reader_fast(
     }
 
     *out_root = current[0];
-    return SSZ_SUCCESS;
+cleanup:
+    free(parent_storage);
+    free(level_storage);
+    return ret;
 }
 
 static ssz_error_t ssz_internal_merkleize_subtree(
