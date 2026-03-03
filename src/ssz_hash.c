@@ -5,6 +5,16 @@
 
 #include <openssl/sha.h>
 
+#if defined(__has_feature)
+#if __has_feature(memory_sanitizer)
+#include <sanitizer/msan_interface.h>
+#define SSZ_MSAN_UNPOISON(ptr, size) __msan_unpoison((ptr), (size))
+#endif
+#endif
+#ifndef SSZ_MSAN_UNPOISON
+#define SSZ_MSAN_UNPOISON(ptr, size) ((void)(ptr), (void)(size))
+#endif
+
 #include "ssz_hash.h"
 #include "ssz_internal.h"
 
@@ -65,6 +75,7 @@ static ssz_error_t ssz_internal_sha256_64_batch_default(
         SHA256_Transform(&ctx, pair);
         SHA256_Transform(&ctx, ssz_internal_sha256_pad_block_for_64);
         ssz_internal_sha256_ctx_to_chunk(&ctx, &out[i]);
+        SSZ_MSAN_UNPOISON(&out[i], sizeof(out[i]));
     }
 
     return SSZ_SUCCESS;
@@ -101,6 +112,7 @@ ssz_error_t ssz_hash_sha256(const uint8_t *data, size_t data_len, uint8_t out[32
         uint8_t empty = 0u;
         const uint8_t *src = (data != NULL) ? data : &empty;
         SHA256(src, data_len, out);
+        SSZ_MSAN_UNPOISON(out, SHA256_DIGEST_LENGTH);
     }
 
     return SSZ_SUCCESS;
