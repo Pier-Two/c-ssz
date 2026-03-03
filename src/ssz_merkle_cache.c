@@ -1615,7 +1615,8 @@ ssz_error_t ssz_merkle_cache_create(
     if (cache->mix_in_length)
     {
         ssz_error_t mix_err =
-            ssz_mix_in_length(&cache->cached_data_root, cache->logical_length, cache->hash_fn, &cache->cached_root);
+            ssz_mix_in_length_u64(
+                &cache->cached_data_root, cache->logical_length, cache->hash_fn, &cache->cached_root);
         if (mix_err != SSZ_SUCCESS)
         {
             ssz_merkle_cache_destroy(cache);
@@ -1736,7 +1737,7 @@ ssz_error_t ssz_merkle_cache_root(ssz_merkle_cache_t *cache, ssz_chunk_t *out_ro
 
     if (!cache->final_root_valid)
     {
-        ssz_error_t err = ssz_mix_in_length(
+        ssz_error_t err = ssz_mix_in_length_u64(
             &cache->cached_data_root, cache->logical_length, cache->hash_fn, &cache->cached_root);
         if (err != SSZ_SUCCESS)
         {

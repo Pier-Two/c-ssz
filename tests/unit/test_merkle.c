@@ -138,6 +138,12 @@ static void write_u64_le(uint8_t out[8], uint64_t value)
     out[7] = (uint8_t)((value >> 56u) & 0xFFu);
 }
 
+static void write_u64_as_u256_le(uint8_t out[32], uint64_t value)
+{
+    memset(out, 0, 32u);
+    write_u64_le(out, value);
+}
+
 typedef struct
 {
     ssz_error_t hash_err;
@@ -401,7 +407,7 @@ static bool test_hash_tree_root_list_variants_and_mix_in_length(void)
 
     ssz_chunk_t data_root;
     ASSERT_ERR(ssz_merkleize(roots, 3u, 4u, NULL, &data_root), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_mix_in_length(&data_root, 3u, NULL, &expected_composite_root), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_mix_in_length_u64(&data_root, 3u, NULL, &expected_composite_root), SSZ_SUCCESS);
 
     ASSERT_CHUNK_EQ(composite_root, roots_root);
     ASSERT_CHUNK_EQ(composite_root, expected_composite_root);
@@ -537,13 +543,26 @@ static bool test_mix_in_helpers(void)
 {
     const ssz_chunk_t base = make_chunk(0xAAu);
     ssz_chunk_t root;
+    ssz_chunk_t root_u64;
 
-    ASSERT_ERR(ssz_mix_in_length(&base, 0x1122334455667788u, NULL, &root), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_mix_in_length_u64(&base, 0x1122334455667788u, NULL, &root_u64), SSZ_SUCCESS);
     ssz_chunk_t length_chunk = zero_chunk();
     write_u64_le(length_chunk.bytes, 0x1122334455667788u);
-    ssz_chunk_t expected_length;
-    ASSERT_ERR(ssz_hash_2to1(NULL, &base, &length_chunk, &expected_length), SSZ_SUCCESS);
-    ASSERT_CHUNK_EQ(root, expected_length);
+    ssz_chunk_t expected_length_u64;
+    ASSERT_ERR(ssz_hash_2to1(NULL, &base, &length_chunk, &expected_length_u64), SSZ_SUCCESS);
+    ASSERT_CHUNK_EQ(root_u64, expected_length_u64);
+
+    uint8_t length_u256[32];
+    write_u64_as_u256_le(length_u256, 0x1122334455667788u);
+    length_u256[8] = 0xA5u;
+    length_u256[31] = 0x3Cu;
+
+    ASSERT_ERR(ssz_mix_in_length(&base, length_u256, NULL, &root), SSZ_SUCCESS);
+    memcpy(length_chunk.bytes, length_u256, 32u);
+    ssz_chunk_t expected_length_u256;
+    ASSERT_ERR(ssz_hash_2to1(NULL, &base, &length_chunk, &expected_length_u256), SSZ_SUCCESS);
+    ASSERT_CHUNK_EQ(root, expected_length_u256);
+    ASSERT_TRUE(memcmp(root.bytes, root_u64.bytes, SSZ_BYTES_PER_CHUNK) != 0);
 
     ASSERT_ERR(ssz_mix_in_selector(&base, 0x5Au, NULL, &root), SSZ_SUCCESS);
     ssz_chunk_t selector_chunk = zero_chunk();
@@ -665,7 +684,7 @@ static bool test_progressive_hash_tree_root_variants(void)
     ASSERT_ERR(ssz_merkleize_progressive(
                    packed_chunks, 2u, NULL, &expected_progressive_list_fixed_data),
                SSZ_SUCCESS);
-    ASSERT_ERR(ssz_mix_in_length(
+    ASSERT_ERR(ssz_mix_in_length_u64(
                    &expected_progressive_list_fixed_data, 5u, NULL, &expected_progressive_list_fixed),
                SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(progressive_list_fixed_root, expected_progressive_list_fixed);
@@ -721,7 +740,7 @@ static bool test_progressive_hash_tree_root_variants(void)
     ssz_chunk_t expected_bitlist_data;
     ssz_chunk_t expected_bitlist_root;
     ASSERT_ERR(ssz_merkleize_progressive(bit_chunks, 2u, NULL, &expected_bitlist_data), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_mix_in_length(&expected_bitlist_data, 260u, NULL, &expected_bitlist_root), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_mix_in_length_u64(&expected_bitlist_data, 260u, NULL, &expected_bitlist_root), SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(progressive_bitlist_root, expected_bitlist_root);
 
     return true;
@@ -740,8 +759,8 @@ static bool test_null_hash_fn_fallback_uses_default(void)
 
     ssz_chunk_t mixed_null;
     ssz_chunk_t mixed_explicit;
-    ASSERT_ERR(ssz_mix_in_length(&root_null, 123u, NULL, &mixed_null), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_mix_in_length(&root_null, 123u, ssz_hash_default(), &mixed_explicit), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_mix_in_length_u64(&root_null, 123u, NULL, &mixed_null), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_mix_in_length_u64(&root_null, 123u, ssz_hash_default(), &mixed_explicit), SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(mixed_null, mixed_explicit);
 
     return true;
@@ -895,8 +914,11 @@ static bool test_merkle_additional_error_paths(void)
                SSZ_ERR_OVERFLOW);
 #endif
 
-    ASSERT_ERR(ssz_mix_in_length(NULL, 1u, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_mix_in_length(&root, 1u, NULL, NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_mix_in_length(NULL, (const uint8_t[32]){0u}, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_mix_in_length(&root, NULL, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_mix_in_length(&root, (const uint8_t[32]){0u}, NULL, NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_mix_in_length_u64(NULL, 1u, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_mix_in_length_u64(&root, 1u, NULL, NULL), SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_mix_in_selector(NULL, 1u, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_mix_in_selector(&root, 1u, NULL, NULL), SSZ_ERR_INVALID_ARGUMENT);
 

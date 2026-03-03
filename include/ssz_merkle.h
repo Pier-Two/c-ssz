@@ -95,6 +95,12 @@ ssz_error_t ssz_merkleize(
 
 ssz_error_t ssz_mix_in_length(
     const ssz_chunk_t *root,
+    const uint8_t length[32],
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root);
+
+ssz_error_t ssz_mix_in_length_u64(
+    const ssz_chunk_t *root,
     uint64_t length,
     const ssz_hash_fn_t *hash_fn,
     ssz_chunk_t *out_root);

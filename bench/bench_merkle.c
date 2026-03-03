@@ -271,7 +271,7 @@ UBENCH(merkle, mix_in_length)
     ssz_chunk_t mixed;
     for (size_t i = 0u; i < MERKLE_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_mix_in_length(&g_root, (uint64_t)i, NULL, &mixed));
+        BENCH_EXPECT_OK(ssz_mix_in_length_u64(&g_root, (uint64_t)i, NULL, &mixed));
     }
     ubench_do_nothing((void *)&mixed);
 }

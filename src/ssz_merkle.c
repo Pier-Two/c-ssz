@@ -869,7 +869,7 @@ ssz_error_t ssz_hash_tree_root_bitlist(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, bit_len, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, bit_len, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_vector_fixed(
@@ -1016,7 +1016,7 @@ ssz_error_t ssz_hash_tree_root_list_fixed(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, element_count, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, element_count, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_list_composite(
@@ -1059,7 +1059,7 @@ ssz_error_t ssz_hash_tree_root_list_composite(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, element_count, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, element_count, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_list_roots(
@@ -1090,7 +1090,7 @@ ssz_error_t ssz_hash_tree_root_list_roots(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, count, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, count, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_union(
@@ -1160,21 +1160,32 @@ ssz_error_t ssz_merkleize(
 
 ssz_error_t ssz_mix_in_length(
     const ssz_chunk_t *root,
-    uint64_t length,
+    const uint8_t length[32],
     const ssz_hash_fn_t *hash_fn,
     ssz_chunk_t *out_root)
 {
     ssz_chunk_t length_chunk;
 
-    if ((root == NULL) || (out_root == NULL))
+    if ((root == NULL) || (length == NULL) || (out_root == NULL))
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memset(length_chunk.bytes, 0, SSZ_BYTES_PER_CHUNK);
-    ssz_internal_write_u64_le(length_chunk.bytes, length);
+    memcpy(length_chunk.bytes, length, SSZ_BYTES_PER_CHUNK);
 
     return ssz_hash_2to1(hash_fn, root, &length_chunk, out_root);
+}
+
+ssz_error_t ssz_mix_in_length_u64(
+    const ssz_chunk_t *root,
+    uint64_t length,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    uint8_t length_bytes[32] = {0u};
+
+    ssz_internal_write_u64_le(length_bytes, length);
+    return ssz_mix_in_length(root, length_bytes, hash_fn, out_root);
 }
 
 ssz_error_t ssz_mix_in_selector(
@@ -1360,7 +1371,7 @@ ssz_error_t ssz_hash_tree_root_progressive_list_fixed(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, element_count, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, element_count, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_progressive_list_composite(
@@ -1398,7 +1409,7 @@ ssz_error_t ssz_hash_tree_root_progressive_list_composite(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, element_count, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, element_count, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_progressive_bitlist(
@@ -1458,7 +1469,7 @@ ssz_error_t ssz_hash_tree_root_progressive_bitlist(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, bit_len, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, bit_len, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_progressive_container_roots(
@@ -1514,5 +1525,5 @@ ssz_error_t ssz_hash_tree_root_progressive_list_roots(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, count, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, count, hash_fn, out_root);
 }

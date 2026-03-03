@@ -167,7 +167,7 @@ static bool test_create_destroy_lifecycle(void)
     ASSERT_TRUE(cache != NULL);
 
     ASSERT_ERR(ssz_merkleize(NULL, 0u, 8u, NULL, &expected_data), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_mix_in_length(&expected_data, 0u, NULL, &expected_root), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_mix_in_length_u64(&expected_data, 0u, NULL, &expected_root), SSZ_SUCCESS);
     ASSERT_ERR(ssz_merkle_cache_root(cache, &got_root), SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(got_root, expected_root);
 
@@ -178,7 +178,7 @@ static bool test_create_destroy_lifecycle(void)
     }
     ASSERT_ERR(ssz_merkle_cache_reset(cache), SSZ_SUCCESS);
     ASSERT_ERR(ssz_merkleize(NULL, 0u, 8u, NULL, &expected_data), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_mix_in_length(&expected_data, 0u, NULL, &expected_root), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_mix_in_length_u64(&expected_data, 0u, NULL, &expected_root), SSZ_SUCCESS);
     ASSERT_ERR(ssz_merkle_cache_root(cache, &got_root), SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(got_root, expected_root);
 
@@ -547,12 +547,12 @@ static bool test_zero_range_and_logical_length_changes(void)
     ASSERT_CHUNK_EQ(data_root, expected);
 
     ASSERT_ERR(ssz_merkle_cache_root(cache, &root_len2), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_mix_in_length(&expected, 2u, NULL, &expected), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_mix_in_length_u64(&expected, 2u, NULL, &expected), SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(root_len2, expected);
 
     ASSERT_ERR(ssz_merkle_cache_set_logical_length(cache, 9u), SSZ_SUCCESS);
     ASSERT_ERR(ssz_merkle_cache_root(cache, &root_len9), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_mix_in_length(&data_root, 9u, NULL, &expected), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_mix_in_length_u64(&data_root, 9u, NULL, &expected), SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(root_len9, expected);
     ASSERT_CHUNK_NE(root_len2, root_len9);
 
@@ -562,7 +562,7 @@ static bool test_zero_range_and_logical_length_changes(void)
 
     ASSERT_ERR(ssz_merkle_cache_set_logical_length(cache, 1u), SSZ_SUCCESS);
     ASSERT_ERR(ssz_merkle_cache_root(cache, &root_len2), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_mix_in_length(&leaves[0], 1u, NULL, &expected), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_mix_in_length_u64(&leaves[0], 1u, NULL, &expected), SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(root_len2, expected);
 
     ASSERT_ERR(ssz_merkle_cache_zero_range(cache, 0u, 1u), SSZ_SUCCESS);
@@ -573,7 +573,7 @@ static bool test_zero_range_and_logical_length_changes(void)
     ASSERT_ERR(ssz_merkle_cache_root(cache, &root_len2), SSZ_SUCCESS);
     {
         ssz_chunk_t zero = zero_chunk();
-        ASSERT_ERR(ssz_mix_in_length(&zero, 0u, NULL, &expected), SSZ_SUCCESS);
+        ASSERT_ERR(ssz_mix_in_length_u64(&zero, 0u, NULL, &expected), SSZ_SUCCESS);
     }
     ASSERT_CHUNK_EQ(root_len2, expected);
 
