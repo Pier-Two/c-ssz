@@ -218,6 +218,9 @@ jobs:
           if [ "${{ matrix.name }}" = "valgrind" ]; then
             packages+=(valgrind)
           fi
+          if [ "${{ matrix.name }}" = "msan" ]; then
+            packages+=(libssl-dev)
+          fi
           if [ ${#packages[@]} -gt 0 ]; then
             sudo apt-get update
             sudo apt-get install -y "${packages[@]}"
@@ -249,6 +252,9 @@ jobs:
           fi
           if [ -n "$CMAKE_C_FLAGS_EXTRA" ]; then
             cmake_args+=("-DCMAKE_C_FLAGS=$CMAKE_C_FLAGS_EXTRA")
+          fi
+          if [ "${{ matrix.name }}" = "msan" ]; then
+            cmake_args+=("-DSSZ_USE_SYSTEM_CRYPTO=ON")
           fi
           cmake "${cmake_args[@]}"
 
