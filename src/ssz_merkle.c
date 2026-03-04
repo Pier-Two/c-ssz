@@ -1,7 +1,39 @@
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ssz_internal.h"
 #include "ssz_merkle.h"
+
+/* Portable 32-byte-aligned allocation for ssz_chunk_t arrays (C99). */
+static void *ssz_internal_alloc_aligned32(size_t size)
+{
+    if (size == 0u)
+    {
+        size = 1u;
+    }
+    size_t total = size + 32u + sizeof(void *);
+    if (total < size)
+    {
+        return NULL;
+    }
+    void *raw = malloc(total);
+    if (raw == NULL)
+    {
+        return NULL;
+    }
+    uintptr_t addr = ((uintptr_t)raw + sizeof(void *) + 31u) & ~(uintptr_t)31u;
+    ((void **)addr)[-1] = raw;
+    return (void *)addr;
+}
+
+static void ssz_internal_free_aligned32(void *ptr)
+{
+    if (ptr != NULL)
+    {
+        free(((void **)ptr)[-1]);
+    }
+}
 
 typedef ssz_error_t (*ssz_internal_leaf_reader_t)(
     const void *ctx,
@@ -26,6 +58,9 @@ typedef struct
     const ssz_member_codec_t *codec;
     uint64_t count;
 } ssz_internal_codec_reader_ctx_t;
+
+#define SSZ_INTERNAL_FAST_MERKLE_MAX_LEAVES  UINT64_C(131072)
+#define SSZ_INTERNAL_STACK_MERKLE_MAX_LEAVES 64u
 
 static ssz_error_t ssz_internal_read_chunk_leaf(
     const void *ctx,
@@ -131,6 +166,188 @@ static ssz_error_t ssz_internal_build_zero_hashes(
     return SSZ_SUCCESS;
 }
 
+static ssz_error_t ssz_internal_merkleize_reader_fast(
+    ssz_internal_leaf_reader_t reader,
+    const void *reader_ctx,
+    uint64_t source_start,
+    uint64_t leaf_count,
+    uint64_t tree_size,
+    const ssz_hash_fn_t *hash_fn,
+    const ssz_chunk_t zero_hashes[64],
+    ssz_chunk_t *out_root)
+{
+    size_t tree_size_sz = 0u;
+    size_t leaf_count_sz = 0u;
+    uint64_t source_end = 0u;
+    size_t source_start_sz = 0u;
+    size_t width = 0u;
+    size_t level_storage_cap = 0u;
+    size_t level_storage_bytes = 0u;
+    ssz_chunk_t *level_storage = NULL;
+    ssz_chunk_t stack_storage[SSZ_INTERNAL_STACK_MERKLE_MAX_LEAVES];
+    ssz_error_t ret = SSZ_SUCCESS;
+
+    if (!ssz_internal_u64_to_size(tree_size, &tree_size_sz) ||
+        !ssz_internal_u64_to_size(leaf_count, &leaf_count_sz))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (tree_size_sz == 0u)
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_internal_add_overflow_u64(source_start, leaf_count, &source_end))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (!ssz_internal_u64_to_size(source_start, &source_start_sz))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    if (tree_size_sz <= SSZ_INTERNAL_STACK_MERKLE_MAX_LEAVES)
+    {
+        uint64_t source_index = source_start;
+        for (size_t i = 0u; i < leaf_count_sz; i++)
+        {
+            ssz_error_t err = reader(reader_ctx, source_index, &stack_storage[i]);
+            if (err != SSZ_SUCCESS)
+            {
+                return err;
+            }
+            source_index++;
+        }
+        for (size_t i = leaf_count_sz; i < tree_size_sz; i++)
+        {
+            stack_storage[i] = zero_hashes[0];
+        }
+
+        width = tree_size_sz;
+        while (width > 1u)
+        {
+            size_t pair_count = width >> 1u;
+            ssz_error_t err = ssz_hash_2to1_batch_inplace(hash_fn, stack_storage, pair_count);
+            if (err != SSZ_SUCCESS)
+            {
+                return err;
+            }
+            width = pair_count;
+        }
+
+        *out_root = stack_storage[0];
+        return SSZ_SUCCESS;
+    }
+
+    if ((leaf_count == tree_size) && (tree_size_sz > 1u) && (reader == ssz_internal_read_chunk_leaf))
+    {
+        const ssz_internal_chunk_reader_ctx_t *chunk_reader =
+            (const ssz_internal_chunk_reader_ctx_t *)reader_ctx;
+        if ((chunk_reader != NULL) && ((chunk_reader->chunks != NULL) || (leaf_count == 0u)) &&
+            (source_start <= chunk_reader->count) && ((chunk_reader->count - source_start) >= leaf_count))
+        {
+            const ssz_chunk_t *source_chunks = chunk_reader->chunks + source_start_sz;
+            level_storage_cap = tree_size_sz >> 1u;
+            if (ssz_internal_mul_overflow_size(level_storage_cap, sizeof(*level_storage), &level_storage_bytes))
+            {
+                return SSZ_ERR_OVERFLOW;
+            }
+            level_storage = (ssz_chunk_t *)ssz_internal_alloc_aligned32(level_storage_bytes);
+            if (level_storage == NULL)
+            {
+                return SSZ_ERR_OVERFLOW;
+            }
+
+            ret = ssz_hash_2to1_batch(hash_fn, source_chunks, level_storage_cap, level_storage);
+            if (ret != SSZ_SUCCESS)
+            {
+                goto cleanup;
+            }
+            width = level_storage_cap;
+            goto reduce_levels;
+        }
+    }
+
+    if ((leaf_count == tree_size) && (tree_size_sz > 1u) && (reader == ssz_internal_read_bytes_leaf))
+    {
+        const ssz_internal_bytes_reader_ctx_t *bytes_reader = (const ssz_internal_bytes_reader_ctx_t *)reader_ctx;
+        size_t source_offset = 0u;
+        size_t copy_len = 0u;
+
+        if ((bytes_reader != NULL) && ((bytes_reader->bytes != NULL) || (bytes_reader->byte_len == 0u)) &&
+            !ssz_internal_mul_overflow_size(source_start_sz, SSZ_BYTES_PER_CHUNK, &source_offset) &&
+            !ssz_internal_mul_overflow_size(tree_size_sz, SSZ_BYTES_PER_CHUNK, &copy_len) &&
+            (source_offset <= bytes_reader->byte_len) &&
+            (copy_len <= (bytes_reader->byte_len - source_offset)))
+        {
+            level_storage_cap = tree_size_sz >> 1u;
+            if (ssz_internal_mul_overflow_size(level_storage_cap, sizeof(*level_storage), &level_storage_bytes))
+            {
+                return SSZ_ERR_OVERFLOW;
+            }
+            level_storage = (ssz_chunk_t *)ssz_internal_alloc_aligned32(level_storage_bytes);
+            if (level_storage == NULL)
+            {
+                return SSZ_ERR_OVERFLOW;
+            }
+
+            ret = ssz_hash_2to1_batch_raw(hash_fn, bytes_reader->bytes + source_offset, level_storage_cap, level_storage);
+            if (ret != SSZ_SUCCESS)
+            {
+                goto cleanup;
+            }
+            width = level_storage_cap;
+            goto reduce_levels;
+        }
+    }
+
+    level_storage_cap = tree_size_sz;
+    if (ssz_internal_mul_overflow_size(level_storage_cap, sizeof(*level_storage), &level_storage_bytes))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    level_storage = (ssz_chunk_t *)ssz_internal_alloc_aligned32(level_storage_bytes);
+    if (level_storage == NULL)
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+
+    {
+        uint64_t source_index = source_start;
+        for (size_t i = 0u; i < leaf_count_sz; i++)
+        {
+            ret = reader(reader_ctx, source_index, &level_storage[i]);
+            if (ret != SSZ_SUCCESS)
+            {
+                goto cleanup;
+            }
+            source_index++;
+        }
+        for (size_t i = leaf_count_sz; i < tree_size_sz; i++)
+        {
+            level_storage[i] = zero_hashes[0];
+        }
+    }
+    width = tree_size_sz;
+
+reduce_levels:
+    while (width > 1u)
+    {
+        size_t pair_count = width >> 1u;
+        ret = ssz_hash_2to1_batch_inplace(hash_fn, level_storage, pair_count);
+        if (ret != SSZ_SUCCESS)
+        {
+            goto cleanup;
+        }
+        width = pair_count;
+    }
+
+    *out_root = level_storage[0];
+
+cleanup:
+    ssz_internal_free_aligned32(level_storage);
+    return ret;
+}
+
 static ssz_error_t ssz_internal_merkleize_subtree(
     ssz_internal_leaf_reader_t reader,
     const void *reader_ctx,
@@ -157,6 +374,24 @@ static ssz_error_t ssz_internal_merkleize_subtree(
             return SSZ_ERR_OVERFLOW;
         }
         return reader(reader_ctx, source_index, out_root);
+    }
+
+    if ((subtree_size <= SSZ_INTERNAL_FAST_MERKLE_MAX_LEAVES) &&
+        ((leaf_count - node_start) >= subtree_size))
+    {
+        uint64_t subtree_source_start = 0u;
+        if (ssz_internal_add_overflow_u64(source_start, node_start, &subtree_source_start))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+        return ssz_internal_merkleize_reader_fast(reader,
+                                                  reader_ctx,
+                                                  subtree_source_start,
+                                                  subtree_size,
+                                                  subtree_size,
+                                                  hash_fn,
+                                                  zero_hashes,
+                                                  out_root);
     }
 
     uint64_t half = subtree_size >> 1u;
@@ -213,9 +448,18 @@ static ssz_error_t ssz_internal_merkleize_reader(
 {
     uint64_t effective_width = 0u;
     uint64_t tree_size = 0u;
-    ssz_chunk_t zero_hashes[64];
+    uint32_t depth = 0u;
+    ssz_chunk_t zero_hashes_buf[64];
+    const ssz_chunk_t *zero_hashes = NULL;
+    const ssz_hash_fn_t *resolved_hash_fn = NULL;
 
     if ((reader == NULL) || (out_root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    resolved_hash_fn = ssz_internal_resolve_hash_fn(hash_fn);
+    if ((resolved_hash_fn == NULL) || (resolved_hash_fn->hash == NULL))
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
@@ -239,11 +483,41 @@ static ssz_error_t ssz_internal_merkleize_reader(
         return SSZ_ERR_OVERFLOW;
     }
 
-    uint32_t depth = ssz_internal_log2_u64(tree_size);
-    ssz_error_t err = ssz_internal_build_zero_hashes(depth, hash_fn, zero_hashes);
-    if (err != SSZ_SUCCESS)
+    depth = ssz_internal_log2_u64(tree_size);
+    if (resolved_hash_fn == ssz_hash_default())
     {
-        return err;
+        zero_hashes = ssz_hash_default_zero_hashes();
+    }
+    else
+    {
+        ssz_error_t err = ssz_internal_build_zero_hashes(depth, resolved_hash_fn, zero_hashes_buf);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
+        }
+        zero_hashes = zero_hashes_buf;
+    }
+    if (zero_hashes == NULL)
+    {
+        return SSZ_ERR_HASH_FAILURE;
+    }
+
+    if (leaf_count == 0u)
+    {
+        *out_root = zero_hashes[depth];
+        return SSZ_SUCCESS;
+    }
+
+    if ((leaf_count == tree_size) && (tree_size <= SSZ_INTERNAL_FAST_MERKLE_MAX_LEAVES))
+    {
+        return ssz_internal_merkleize_reader_fast(reader,
+                                                  reader_ctx,
+                                                  source_start,
+                                                  leaf_count,
+                                                  tree_size,
+                                                  resolved_hash_fn,
+                                                  zero_hashes,
+                                                  out_root);
     }
 
     return ssz_internal_merkleize_subtree(reader,
@@ -253,7 +527,7 @@ static ssz_error_t ssz_internal_merkleize_reader(
                                           0u,
                                           tree_size,
                                           depth,
-                                          hash_fn,
+                                          resolved_hash_fn,
                                           zero_hashes,
                                           out_root);
 }
@@ -595,7 +869,7 @@ ssz_error_t ssz_hash_tree_root_bitlist(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, bit_len, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, bit_len, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_vector_fixed(
@@ -742,7 +1016,7 @@ ssz_error_t ssz_hash_tree_root_list_fixed(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, element_count, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, element_count, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_list_composite(
@@ -785,7 +1059,7 @@ ssz_error_t ssz_hash_tree_root_list_composite(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, element_count, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, element_count, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_list_roots(
@@ -816,7 +1090,7 @@ ssz_error_t ssz_hash_tree_root_list_roots(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, count, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, count, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_union(
@@ -886,21 +1160,32 @@ ssz_error_t ssz_merkleize(
 
 ssz_error_t ssz_mix_in_length(
     const ssz_chunk_t *root,
-    uint64_t length,
+    const uint8_t length[32],
     const ssz_hash_fn_t *hash_fn,
     ssz_chunk_t *out_root)
 {
     ssz_chunk_t length_chunk;
 
-    if ((root == NULL) || (out_root == NULL))
+    if ((root == NULL) || (length == NULL) || (out_root == NULL))
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memset(length_chunk.bytes, 0, SSZ_BYTES_PER_CHUNK);
-    ssz_internal_write_u64_le(length_chunk.bytes, length);
+    memcpy(length_chunk.bytes, length, SSZ_BYTES_PER_CHUNK);
 
     return ssz_hash_2to1(hash_fn, root, &length_chunk, out_root);
+}
+
+ssz_error_t ssz_mix_in_length_u64(
+    const ssz_chunk_t *root,
+    uint64_t length,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    uint8_t length_bytes[32] = {0u};
+
+    ssz_internal_write_u64_le(length_bytes, length);
+    return ssz_mix_in_length(root, length_bytes, hash_fn, out_root);
 }
 
 ssz_error_t ssz_mix_in_selector(
@@ -1086,7 +1371,7 @@ ssz_error_t ssz_hash_tree_root_progressive_list_fixed(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, element_count, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, element_count, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_progressive_list_composite(
@@ -1124,7 +1409,7 @@ ssz_error_t ssz_hash_tree_root_progressive_list_composite(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, element_count, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, element_count, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_progressive_bitlist(
@@ -1184,7 +1469,7 @@ ssz_error_t ssz_hash_tree_root_progressive_bitlist(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, bit_len, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, bit_len, hash_fn, out_root);
 }
 
 ssz_error_t ssz_hash_tree_root_progressive_container_roots(
@@ -1240,5 +1525,5 @@ ssz_error_t ssz_hash_tree_root_progressive_list_roots(
         return err;
     }
 
-    return ssz_mix_in_length(&data_root, count, hash_fn, out_root);
+    return ssz_mix_in_length_u64(&data_root, count, hash_fn, out_root);
 }

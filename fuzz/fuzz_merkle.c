@@ -411,9 +411,10 @@ static void fuzz_cover_merkle_errors(void)
     (void)ssz_merkleize(roots, 1u, (UINT64_C(1) << 63u) + 1u, ssz_hash_default(), &out_root);
     (void)ssz_merkleize(roots, 1u, SSZ_NO_LIMIT, &hash_err_2to1, &out_root);
 
-    (void)ssz_mix_in_length(NULL, 1u, ssz_hash_default(), &out_root);
-    (void)ssz_mix_in_length(&root, 1u, ssz_hash_default(), NULL);
-    (void)ssz_mix_in_length(&root, 1u, &hash_err_2to1, &out_root);
+    (void)ssz_mix_in_length(NULL, (const uint8_t[32]){0u}, ssz_hash_default(), &out_root);
+    (void)ssz_mix_in_length(&root, NULL, ssz_hash_default(), &out_root);
+    (void)ssz_mix_in_length(&root, (const uint8_t[32]){0u}, ssz_hash_default(), NULL);
+    (void)ssz_mix_in_length_u64(&root, 1u, &hash_err_2to1, &out_root);
     (void)ssz_mix_in_selector(NULL, 1u, ssz_hash_default(), &out_root);
     (void)ssz_mix_in_selector(&root, 1u, ssz_hash_default(), NULL);
     (void)ssz_mix_in_selector(&root, 1u, &hash_err_2to1, &out_root);
@@ -771,7 +772,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         {
             ssz_chunk_t root = {{0u}};
             fuzz_fill_bytes(&input, root.bytes, SSZ_BYTES_PER_CHUNK);
-            uint64_t length = fuzz_take_u64(&input);
+            uint8_t length[32] = {0u};
+            fuzz_fill_bytes(&input, length, sizeof(length));
 
             ssz_chunk_t out_root;
             (void)ssz_mix_in_length(&root, length, hash_fn, &out_root);

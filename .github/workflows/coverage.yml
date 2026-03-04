@@ -64,11 +64,12 @@ jobs:
 
       - name: Install 32-bit toolchain and lcov
         run: |
+          sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y gcc-multilib lcov
+          sudo apt-get install -y gcc-multilib libssl-dev:i386 lcov
 
       - name: Configure (32-bit with coverage)
-        run: cmake -S . -B build/coverage-32 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS='-m32 --coverage' -DCMAKE_EXE_LINKER_FLAGS='-m32 --coverage'
+        run: cmake -S . -B build/coverage-32 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS='-m32 --coverage' -DCMAKE_EXE_LINKER_FLAGS='-m32 --coverage' -DSSZ_USE_SYSTEM_CRYPTO=ON -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/i386-linux-gnu/libcrypto.so
 
       - name: Build
         run: cmake --build build/coverage-32 --parallel

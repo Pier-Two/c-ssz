@@ -57,11 +57,12 @@ jobs:
 
       - name: Install 32-bit toolchain
         run: |
+          sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y gcc-multilib
+          sudo apt-get install -y gcc-multilib libssl-dev:i386
 
       - name: Configure (32-bit)
-        run: cmake -S . -B build -DCMAKE_C_FLAGS=-m32 -DCMAKE_EXE_LINKER_FLAGS=-m32
+        run: cmake -S . -B build -DCMAKE_C_FLAGS=-m32 -DCMAKE_EXE_LINKER_FLAGS=-m32 -DSSZ_USE_SYSTEM_CRYPTO=ON -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/i386-linux-gnu/libcrypto.so
 
       - name: Build
         run: cmake --build build

@@ -10,6 +10,21 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+option(SSZ_USE_SYSTEM_CRYPTO "Use system libcrypto (OpenSSL/LibreSSL) instead of AWS-LC" OFF)
+
+if(SSZ_USE_SYSTEM_CRYPTO)
+  find_package(OpenSSL REQUIRED)
+  set(SSZ_CRYPTO_LIB OpenSSL::Crypto)
+else()
+  set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+  set(BUILD_LIBSSL OFF CACHE BOOL "" FORCE)
+  set(BUILD_TOOL OFF CACHE BOOL "" FORCE)
+  set(DISABLE_GO ON CACHE BOOL "" FORCE)
+  set(DISABLE_PERL ON CACHE BOOL "" FORCE)
+  add_subdirectory(external/aws-lc)
+  set(SSZ_CRYPTO_LIB crypto)
+endif()
+
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
   add_compile_options(-Wall -Wextra -O3 -g)
   if(CMAKE_C_COMPILER_ID MATCHES "Clang|AppleClang")
@@ -39,21 +54,15 @@ if(NOT WIN32)
   list(APPEND SSZ_PLATFORM_LIBS m)
 endif()
 
-set(SSZ_HACL_INCLUDE_DIRS
-  ${CMAKE_CURRENT_SOURCE_DIR}/external/hacl/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/external/hacl/karamel/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/external/hacl/karamel/krmllib/dist/minimal
-)
-
 add_library(ssz
   src/ssz_types.c
   src/ssz_serialize.c
   src/ssz_deserialize.c
   src/ssz_merkle.c
+  src/ssz_merkle_cache.c
   src/ssz_proof.c
   src/ssz_hash.c
   src/ssz_endian.c
-  external/hacl/src/Hacl_Hash_SHA2.c
 )
 
 target_include_directories(ssz
@@ -61,22 +70,9 @@ target_include_directories(ssz
     ${CMAKE_CURRENT_SOURCE_DIR}/include
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${SSZ_HACL_INCLUDE_DIRS}
 )
 
-# HACL*/karamel's lowstar_endianness.h uses be32toh/htobe32 etc. from <endian.h>.
-# In strict C99 mode (-std=c99), glibc on Linux does not expose these macros unless
-# _DEFAULT_SOURCE is defined. src/ssz_hash.c includes HACL headers directly, so it
-# needs the same feature-test macro as Hacl_Hash_SHA2.c.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-  set_source_files_properties(
-    src/ssz_hash.c
-    external/hacl/src/Hacl_Hash_SHA2.c
-    PROPERTIES COMPILE_DEFINITIONS _DEFAULT_SOURCE
-  )
-endif()
-
-target_link_libraries(ssz PUBLIC ${SSZ_PLATFORM_LIBS})
+target_link_libraries(ssz PUBLIC ${SSZ_PLATFORM_LIBS} ${SSZ_CRYPTO_LIB})
 
 enable_testing()
 
@@ -91,6 +87,10 @@ add_test(NAME test_deserialize COMMAND test_deserialize)
 add_executable(test_merkle tests/unit/test_merkle.c)
 target_link_libraries(test_merkle PRIVATE ssz)
 add_test(NAME test_merkle COMMAND test_merkle)
+
+add_executable(test_merkle_cache tests/unit/test_merkle_cache.c)
+target_link_libraries(test_merkle_cache PRIVATE ssz)
+add_test(NAME test_merkle_cache COMMAND test_merkle_cache)
 
 add_executable(test_proof tests/unit/test_proof.c)
 target_link_libraries(test_proof PRIVATE ssz)
@@ -113,10 +113,10 @@ set(SSZ_COMMON_SOURCES
   src/ssz_serialize.c
   src/ssz_deserialize.c
   src/ssz_merkle.c
+  src/ssz_merkle_cache.c
   src/ssz_proof.c
   src/ssz_hash.c
   src/ssz_endian.c
-  external/hacl/src/Hacl_Hash_SHA2.c
 )
 
 # test_proof_internal: #includes ssz_proof.c — compile everything else
@@ -127,9 +127,8 @@ add_executable(test_proof_internal tests/unit/test_proof_internal.c ${SSZ_SOURCE
 target_include_directories(test_proof_internal PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/src
-  ${SSZ_HACL_INCLUDE_DIRS}
 )
-target_link_libraries(test_proof_internal PRIVATE ${SSZ_PLATFORM_LIBS})
+target_link_libraries(test_proof_internal PRIVATE ${SSZ_PLATFORM_LIBS} ${SSZ_CRYPTO_LIB})
 add_test(NAME test_proof_internal COMMAND test_proof_internal)
 
 
@@ -243,6 +242,10 @@ endif()
 option(SSZ_BUILD_BENCH "Build ubench.h micro-benchmarks" OFF)
 if(SSZ_BUILD_BENCH)
   file(GLOB SSZ_BENCH_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/bench/bench_*.c)
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bench/bench_arena_compare.c")
+    list(APPEND SSZ_BENCH_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/bench/bench_arena_compare.c)
+  endif()
+  list(REMOVE_DUPLICATES SSZ_BENCH_SOURCES)
   foreach(bench_src ${SSZ_BENCH_SOURCES})
     get_filename_component(bench_name ${bench_src} NAME_WE)
     add_executable(${bench_name} ${bench_src})
@@ -271,10 +274,9 @@ if(SSZ_BUILD_FUZZ)
     target_include_directories(${fuzz_name} PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/include
       ${CMAKE_CURRENT_SOURCE_DIR}/src
-      ${SSZ_HACL_INCLUDE_DIRS}
     )
     target_compile_options(${fuzz_name} PRIVATE -fsanitize=fuzzer,address)
     target_link_options(${fuzz_name} PRIVATE -fsanitize=fuzzer,address)
-    target_link_libraries(${fuzz_name} PRIVATE ${SSZ_PLATFORM_LIBS})
+    target_link_libraries(${fuzz_name} PRIVATE ${SSZ_PLATFORM_LIBS} ${SSZ_CRYPTO_LIB})
   endforeach()
 endif()

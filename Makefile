@@ -10,11 +10,13 @@ LLVM_PROFDATA ?= llvm-profdata
 LLVM_COV      ?= llvm-cov
 
 SSZ_FUZZ_SOURCES       := $(wildcard fuzz/fuzz_*.c)
-SSZ_LIBRARY_SOURCES    := $(wildcard src/*.c) external/hacl/src/Hacl_Hash_SHA2.c
-SSZ_FUZZ_INCLUDE_FLAGS := -Iinclude -Iexternal/hacl/include -Iexternal/hacl/karamel/include -Iexternal/hacl/karamel/krmllib/dist/minimal
+SSZ_LIBRARY_SOURCES    := $(wildcard src/*.c)
+SSZ_FUZZ_INCLUDE_FLAGS := -Iinclude -Iexternal/aws-lc/include
 SSZ_FUZZ_BUILD_FLAGS   := -std=c99 -Wall -Wextra -O1 -g
 SSZ_FUZZ_SAN_FLAGS     := -fsanitize=fuzzer,address
 SSZ_FUZZ_COV_FLAGS     := -fprofile-instr-generate -fcoverage-mapping
+# fuzz-coverage compiles directly without CMake; AWS-LC libcrypto.a must be pre-built.
+SSZ_FUZZ_AWSLC_CRYPTO_LIB ?= external/aws-lc/build/crypto/libcrypto.a
 SSZ_FUZZ_PLATFORM_DEFS :=
 
 ifeq ($(shell uname -s),Linux)
@@ -122,6 +124,10 @@ fuzz-coverage:
 	  echo "$(LLVM_COV) is required for fuzz-coverage."; \
 	  exit 1; \
 	fi; \
+	if [ ! -f "$(SSZ_FUZZ_AWSLC_CRYPTO_LIB)" ]; then \
+	  echo "Pre-built AWS-LC libcrypto.a not found at $(SSZ_FUZZ_AWSLC_CRYPTO_LIB)."; \
+	  exit 1; \
+	fi; \
 	rm -rf $(FUZZ_COVERAGE_DIR); \
 	mkdir -p $(FUZZ_COVERAGE_DIR)/bin $(FUZZ_COVERAGE_DIR)/profiles \
 	  $(FUZZ_COVERAGE_DIR)/artifacts $(FUZZ_COVERAGE_DIR)/html; \
@@ -132,7 +138,7 @@ fuzz-coverage:
 	    $(SSZ_FUZZ_SAN_FLAGS) $(SSZ_FUZZ_COV_FLAGS) \
 	    $(SSZ_FUZZ_INCLUDE_FLAGS) \
 	    "$$harness" $(SSZ_LIBRARY_SOURCES) \
-	    -lm -o $(FUZZ_COVERAGE_DIR)/bin/$$name; \
+	    "$(SSZ_FUZZ_AWSLC_CRYPTO_LIB)" -lm -o $(FUZZ_COVERAGE_DIR)/bin/$$name; \
 	done; \
 	found=0; \
 	for fuzzer in $(FUZZ_COVERAGE_DIR)/bin/fuzz_*; do \
