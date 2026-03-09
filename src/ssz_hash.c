@@ -153,10 +153,7 @@ static void ssz_internal_init_default_zero_hashes(void)
     {
         memcpy(pair, computed[depth - 1u].bytes, SSZ_BYTES_PER_CHUNK);
         memcpy(pair + SSZ_BYTES_PER_CHUNK, computed[depth - 1u].bytes, SSZ_BYTES_PER_CHUNK);
-        if (ssz_hash_sha256(pair, sizeof(pair), computed[depth].bytes) != SSZ_SUCCESS)
-        {
-            return;
-        }
+        ssz_hash_sha256(pair, sizeof(pair), computed[depth].bytes);
     }
 
     memcpy(ssz_internal_default_zero_hashes, computed, sizeof(computed));

@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <openssl/sha.h>
+
 #include "ssz.h"
 
 typedef bool (*test_fn_t)(void);
@@ -168,6 +170,47 @@ static ssz_error_t counting_hash(
     return SSZ_SUCCESS;
 }
 
+typedef struct
+{
+    bool sha256_init_should_fail;
+} internal_hash_hook_state_t;
+
+static internal_hash_hook_state_t g_internal_hash_hooks;
+
+static void reset_internal_hash_hooks(void)
+{
+    memset(&g_internal_hash_hooks, 0, sizeof(g_internal_hash_hooks));
+}
+
+static int hook_sha256_init(SHA256_CTX *ctx)
+{
+    if (g_internal_hash_hooks.sha256_init_should_fail)
+    {
+        return 0;
+    }
+    return SHA256_Init(ctx);
+}
+
+static const ssz_hash_fn_t *internal_copy_ssz_hash_default(void);
+
+#define SHA256_Init hook_sha256_init
+#define ssz_hash_sha256 internal_copy_ssz_hash_sha256
+#define ssz_hash_2to1 internal_copy_ssz_hash_2to1
+#define ssz_hash_default internal_copy_ssz_hash_default
+#define ssz_hash_2to1_batch internal_copy_ssz_hash_2to1_batch
+#define ssz_hash_2to1_batch_raw internal_copy_ssz_hash_2to1_batch_raw
+#define ssz_hash_2to1_batch_inplace internal_copy_ssz_hash_2to1_batch_inplace
+#define ssz_hash_default_zero_hashes internal_copy_ssz_hash_default_zero_hashes
+#include "../../src/ssz_hash.c"
+#undef SHA256_Init
+#undef ssz_hash_sha256
+#undef ssz_hash_2to1
+#undef ssz_hash_default
+#undef ssz_hash_2to1_batch
+#undef ssz_hash_2to1_batch_raw
+#undef ssz_hash_2to1_batch_inplace
+#undef ssz_hash_default_zero_hashes
+
 static bool test_hash_sha256_known_vectors(void)
 {
     uint8_t out[32] = {0u};
@@ -234,10 +277,12 @@ static bool test_hash_default_provider(void)
 static bool test_hash_default_zero_hashes_match_runtime_computation(void)
 {
     const ssz_chunk_t *static_zero_hashes = ssz_hash_default_zero_hashes();
+    const ssz_chunk_t *cached_zero_hashes = ssz_hash_default_zero_hashes();
     ssz_chunk_t runtime_zero_hashes[64];
     uint8_t pair[SSZ_BYTES_PER_CHUNK * 2u];
 
     ASSERT_TRUE(static_zero_hashes != NULL);
+    ASSERT_TRUE(cached_zero_hashes == static_zero_hashes);
 
     memset(runtime_zero_hashes[0].bytes, 0u, SSZ_BYTES_PER_CHUNK);
     for (size_t depth = 1u; depth < 64u; depth++)
@@ -306,6 +351,22 @@ static bool test_hash_2to1_null_hash_fn_fallback(void)
     return true;
 }
 
+static bool test_hash_2to1_default_contiguous_fast_path_with_output_after_pair(void)
+{
+    ssz_chunk_t storage[3] = {
+        make_chunk(0x11u),
+        make_chunk(0x31u),
+        make_chunk(0x00u),
+    };
+    ssz_chunk_t expected;
+
+    ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &storage[0], &storage[1], &expected), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &storage[0], &storage[1], &storage[2]), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(storage[2].bytes, expected.bytes, SSZ_BYTES_PER_CHUNK);
+
+    return true;
+}
+
 static bool test_hash_sha256_error_paths(void)
 {
     uint8_t out[32] = {0u};
@@ -336,8 +397,19 @@ static bool test_hash_2to1_custom_provider_and_error_normalization(void)
         .hash_2to1_batch = NULL,
         .ctx = &success_behavior,
     };
+    const ssz_hash_fn_t hash_only_success = {
+        .hash = mock_hash,
+        .hash_2to1 = NULL,
+        .hash_2to1_batch = NULL,
+        .ctx = &success_behavior,
+    };
 
     ASSERT_ERR(ssz_hash_2to1(&custom_success, &left, &right, &out), SSZ_SUCCESS);
+    for (size_t i = 0u; i < SSZ_BYTES_PER_CHUNK; i++)
+    {
+        ASSERT_TRUE(out.bytes[i] == 0x5Au);
+    }
+    ASSERT_ERR(ssz_hash_2to1(&hash_only_success, &left, &right, &out), SSZ_SUCCESS);
     for (size_t i = 0u; i < SSZ_BYTES_PER_CHUNK; i++)
     {
         ASSERT_TRUE(out.bytes[i] == 0x5Au);
@@ -353,7 +425,14 @@ static bool test_hash_2to1_custom_provider_and_error_normalization(void)
         .hash_2to1_batch = NULL,
         .ctx = &fail_behavior,
     };
+    const ssz_hash_fn_t hash_only_fail = {
+        .hash = mock_hash,
+        .hash_2to1 = NULL,
+        .hash_2to1_batch = NULL,
+        .ctx = &fail_behavior,
+    };
     ASSERT_ERR(ssz_hash_2to1(&custom_fail, &left, &right, &out), SSZ_ERR_HASH_FAILURE);
+    ASSERT_ERR(ssz_hash_2to1(&hash_only_fail, &left, &right, &out), SSZ_ERR_HASH_FAILURE);
 
     const ssz_hash_fn_t missing_hash = {
         .hash = NULL,
@@ -433,6 +512,199 @@ static bool test_hash_2to1_batch_error_paths(void)
     return true;
 }
 
+static bool test_hash_2to1_batch_raw_paths(void)
+{
+    const ssz_chunk_t pairs[4] = {
+        make_chunk(0x01u), make_chunk(0x21u),
+        make_chunk(0x41u), make_chunk(0x61u),
+    };
+    ssz_chunk_t out[2];
+    ssz_chunk_t expected[2];
+
+    const ssz_hash_fn_t missing_hash = {
+        .hash = NULL,
+        .hash_2to1 = NULL,
+        .hash_2to1_batch = NULL,
+        .ctx = NULL,
+    };
+    hash_behavior_t custom_behavior = {
+        .fill = 0x7Eu,
+        .err = SSZ_SUCCESS,
+    };
+    const ssz_hash_fn_t custom_hash = {
+        .hash = mock_hash,
+        .hash_2to1 = NULL,
+        .hash_2to1_batch = NULL,
+        .ctx = &custom_behavior,
+    };
+
+    ASSERT_ERR(ssz_hash_2to1_batch_raw(ssz_hash_default(), NULL, 0u, out), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1_batch_raw(ssz_hash_default(), (const uint8_t *)pairs, 2u, out), SSZ_SUCCESS);
+
+    ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &pairs[0], &pairs[1], &expected[0]), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &pairs[2], &pairs[3], &expected[1]), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(out[0].bytes, expected[0].bytes, SSZ_BYTES_PER_CHUNK);
+    ASSERT_MEM_EQ(out[1].bytes, expected[1].bytes, SSZ_BYTES_PER_CHUNK);
+
+    ASSERT_ERR(ssz_hash_2to1_batch_raw(&custom_hash, (const uint8_t *)pairs, 2u, out), SSZ_SUCCESS);
+    for (size_t i = 0u; i < 2u; i++)
+    {
+        for (size_t j = 0u; j < SSZ_BYTES_PER_CHUNK; j++)
+        {
+            ASSERT_TRUE(out[i].bytes[j] == 0x7Eu);
+        }
+    }
+
+    ASSERT_ERR(ssz_hash_2to1_batch_raw(&missing_hash, (const uint8_t *)pairs, 1u, out), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_hash_2to1_batch_raw(ssz_hash_default(), NULL, 1u, out), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_hash_2to1_batch_raw(ssz_hash_default(), (const uint8_t *)pairs, 1u, NULL),
+               SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_hash_2to1_batch_raw(ssz_hash_default(),
+                                       (const uint8_t *)pairs,
+                                       (SIZE_MAX / (SSZ_BYTES_PER_CHUNK * 2u)) + 1u,
+                                       out),
+               SSZ_ERR_OVERFLOW);
+
+    return true;
+}
+
+static bool test_hash_2to1_batch_inplace_cases(void)
+{
+    ssz_chunk_t nodes_default[4] = {
+        make_chunk(0x10u), make_chunk(0x20u),
+        make_chunk(0x30u), make_chunk(0x40u),
+    };
+    ssz_chunk_t expected_default[2];
+
+    hash_behavior_t custom_behavior = {
+        .fill = 0x3Cu,
+        .err = SSZ_SUCCESS,
+    };
+    const ssz_hash_fn_t custom_hash = {
+        .hash = mock_hash,
+        .hash_2to1 = NULL,
+        .hash_2to1_batch = NULL,
+        .ctx = &custom_behavior,
+    };
+    ssz_chunk_t nodes_custom[4] = {
+        make_chunk(0x50u), make_chunk(0x60u),
+        make_chunk(0x70u), make_chunk(0x80u),
+    };
+
+    ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &nodes_default[0], &nodes_default[1], &expected_default[0]),
+               SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &nodes_default[2], &nodes_default[3], &expected_default[1]),
+               SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1_batch_inplace(ssz_hash_default(), nodes_default, 2u), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(nodes_default[0].bytes, expected_default[0].bytes, SSZ_BYTES_PER_CHUNK);
+    ASSERT_MEM_EQ(nodes_default[1].bytes, expected_default[1].bytes, SSZ_BYTES_PER_CHUNK);
+
+    ASSERT_ERR(ssz_hash_2to1_batch_inplace(&custom_hash, nodes_custom, 2u), SSZ_SUCCESS);
+    for (size_t i = 0u; i < SSZ_BYTES_PER_CHUNK; i++)
+    {
+        ASSERT_TRUE(nodes_custom[0].bytes[i] == 0x3Cu);
+        ASSERT_TRUE(nodes_custom[1].bytes[i] == 0x3Cu);
+    }
+
+    return true;
+}
+
+static bool test_hash_2to1_batch_inplace_error_paths(void)
+{
+    ssz_chunk_t nodes[2] = {
+        make_chunk(0x91u),
+        make_chunk(0xB1u),
+    };
+
+    const ssz_hash_fn_t missing_hash = {
+        .hash = NULL,
+        .hash_2to1 = NULL,
+        .hash_2to1_batch = NULL,
+        .ctx = NULL,
+    };
+    hash_behavior_t fail_behavior = {
+        .fill = 0u,
+        .err = SSZ_ERR_TYPE_MISMATCH,
+    };
+    const ssz_hash_fn_t failing_hash = {
+        .hash = mock_hash,
+        .hash_2to1 = NULL,
+        .hash_2to1_batch = NULL,
+        .ctx = &fail_behavior,
+    };
+
+    ASSERT_ERR(ssz_hash_2to1_batch_inplace(&missing_hash, nodes, 1u), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_hash_2to1_batch_inplace(ssz_hash_default(), NULL, 1u), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_hash_2to1_batch_inplace(ssz_hash_default(), nodes, (SIZE_MAX / 2u) + 1u), SSZ_ERR_OVERFLOW);
+    ASSERT_ERR(ssz_hash_2to1_batch_inplace(&failing_hash, nodes, 1u), SSZ_ERR_HASH_FAILURE);
+
+    return true;
+}
+
+static bool test_hash_2to1_batch_falls_back_to_hash_2to1_provider(void)
+{
+    const ssz_chunk_t pairs[4] = {
+        make_chunk(0x02u), make_chunk(0x12u),
+        make_chunk(0x22u), make_chunk(0x32u),
+    };
+    ssz_chunk_t out[2];
+
+    hash_behavior_t success_behavior = {
+        .fill = 0xC3u,
+        .err = SSZ_SUCCESS,
+    };
+    const ssz_hash_fn_t success_hash = {
+        .hash = mock_hash,
+        .hash_2to1 = mock_hash_2to1,
+        .hash_2to1_batch = NULL,
+        .ctx = &success_behavior,
+    };
+
+    hash_behavior_t fail_behavior = {
+        .fill = 0u,
+        .err = SSZ_ERR_TYPE_MISMATCH,
+    };
+    const ssz_hash_fn_t fail_hash = {
+        .hash = mock_hash,
+        .hash_2to1 = mock_hash_2to1,
+        .hash_2to1_batch = NULL,
+        .ctx = &fail_behavior,
+    };
+
+    ASSERT_ERR(ssz_hash_2to1_batch(&success_hash, pairs, 2u, out), SSZ_SUCCESS);
+    for (size_t i = 0u; i < 2u; i++)
+    {
+        for (size_t j = 0u; j < SSZ_BYTES_PER_CHUNK; j++)
+        {
+            ASSERT_TRUE(out[i].bytes[j] == 0xC3u);
+        }
+    }
+
+    ASSERT_ERR(ssz_hash_2to1_batch(&fail_hash, pairs, 1u, out), SSZ_ERR_HASH_FAILURE);
+
+    return true;
+}
+
+static bool test_hash_internal_sha256_batch_default_defensive_paths(void)
+{
+    const ssz_chunk_t pairs[2] = {
+        make_chunk(0xA0u),
+        make_chunk(0xC0u),
+    };
+    ssz_chunk_t out[1];
+
+    reset_internal_hash_hooks();
+
+    ASSERT_ERR(ssz_internal_sha256_64_batch_default(NULL, 0u, NULL), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_internal_sha256_64_batch_default(NULL, 1u, out), SSZ_ERR_INVALID_ARGUMENT);
+
+    g_internal_hash_hooks.sha256_init_should_fail = true;
+    ASSERT_ERR(ssz_internal_sha256_64_batch_default((const uint8_t *)pairs, 1u, out), SSZ_ERR_HASH_FAILURE);
+
+    reset_internal_hash_hooks();
+    return true;
+}
+
 int main(void)
 {
     const test_case_t tests[] = {
@@ -443,9 +715,16 @@ int main(void)
          test_hash_default_zero_hashes_match_runtime_computation},
         {"hash_2to1_batch_cases", test_hash_2to1_batch_cases},
         {"hash_2to1_null_hash_fn_fallback", test_hash_2to1_null_hash_fn_fallback},
+        {"hash_2to1_default_contiguous_fast_path_with_output_after_pair",
+         test_hash_2to1_default_contiguous_fast_path_with_output_after_pair},
         {"hash_sha256_error_paths", test_hash_sha256_error_paths},
         {"hash_2to1_custom_provider_and_error_normalization", test_hash_2to1_custom_provider_and_error_normalization},
         {"hash_2to1_batch_error_paths", test_hash_2to1_batch_error_paths},
+        {"hash_2to1_batch_raw_paths", test_hash_2to1_batch_raw_paths},
+        {"hash_2to1_batch_inplace_cases", test_hash_2to1_batch_inplace_cases},
+        {"hash_2to1_batch_inplace_error_paths", test_hash_2to1_batch_inplace_error_paths},
+        {"hash_2to1_batch_falls_back_to_hash_2to1_provider", test_hash_2to1_batch_falls_back_to_hash_2to1_provider},
+        {"hash_internal_sha256_batch_default_defensive_paths", test_hash_internal_sha256_batch_default_defensive_paths},
     };
 
     size_t passed = 0u;
