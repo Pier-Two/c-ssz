@@ -1190,6 +1190,35 @@ static bool test_merkle_failure_propagation_paths(void)
     return true;
 }
 
+static bool test_bytes_reader_batch_path_large_vector(void)
+{
+    /* 128 chunks = 4096 bytes; chunk count is a power of two and exceeds the
+       64-leaf stack threshold, so this exercises the bytes-reader batch fast
+       path in ssz_internal_merkleize_reader_fast (ssz_merkle.c ~lines 275-305). */
+    uint8_t buf[128u * SSZ_BYTES_PER_CHUNK];
+    ssz_chunk_t root;
+    ssz_chunk_t expected;
+    ssz_chunk_t chunks[128];
+
+    for (size_t i = 0u; i < sizeof(buf); i++)
+    {
+        buf[i] = (uint8_t)(i & 0xFFu);
+    }
+
+    ASSERT_ERR(ssz_hash_tree_root_vector_fixed(buf, 128u * SSZ_BYTES_PER_CHUNK, 1u, NULL, &root),
+               SSZ_SUCCESS);
+
+    /* Verify against chunk-based merkleize for correctness. */
+    for (size_t i = 0u; i < 128u; i++)
+    {
+        memcpy(chunks[i].bytes, buf + (i * SSZ_BYTES_PER_CHUNK), SSZ_BYTES_PER_CHUNK);
+    }
+    ASSERT_ERR(ssz_merkleize(chunks, 128u, SSZ_NO_LIMIT, NULL, &expected), SSZ_SUCCESS);
+    ASSERT_CHUNK_EQ(root, expected);
+
+    return true;
+}
+
 int main(void)
 {
     const test_case_t tests[] = {
@@ -1207,6 +1236,7 @@ int main(void)
         {"merkle_additional_error_paths", test_merkle_additional_error_paths},
         {"merkle_active_field_validation_errors", test_merkle_active_field_validation_errors},
         {"merkle_failure_propagation_paths", test_merkle_failure_propagation_paths},
+        {"bytes_reader_batch_path_large_vector", test_bytes_reader_batch_path_large_vector},
     };
 
     size_t passed = 0u;

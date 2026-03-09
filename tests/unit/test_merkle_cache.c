@@ -581,6 +581,65 @@ static bool test_zero_range_and_logical_length_changes(void)
     return true;
 }
 
+static bool test_multi_word_dirty_triggers_qsort(void)
+{
+    /* Create a cache with 256 leaves so dirty tracking uses 4 64-bit words
+       (256 / 64 = 4).  After an initial full computation, dirty individual
+       leaves in different words and recompute — this exercises the qsort
+       comparator in build_parent_dirty_set and hash_dirty_parents_exact. */
+    const ssz_merkle_cache_config_t cfg = {
+        .initial_leaf_count = 0u,
+        .leaf_limit = SSZ_NO_LIMIT,
+        .logical_length = 0u,
+        .mix_in_length = false,
+        .hash_fn = NULL,
+    };
+    ssz_merkle_cache_t *cache = NULL;
+    ssz_chunk_t leaves[256];
+    ssz_chunk_t root1;
+    ssz_chunk_t root2;
+    ssz_chunk_t expected;
+
+    for (size_t i = 0u; i < 256u; i++)
+    {
+        leaves[i] = make_chunk((uint8_t)(i & 0xFFu));
+    }
+
+    ASSERT_ERR(ssz_merkle_cache_create(&cfg, &cache), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_merkle_cache_update_root_range(cache, 0u, leaves, 256u), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_merkle_cache_data_root(cache, &root1), SSZ_SUCCESS);
+
+    /* Now dirty leaves in four different 64-bit words:
+       leaf 1  → word 0,  leaf 65  → word 1,
+       leaf 129 → word 2, leaf 193 → word 3. */
+    ssz_chunk_t v;
+
+    v = make_chunk(0xF1u);
+    ASSERT_ERR(ssz_merkle_cache_update_root_range(cache, 1u, &v, 1u), SSZ_SUCCESS);
+    leaves[1] = v;
+
+    v = make_chunk(0xF2u);
+    ASSERT_ERR(ssz_merkle_cache_update_root_range(cache, 65u, &v, 1u), SSZ_SUCCESS);
+    leaves[65] = v;
+
+    v = make_chunk(0xF3u);
+    ASSERT_ERR(ssz_merkle_cache_update_root_range(cache, 129u, &v, 1u), SSZ_SUCCESS);
+    leaves[129] = v;
+
+    v = make_chunk(0xF4u);
+    ASSERT_ERR(ssz_merkle_cache_update_root_range(cache, 193u, &v, 1u), SSZ_SUCCESS);
+    leaves[193] = v;
+
+    ASSERT_ERR(ssz_merkle_cache_data_root(cache, &root2), SSZ_SUCCESS);
+    ASSERT_CHUNK_NE(root1, root2);
+
+    ASSERT_ERR(ssz_merkleize(leaves, 256u, SSZ_NO_LIMIT, NULL, &expected), SSZ_SUCCESS);
+    ASSERT_CHUNK_EQ(root2, expected);
+
+    ssz_merkle_cache_destroy(cache);
+    return true;
+}
+
 int main(void)
 {
     const test_case_t tests[] = {
@@ -594,6 +653,7 @@ int main(void)
         {"no_limit_growth_preserves_left_subtree_work", test_no_limit_growth_preserves_left_subtree_work},
         {"cached_vs_stateless_equivalence", test_cached_vs_stateless_equivalence},
         {"zero_range_and_logical_length_changes", test_zero_range_and_logical_length_changes},
+        {"multi_word_dirty_triggers_qsort", test_multi_word_dirty_triggers_qsort},
     };
 
     for (size_t i = 0u; i < (sizeof(tests) / sizeof(tests[0])); i++)
