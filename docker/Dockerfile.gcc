@@ -3,15 +3,12 @@ FROM --platform=linux/amd64 ubuntu:24.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
-    gcc-multilib \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 COPY . .
 
-RUN cmake -S . -B build \
-    -DCMAKE_C_FLAGS=-m32 \
-    -DCMAKE_EXE_LINKER_FLAGS=-m32
+RUN cmake -S . -B build
 
 RUN cmake --build build --parallel
 
