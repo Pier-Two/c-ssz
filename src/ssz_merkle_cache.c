@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <string.h>
 
 #include "ssz_hash.h"
@@ -126,6 +127,24 @@ static unsigned ssz_merkle_cache_internal_ctz_u64(uint64_t value)
         count++;
     }
     return count;
+}
+
+static ssz_error_t ssz_merkle_cache_internal_grow_capacity(
+    size_t current_capacity,
+    size_t required,
+    size_t *out_capacity)
+{
+    size_t cap = (current_capacity == 0u) ? 8u : current_capacity;
+    while (cap < required)
+    {
+        if (cap > (SIZE_MAX / 2u))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+        cap <<= 1u;
+    }
+    *out_capacity = cap;
+    return SSZ_SUCCESS;
 }
 
 static int ssz_merkle_cache_internal_compare_size_t(const void *a, const void *b)
@@ -666,10 +685,6 @@ static ssz_error_t ssz_merkle_cache_internal_ensure_gather_capacity(
         return SSZ_ERR_INVALID_ARGUMENT;
     }
     if (pair_capacity <= cache->scratch_pair_capacity)
-    {
-        return SSZ_SUCCESS;
-    }
-    if (pair_capacity == 0u)
     {
         return SSZ_SUCCESS;
     }
@@ -1219,10 +1234,7 @@ static ssz_error_t ssz_merkle_cache_internal_grow(ssz_merkle_cache_t *cache, uin
     }
 
     new_depth = ssz_merkle_cache_internal_log2_u64(new_capacity);
-    if (new_depth >= 64u)
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
+    assert(new_depth < 64u);
 
     {
         ssz_error_t off_err =
@@ -1524,12 +1536,7 @@ ssz_error_t ssz_merkle_cache_create(
     cache->mix_in_length = config->mix_in_length;
     cache->leaf_capacity = initial_capacity;
     cache->depth = ssz_merkle_cache_internal_log2_u64(initial_capacity);
-
-    if (cache->depth >= 64u)
-    {
-        ssz_merkle_cache_destroy(cache);
-        return SSZ_ERR_OVERFLOW;
-    }
+    assert(cache->depth < 64u);
 
     if (resolved_hash_fn == ssz_hash_default())
     {
@@ -1605,11 +1612,8 @@ ssz_error_t ssz_merkle_cache_create(
 
     {
         ssz_error_t root_err = ssz_merkle_cache_internal_refresh_cached_data_root(cache);
-        if (root_err != SSZ_SUCCESS)
-        {
-            ssz_merkle_cache_destroy(cache);
-            return root_err;
-        }
+        assert(root_err == SSZ_SUCCESS);
+        (void)root_err;
     }
 
     if (cache->mix_in_length)
@@ -1970,10 +1974,8 @@ ssz_error_t ssz_merkle_cache_sync_packed_bytes(
 
     {
         ssz_error_t len_err = ssz_merkle_cache_set_logical_length(cache, logical_length);
-        if (len_err != SSZ_SUCCESS)
-        {
-            return len_err;
-        }
+        assert(len_err == SSZ_SUCCESS);
+        (void)len_err;
     }
 
     cache->needs_resync = false;
@@ -2409,10 +2411,8 @@ ssz_error_t ssz_merkle_cache_sync_composite(
 
         {
             ssz_error_t len_err = ssz_merkle_cache_set_logical_length(cache, element_count);
-            if (len_err != SSZ_SUCCESS)
-            {
-                return len_err;
-            }
+            assert(len_err == SSZ_SUCCESS);
+            (void)len_err;
         }
 
         cache->needs_resync = false;
@@ -2478,32 +2478,15 @@ ssz_error_t ssz_merkle_cache_sync_composite(
         {
             run_len++;
         }
-        else
-        {
-            ssz_error_t run_err =
-                ssz_merkle_cache_internal_sync_composite_run(cache, codec, opts, run_start, run_len, run_tokens);
-            if (run_err != SSZ_SUCCESS)
-            {
-                cache->needs_resync = true;
-                free(run_tokens);
-                return run_err;
-            }
-            run_start = i;
-            run_len = 1u;
-        }
 
         if (run_len > run_tokens_cap)
         {
-            size_t new_cap = (run_tokens_cap == 0u) ? 8u : run_tokens_cap;
-            while (new_cap < (size_t)run_len)
+            size_t new_cap = 0u;
             {
-                if (new_cap > (SIZE_MAX / 2u))
-                {
-                    cache->needs_resync = true;
-                    free(run_tokens);
-                    return SSZ_ERR_OVERFLOW;
-                }
-                new_cap <<= 1u;
+                ssz_error_t cap_err =
+                    ssz_merkle_cache_internal_grow_capacity(run_tokens_cap, (size_t)run_len, &new_cap);
+                assert(cap_err == SSZ_SUCCESS);
+                (void)cap_err;
             }
             {
                 uint64_t *new_tokens = (uint64_t *)realloc(run_tokens, new_cap * sizeof(*new_tokens));
@@ -2553,10 +2536,8 @@ ssz_error_t ssz_merkle_cache_sync_composite(
 
     {
         ssz_error_t len_err = ssz_merkle_cache_set_logical_length(cache, element_count);
-        if (len_err != SSZ_SUCCESS)
-        {
-            return len_err;
-        }
+        assert(len_err == SSZ_SUCCESS);
+        (void)len_err;
     }
 
     cache->needs_resync = false;
