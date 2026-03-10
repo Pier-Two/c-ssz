@@ -624,8 +624,8 @@ static bool test_depth_gather_and_recompute_paths(void)
     uint64_t scratch_bits[1] = {0u};
     size_t scratch_idx[1] = {0u};
     size_t gather_count = 0u;
-    ssz_chunk_t child_nodes[4];
-    ssz_chunk_t parent_nodes[2];
+    ssz_chunk_t child_nodes[4] = {0};
+    ssz_chunk_t parent_nodes[2] = {0};
     ssz_merkle_cache_dirty_set_t dirty_set = {0};
     ssz_merkle_cache_dirty_set_t out_parent = {0};
 
