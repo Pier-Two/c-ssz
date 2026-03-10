@@ -404,11 +404,11 @@ static bool test_basic_internal_helpers(void)
 {
     size_t out_size = 0u;
     size_t offsets[64] = {0u};
-    ssz_chunk_t zero_hashes[64];
+    ssz_chunk_t zero_hashes[64] = {0};
     ssz_chunk_t *nodes = NULL;
     void *ptr = NULL;
     ssz_merkle_cache_t cache;
-    ssz_chunk_t node_store[1];
+    ssz_chunk_t node_store[1] = {0};
 
     reset_hooks();
     ptr = ssz_merkle_cache_internal_alloc_aligned32(0u);
@@ -507,7 +507,7 @@ static bool test_dirty_and_token_helpers(void)
     ssz_merkle_cache_dirty_set_t set = {0};
     uint64_t bits[1] = {0u};
     size_t word_idx[1] = {0u};
-    ssz_chunk_t nodes[1];
+    ssz_chunk_t nodes[1] = {0};
     ssz_merkle_cache_t cache;
     ssz_chunk_t leaf = make_chunk(0x22u);
 
@@ -618,7 +618,7 @@ static bool test_depth_gather_and_recompute_paths(void)
 {
     uint32_t out_depth = 0u;
     ssz_merkle_cache_t cache;
-    ssz_chunk_t nodes[7];
+    ssz_chunk_t nodes[7] = {0};
     uint64_t dirty_bits[1] = {0u};
     size_t dirty_idx[1] = {0u};
     uint64_t scratch_bits[1] = {0u};
@@ -815,7 +815,7 @@ static bool test_depth_gather_and_recompute_paths(void)
 static bool test_storage_and_growth_paths(void)
 {
     ssz_merkle_cache_t cache;
-    ssz_chunk_t nodes[3];
+    ssz_chunk_t nodes[3] = {0};
     uint64_t dirty_bits[1] = {0u};
     size_t dirty_idx[1] = {0u};
     uint64_t tokens[2] = {11u, 22u};
@@ -1385,7 +1385,7 @@ static bool test_remaining_targeted_branches(void)
         .hash_fn = NULL,
     };
     ssz_merkle_cache_t cache;
-    ssz_chunk_t nodes[7];
+    ssz_chunk_t nodes[7] = {0};
     uint64_t dirty_bits[1] = {0u};
     size_t dirty_idx[1] = {0u};
     uint64_t scratch_bits[1] = {0u};
