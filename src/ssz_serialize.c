@@ -520,10 +520,6 @@ ssz_error_t ssz_serialize_list_variable(
     {
         return err;
     }
-    if (out == NULL)
-    {
-        return SSZ_SUCCESS;
-    }
     return SSZ_SUCCESS;
 }
 
@@ -665,10 +661,6 @@ ssz_error_t ssz_serialize_container(
     if (err != SSZ_SUCCESS)
     {
         return err;
-    }
-    if (out == NULL)
-    {
-        return SSZ_SUCCESS;
     }
     return SSZ_SUCCESS;
 }

@@ -1107,6 +1107,165 @@ static bool test_serialize_list_variable_error_paths(void)
     return true;
 }
 
+static bool test_serialize_list_variable_out_buffer_edge_paths(void)
+{
+    uint8_t out[16] = {0u};
+    size_t out_len = 0u;
+
+    ASSERT_ERR(ssz_serialize_list_variable(
+                   2u,
+                   SSZ_NO_LIMIT,
+                   &(ssz_member_codec_t){.ctx = NULL, .write = fail_if_called_write, .read = NULL, .root = NULL},
+                   out,
+                   7u,
+                   &out_len),
+               SSZ_ERR_BUFFER_TOO_SMALL);
+
+#if SIZE_MAX > UINT32_MAX
+    ASSERT_ERR(ssz_serialize_list_variable(
+                   ((uint64_t)UINT32_MAX / SSZ_BYTES_PER_LENGTH_OFFSET) + 1u,
+                   SSZ_NO_LIMIT,
+                   &(ssz_member_codec_t){.ctx = NULL, .write = fail_if_called_write, .read = NULL, .root = NULL},
+                   out,
+                   SIZE_MAX,
+                   &out_len),
+               SSZ_ERR_OVERFLOW);
+#endif
+
+    {
+        const size_t lengths[1] = {1u};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_list_variable(2u, SSZ_NO_LIMIT, &codec, out, 8u, &out_len),
+                   SSZ_ERR_BUFFER_TOO_SMALL);
+    }
+
+    {
+        const size_t lengths[1] = {0u};
+        const ssz_error_t errors[1] = {SSZ_ERR_TYPE_MISMATCH};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_list_variable(1u, SSZ_NO_LIMIT, &codec, out, 4u, &out_len),
+                   SSZ_ERR_TYPE_MISMATCH);
+    }
+
+    {
+        const size_t lengths[1] = {SIZE_MAX};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_list_variable(1u, SSZ_NO_LIMIT, &codec, out, 4u, &out_len),
+                   SSZ_ERR_OVERFLOW);
+    }
+
+#if SIZE_MAX > UINT32_MAX
+    {
+        const size_t lengths[1] = {(size_t)UINT32_MAX};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_list_variable(1u, SSZ_NO_LIMIT, &codec, out, 4u, &out_len),
+                   SSZ_ERR_OVERFLOW);
+    }
+#endif
+
+    return true;
+}
+
+static bool test_serialize_list_variable_size_query_edge_paths(void)
+{
+    size_t out_len = 0u;
+
+    {
+        const size_t lengths[1] = {0u};
+        const ssz_error_t errors[1] = {SSZ_ERR_TYPE_MISMATCH};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_list_variable(1u, SSZ_NO_LIMIT, &codec, NULL, 0u, &out_len),
+                   SSZ_ERR_TYPE_MISMATCH);
+    }
+
+    {
+        const size_t lengths[1] = {SIZE_MAX};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_list_variable(1u, SSZ_NO_LIMIT, &codec, NULL, 0u, &out_len),
+                   SSZ_ERR_OVERFLOW);
+    }
+
+#if SIZE_MAX > UINT32_MAX
+    {
+        const size_t lengths[1] = {(size_t)UINT32_MAX};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_list_variable(1u, SSZ_NO_LIMIT, &codec, NULL, 0u, &out_len),
+                   SSZ_ERR_OVERFLOW);
+    }
+#endif
+
+    {
+        const size_t lengths[1] = {1u};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_list_variable(1u, SSZ_NO_LIMIT, &codec, NULL, 0u, NULL),
+                   SSZ_ERR_INVALID_ARGUMENT);
+    }
+
+    return true;
+}
+
 static bool test_serialize_container_error_paths(void)
 {
     uint8_t out[32] = {0u};
@@ -1305,6 +1464,245 @@ static bool test_serialize_container_error_paths(void)
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(ssz_serialize_container(one_variable, 1u, &codec, out, sizeof(out), &out_len),
                    SSZ_SUCCESS);
+    }
+
+    return true;
+}
+
+static bool test_serialize_container_out_buffer_edge_paths(void)
+{
+    uint8_t out[16] = {0u};
+    size_t out_len = 0u;
+
+    {
+        const size_t field_fixed_sizes[2] = {0u, 1u};
+        ASSERT_ERR(ssz_serialize_container(
+                       field_fixed_sizes,
+                       2u,
+                       &(ssz_member_codec_t){.ctx = NULL, .write = fail_if_called_write, .read = NULL, .root = NULL},
+                       out,
+                       4u,
+                       &out_len),
+                   SSZ_ERR_BUFFER_TOO_SMALL);
+    }
+
+#if SIZE_MAX > UINT32_MAX
+    {
+        const size_t field_fixed_sizes[2] = {(size_t)UINT32_MAX, 1u};
+        ASSERT_ERR(ssz_serialize_container(
+                       field_fixed_sizes,
+                       2u,
+                       &(ssz_member_codec_t){.ctx = NULL, .write = fail_if_called_write, .read = NULL, .root = NULL},
+                       out,
+                       SIZE_MAX,
+                       &out_len),
+                   SSZ_ERR_OVERFLOW);
+    }
+#endif
+
+    {
+        const size_t field_fixed_sizes[2] = {0u, 0u};
+        const size_t lengths[1] = {1u};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_container(field_fixed_sizes, 2u, &codec, out, 8u, &out_len),
+                   SSZ_ERR_BUFFER_TOO_SMALL);
+    }
+
+#if SIZE_MAX > UINT32_MAX
+    {
+        const size_t field_fixed_sizes[2] = {0u, 0u};
+        const size_t lengths[1] = {(size_t)UINT32_MAX};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_container(field_fixed_sizes, 2u, &codec, out, 8u, &out_len),
+                   SSZ_ERR_OVERFLOW);
+    }
+#endif
+
+    {
+        const size_t field_fixed_sizes[1] = {0u};
+        const size_t lengths[1] = {0u};
+        const ssz_error_t errors[1] = {SSZ_ERR_TYPE_MISMATCH};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_container(field_fixed_sizes, 1u, &codec, out, 4u, &out_len),
+                   SSZ_ERR_TYPE_MISMATCH);
+    }
+
+    {
+        const size_t field_fixed_sizes[1] = {0u};
+        const size_t lengths[1] = {SIZE_MAX};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_container(field_fixed_sizes, 1u, &codec, out, 4u, &out_len),
+                   SSZ_ERR_OVERFLOW);
+    }
+
+    {
+        const size_t field_fixed_sizes[1] = {1u};
+        const size_t lengths[1] = {0u};
+        const ssz_error_t errors[1] = {SSZ_ERR_TYPE_MISMATCH};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_container(field_fixed_sizes, 1u, &codec, out, 1u, &out_len),
+                   SSZ_ERR_TYPE_MISMATCH);
+    }
+
+    {
+        const size_t field_fixed_sizes[1] = {2u};
+        const size_t lengths[1] = {1u};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_container(field_fixed_sizes, 1u, &codec, out, 2u, &out_len),
+                   SSZ_ERR_TYPE_MISMATCH);
+    }
+
+#if SIZE_MAX > UINT32_MAX
+    {
+        const size_t field_fixed_sizes[1] = {0u};
+        const size_t lengths[1] = {(size_t)UINT32_MAX};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_container(field_fixed_sizes, 1u, &codec, out, 4u, &out_len),
+                   SSZ_ERR_OVERFLOW);
+    }
+#endif
+
+    return true;
+}
+
+static bool test_serialize_container_size_query_edge_paths(void)
+{
+    size_t out_len = 0u;
+
+    {
+        const size_t field_fixed_sizes[1] = {0u};
+        const size_t lengths[1] = {0u};
+        const ssz_error_t errors[1] = {SSZ_ERR_TYPE_MISMATCH};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_container(field_fixed_sizes, 1u, &codec, NULL, 0u, &out_len),
+                   SSZ_ERR_TYPE_MISMATCH);
+    }
+
+    {
+        const size_t field_fixed_sizes[1] = {0u};
+        const size_t lengths[1] = {SIZE_MAX};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_container(field_fixed_sizes, 1u, &codec, NULL, 0u, &out_len),
+                   SSZ_ERR_OVERFLOW);
+    }
+
+    {
+        const size_t field_fixed_sizes[1] = {2u};
+        const size_t lengths[1] = {1u};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_container(field_fixed_sizes, 1u, &codec, NULL, 0u, &out_len),
+                   SSZ_ERR_TYPE_MISMATCH);
+    }
+
+#if SIZE_MAX > UINT32_MAX
+    {
+        const size_t field_fixed_sizes[1] = {0u};
+        const size_t lengths[1] = {(size_t)UINT32_MAX};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_container(field_fixed_sizes, 1u, &codec, NULL, 0u, &out_len),
+                   SSZ_ERR_OVERFLOW);
+    }
+#endif
+
+    {
+        const size_t field_fixed_sizes[1] = {0u};
+        const size_t lengths[1] = {1u};
+        const ssz_error_t errors[1] = {SSZ_SUCCESS};
+        scripted_write_ctx_t ctx = {
+            .lengths = lengths,
+            .errors = errors,
+            .step_count = 1u,
+            .step_index = 0u,
+            .fill = 0u,
+        };
+        ssz_member_codec_t codec = make_scripted_codec(&ctx);
+        ASSERT_ERR(ssz_serialize_container(field_fixed_sizes, 1u, &codec, NULL, 0u, NULL),
+                   SSZ_ERR_INVALID_ARGUMENT);
     }
 
     return true;
@@ -1550,7 +1948,11 @@ int main(void)
         {"serialize_fixed_collection_error_paths", test_serialize_fixed_collection_error_paths},
         {"serialize_vector_variable_error_paths", test_serialize_vector_variable_error_paths},
         {"serialize_list_variable_error_paths", test_serialize_list_variable_error_paths},
+        {"serialize_list_variable_out_buffer_edge_paths", test_serialize_list_variable_out_buffer_edge_paths},
+        {"serialize_list_variable_size_query_edge_paths", test_serialize_list_variable_size_query_edge_paths},
         {"serialize_container_error_paths", test_serialize_container_error_paths},
+        {"serialize_container_out_buffer_edge_paths", test_serialize_container_out_buffer_edge_paths},
+        {"serialize_container_size_query_edge_paths", test_serialize_container_size_query_edge_paths},
         {"serialize_union_error_paths", test_serialize_union_error_paths},
         {"serialize_compatible_union_error_paths", test_serialize_compatible_union_error_paths},
     };

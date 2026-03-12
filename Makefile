@@ -6,6 +6,7 @@ COVERAGE_DIR := build/coverage
 FUZZ_COVERAGE_DIR := build/fuzz-coverage
 
 CLANG         ?= clang
+CLANG_TIDY    ?= $(shell command -v clang-tidy 2>/dev/null || echo /opt/homebrew/opt/llvm/bin/clang-tidy)
 LLVM_PROFDATA ?= llvm-profdata
 LLVM_COV      ?= llvm-cov
 
@@ -181,15 +182,35 @@ fuzz-coverage:
 	  -instr-profile=$(FUZZ_COVERAGE_DIR)/fuzz.profdata \
 	  src/*.c
 
+# ── Static analysis ─────────────────────────────────────────────
+
+static-analysis:
+	cmake -S . -B $(BUILD_DIR) -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+	cmake --build $(BUILD_DIR) --parallel
+	@echo "--- clang-tidy (informational) ---"
+	-@c_files=$$(git ls-files 'src/*.c' 'include/*.h'); \
+	if [ -z "$$c_files" ]; then \
+	  echo "No C source files found."; \
+	else \
+	  $(CLANG_TIDY) -p $(BUILD_DIR) $$c_files; \
+	fi
+	@echo "--- cppcheck (informational) ---"
+	-cppcheck \
+	  --enable=warning,style,performance,portability \
+	  --std=c11 \
+	  --project=$(BUILD_DIR)/compile_commands.json \
+	  --suppress=missingIncludeSystem \
+	  -i external
+
 # ── Docker builds ────────────────────────────────────────────────
 
 docker-32bit:
-	docker build -f docker/Dockerfile.32bit -t c-ssz-32bit .
-	docker run --rm c-ssz-32bit
+	docker build --platform linux/amd64 -f docker/Dockerfile.32bit -t c-ssz-32bit .
+	docker run --platform linux/amd64 --rm c-ssz-32bit
 
 docker-gcc:
-	docker build -f docker/Dockerfile.32bit -t c-ssz-gcc .
-	docker run --rm c-ssz-gcc
+	docker build --platform linux/amd64 -f docker/Dockerfile.gcc -t c-ssz-gcc .
+	docker run --platform linux/amd64 --rm c-ssz-gcc
 
 # ── Cleanup ──────────────────────────────────────────────────────
 

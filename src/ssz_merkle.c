@@ -146,6 +146,11 @@ static uint32_t ssz_internal_log2_u64(uint64_t value)
     return depth;
 }
 
+static bool ssz_internal_count_fits_size(uint64_t count)
+{
+    return ssz_internal_u64_to_size(count, NULL);
+}
+
 static ssz_error_t ssz_internal_build_zero_hashes(
     uint32_t max_depth,
     const ssz_hash_fn_t *hash_fn,
@@ -953,7 +958,7 @@ ssz_error_t ssz_hash_tree_root_vector_roots(
     {
         return SSZ_ERR_SCHEMA_INVALID;
     }
-    if (count > (uint64_t)SIZE_MAX)
+    if (!ssz_internal_count_fits_size(count))
     {
         return SSZ_ERR_OVERFLOW;
     }
@@ -1079,7 +1084,7 @@ ssz_error_t ssz_hash_tree_root_list_roots(
     {
         return SSZ_ERR_LIMIT_EXCEEDED;
     }
-    if (count > (uint64_t)SIZE_MAX)
+    if (!ssz_internal_count_fits_size(count))
     {
         return SSZ_ERR_OVERFLOW;
     }
@@ -1514,7 +1519,7 @@ ssz_error_t ssz_hash_tree_root_progressive_list_roots(
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (count > (uint64_t)SIZE_MAX)
+    if (!ssz_internal_count_fits_size(count))
     {
         return SSZ_ERR_OVERFLOW;
     }
