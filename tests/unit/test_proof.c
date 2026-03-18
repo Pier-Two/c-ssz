@@ -360,6 +360,46 @@ static bool test_multi_proof_calculate_and_verify(void)
     return true;
 }
 
+static bool test_multi_proof_empty_helper_allows_null_proof(void)
+{
+    const ssz_chunk_t root = make_chunk(0xA5u);
+    const ssz_chunk_t leaves[1] = {root};
+    const ssz_gindex_t indices[1] = {1u};
+
+    ssz_gindex_t scratch_indices[1] = {0u};
+    ssz_chunk_t scratch_nodes[1];
+    memset(scratch_nodes, 0, sizeof(scratch_nodes));
+
+    ssz_chunk_t computed;
+    ASSERT_ERR(ssz_calculate_multi_merkle_root(leaves,
+                                               indices,
+                                               1u,
+                                               NULL,
+                                               0u,
+                                               scratch_indices,
+                                               scratch_nodes,
+                                               1u,
+                                               NULL,
+                                               &computed),
+               SSZ_SUCCESS);
+    ASSERT_CHUNK_EQ(computed, root);
+
+    memset(scratch_nodes, 0, sizeof(scratch_nodes));
+    ASSERT_ERR(ssz_verify_merkle_multiproof(leaves,
+                                            indices,
+                                            1u,
+                                            NULL,
+                                            0u,
+                                            &root,
+                                            scratch_indices,
+                                            scratch_nodes,
+                                            1u,
+                                            NULL),
+               SSZ_SUCCESS);
+
+    return true;
+}
+
 static bool test_proof_error_cases(void)
 {
     const ssz_chunk_t leaf = make_chunk(0xAAu);
@@ -711,6 +751,18 @@ static bool test_multiproof_additional_error_paths(void)
     ASSERT_ERR(ssz_calculate_multi_merkle_root(leaves_ok,
                                                indices_ok,
                                                2u,
+                                               NULL,
+                                               helper_len,
+                                               calc_scratch_idx,
+                                               calc_scratch_nodes,
+                                               16u,
+                                               NULL,
+                                               &(ssz_chunk_t){0}),
+               SSZ_ERR_INVALID_ARGUMENT);
+
+    ASSERT_ERR(ssz_calculate_multi_merkle_root(leaves_ok,
+                                               indices_ok,
+                                               2u,
                                                proof_ok,
                                                helper_len - 1u,
                                                calc_scratch_idx,
@@ -960,6 +1012,7 @@ int main(void)
         {"get_helper_indices_multi_index", test_get_helper_indices_multi_index},
         {"single_proof_calculate_and_verify", test_single_proof_calculate_and_verify},
         {"multi_proof_calculate_and_verify", test_multi_proof_calculate_and_verify},
+        {"multi_proof_empty_helper_allows_null_proof", test_multi_proof_empty_helper_allows_null_proof},
         {"proof_error_cases", test_proof_error_cases},
         {"get_generalized_index_error_paths", test_get_generalized_index_error_paths},
         {"indices_and_helper_error_paths", test_indices_and_helper_error_paths},

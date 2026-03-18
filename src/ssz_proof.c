@@ -532,7 +532,8 @@ ssz_error_t ssz_calculate_multi_merkle_root(
 {
     size_t helper_count = 0u;
 
-    if ((leaf_count == 0u) || (leaves == NULL) || (indices == NULL) || (proof == NULL) ||
+    if ((leaf_count == 0u) || (leaves == NULL) || (indices == NULL) ||
+        ((proof_count != 0u) && (proof == NULL)) ||
         (scratch_indices == NULL) || (scratch_nodes == NULL) || (out_root == NULL))
     {
         return SSZ_ERR_INVALID_ARGUMENT;
