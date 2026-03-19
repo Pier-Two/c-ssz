@@ -97,6 +97,9 @@ target_link_libraries(test_proof PRIVATE ssz)
 add_test(NAME test_proof COMMAND test_proof)
 
 add_executable(test_hash tests/unit/test_hash.c)
+target_include_directories(test_hash PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
 target_link_libraries(test_hash PRIVATE ssz)
 add_test(NAME test_hash COMMAND test_hash)
 

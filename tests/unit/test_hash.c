@@ -201,7 +201,9 @@ static const ssz_hash_fn_t *internal_copy_ssz_hash_default(void);
 #define ssz_hash_2to1_batch_raw internal_copy_ssz_hash_2to1_batch_raw
 #define ssz_hash_2to1_batch_inplace internal_copy_ssz_hash_2to1_batch_inplace
 #define ssz_hash_default_zero_hashes internal_copy_ssz_hash_default_zero_hashes
-#include "../../src/ssz_hash.c"
+/* Include the source file directly to exercise the renamed portable fallback
+   entry points while keeping coverage attributed to src/ssz_hash.c. */
+#include "ssz_hash.c"
 #undef SHA256_Init
 #undef ssz_hash_sha256
 #undef ssz_hash_2to1
@@ -302,6 +304,37 @@ static bool test_hash_default_zero_hashes_match_runtime_computation(void)
     return true;
 }
 
+static bool test_hash_internal_copy_sha256_and_zero_hashes_match_public(void)
+{
+    const uint8_t msg[] = {0xDEu, 0xADu, 0xBEu, 0xEFu, 0x55u};
+    uint8_t copy_out[32] = {0u};
+    uint8_t public_out[32] = {0u};
+    const ssz_chunk_t *copy_zero_hashes = NULL;
+    const ssz_chunk_t *copy_zero_hashes_cached = NULL;
+    const ssz_chunk_t *public_zero_hashes = NULL;
+
+    reset_internal_hash_hooks();
+
+    ASSERT_ERR(internal_copy_ssz_hash_sha256(msg, sizeof(msg), copy_out), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_sha256(msg, sizeof(msg), public_out), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(copy_out, public_out, sizeof(copy_out));
+
+    copy_zero_hashes = internal_copy_ssz_hash_default_zero_hashes();
+    copy_zero_hashes_cached = internal_copy_ssz_hash_default_zero_hashes();
+    public_zero_hashes = ssz_hash_default_zero_hashes();
+
+    ASSERT_TRUE(copy_zero_hashes != NULL);
+    ASSERT_TRUE(copy_zero_hashes_cached == copy_zero_hashes);
+    ASSERT_TRUE(public_zero_hashes != NULL);
+
+    for (size_t depth = 0u; depth < 64u; depth++)
+    {
+        ASSERT_MEM_EQ(copy_zero_hashes[depth].bytes, public_zero_hashes[depth].bytes, SSZ_BYTES_PER_CHUNK);
+    }
+
+    return true;
+}
+
 static bool test_hash_2to1_batch_cases(void)
 {
     const ssz_chunk_t pairs_one[2] = {make_chunk(0x10u), make_chunk(0x20u)};
@@ -363,6 +396,61 @@ static bool test_hash_2to1_default_contiguous_fast_path_with_output_after_pair(v
     ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &storage[0], &storage[1], &expected), SSZ_SUCCESS);
     ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &storage[0], &storage[1], &storage[2]), SSZ_SUCCESS);
     ASSERT_MEM_EQ(storage[2].bytes, expected.bytes, SSZ_BYTES_PER_CHUNK);
+
+    return true;
+}
+
+static bool test_hash_internal_copy_portable_entry_points_match_public(void)
+{
+    const ssz_hash_fn_t *copy_default = internal_copy_ssz_hash_default();
+    const ssz_hash_fn_t *public_default = ssz_hash_default();
+    const ssz_chunk_t pairs[6] = {
+        make_chunk(0x03u), make_chunk(0x13u),
+        make_chunk(0x23u), make_chunk(0x33u),
+        make_chunk(0x43u), make_chunk(0x53u),
+    };
+    ssz_chunk_t copy_single;
+    ssz_chunk_t public_single;
+    ssz_chunk_t copy_raw[2];
+    ssz_chunk_t public_raw[2];
+    ssz_chunk_t copy_batch[3];
+    ssz_chunk_t public_batch[3];
+    ssz_chunk_t copy_nodes[4] = {
+        make_chunk(0x61u), make_chunk(0x71u),
+        make_chunk(0x81u), make_chunk(0x91u),
+    };
+    ssz_chunk_t public_nodes[4] = {
+        make_chunk(0x61u), make_chunk(0x71u),
+        make_chunk(0x81u), make_chunk(0x91u),
+    };
+
+    ASSERT_TRUE(copy_default != NULL);
+    ASSERT_TRUE(public_default != NULL);
+
+    ASSERT_ERR(internal_copy_ssz_hash_2to1(copy_default, &pairs[0], &pairs[1], &copy_single), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1(public_default, &pairs[0], &pairs[1], &public_single), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(copy_single.bytes, public_single.bytes, SSZ_BYTES_PER_CHUNK);
+
+    ASSERT_ERR(internal_copy_ssz_hash_2to1_batch_raw(copy_default, (const uint8_t *)pairs, 2u, copy_raw), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1_batch_raw(public_default, (const uint8_t *)pairs, 2u, public_raw), SSZ_SUCCESS);
+    for (size_t i = 0u; i < 2u; i++)
+    {
+        ASSERT_MEM_EQ(copy_raw[i].bytes, public_raw[i].bytes, SSZ_BYTES_PER_CHUNK);
+    }
+
+    ASSERT_ERR(internal_copy_ssz_hash_2to1_batch_inplace(copy_default, copy_nodes, 2u), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1_batch_inplace(public_default, public_nodes, 2u), SSZ_SUCCESS);
+    for (size_t i = 0u; i < 2u; i++)
+    {
+        ASSERT_MEM_EQ(copy_nodes[i].bytes, public_nodes[i].bytes, SSZ_BYTES_PER_CHUNK);
+    }
+
+    ASSERT_ERR(internal_copy_ssz_hash_2to1_batch(copy_default, pairs, 3u, copy_batch), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1_batch(public_default, pairs, 3u, public_batch), SSZ_SUCCESS);
+    for (size_t i = 0u; i < 3u; i++)
+    {
+        ASSERT_MEM_EQ(copy_batch[i].bytes, public_batch[i].bytes, SSZ_BYTES_PER_CHUNK);
+    }
 
     return true;
 }
@@ -713,7 +801,11 @@ int main(void)
         {"hash_default_provider", test_hash_default_provider},
         {"hash_default_zero_hashes_match_runtime_computation",
          test_hash_default_zero_hashes_match_runtime_computation},
+        {"hash_internal_copy_sha256_and_zero_hashes_match_public",
+         test_hash_internal_copy_sha256_and_zero_hashes_match_public},
         {"hash_2to1_batch_cases", test_hash_2to1_batch_cases},
+        {"hash_internal_copy_portable_entry_points_match_public",
+         test_hash_internal_copy_portable_entry_points_match_public},
         {"hash_2to1_null_hash_fn_fallback", test_hash_2to1_null_hash_fn_fallback},
         {"hash_2to1_default_contiguous_fast_path_with_output_after_pair",
          test_hash_2to1_default_contiguous_fast_path_with_output_after_pair},
