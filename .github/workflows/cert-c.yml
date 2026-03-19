@@ -1,0 +1,71 @@
+name: CERT C Compliance
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cert-c:
+    name: CERT C (clang-tidy)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy cppcheck
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run clang-tidy CERT C checks
+        run: |
+          set -euo pipefail
+          mapfile -t c_files < <(git ls-files 'src/*.c' 'include/*.h')
+          if [ ${#c_files[@]} -eq 0 ]; then
+            echo "No C source files found."
+            exit 1
+          fi
+
+          echo "Checking ${#c_files[@]} files for CERT C compliance..."
+          clang-tidy \
+            -p build \
+            --checks='-*,cert-*' \
+            --warnings-as-errors='cert-*' \
+            "${c_files[@]}" 2>&1 | tee cert-c-clang-tidy-report.txt
+
+      - name: Run cppcheck with CERT addon
+        run: |
+          set -euo pipefail
+          cppcheck \
+            --addon=cert \
+            --error-exitcode=1 \
+            --std=c11 \
+            --project=build/compile_commands.json \
+            --suppress=missingIncludeSystem \
+            -i external \
+            -i tests \
+            -i bench \
+            -i fuzz \
+            2>&1 | tee cert-c-cppcheck-report.txt
+
+      - name: Upload CERT C reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cert-c-reports
+          path: |
+            cert-c-clang-tidy-report.txt
+            cert-c-cppcheck-report.txt
