@@ -426,11 +426,15 @@ static bool test_basic_internal_helpers(void)
     ASSERT_TRUE(ssz_merkle_cache_internal_alloc_aligned32(16u) == NULL);
 
     {
-        size_t a = 1u;
-        size_t b = 2u;
-        ASSERT_TRUE(ssz_merkle_cache_internal_compare_size_t(&a, &b) < 0);
-        ASSERT_TRUE(ssz_merkle_cache_internal_compare_size_t(&b, &a) > 0);
-        ASSERT_TRUE(ssz_merkle_cache_internal_compare_size_t(&a, &a) == 0);
+        volatile size_t a_seed = 1u;
+        volatile size_t b_seed = 2u;
+        size_t a = a_seed;
+        size_t b = b_seed;
+        int (*volatile cmp_fn)(const void *, const void *) = ssz_merkle_cache_internal_compare_size_t;
+
+        ASSERT_TRUE(cmp_fn(&a, &b) == -1);
+        ASSERT_TRUE(cmp_fn(&b, &a) == 1);
+        ASSERT_TRUE(cmp_fn(&a, &a) == 0);
         ASSERT_U64_EQ(ssz_merkle_cache_internal_log2_u64(8u), 3u);
         ASSERT_SIZE_EQ(ssz_merkle_cache_internal_popcount_u64(UINT64_C(0x15)), 3u);
         ASSERT_U64_EQ(ssz_merkle_cache_internal_ctz_u64(8u), 3u);
@@ -1347,7 +1351,9 @@ static bool test_composite_paths(void)
 
     ASSERT_ERR(ssz_merkle_cache_internal_sync_composite_fallback(cache, 2u, &codec, &batch_opts), SSZ_SUCCESS);
 
+    reset_hooks();
     ASSERT_ERR(ssz_merkle_cache_sync_composite(cache, 2u, 4u, &codec, &token_only_opts), SSZ_SUCCESS);
+    ASSERT_SIZE_EQ(g_hooks.realloc_calls, 1u);
     fixture.fail_index = 1u;
     ASSERT_ERR(ssz_merkle_cache_sync_composite(cache, 2u, 4u, &codec, &token_only_opts), SSZ_ERR_HASH_FAILURE);
     ASSERT_TRUE(ssz_merkle_cache_needs_resync(cache));
@@ -1923,29 +1929,36 @@ static bool test_remaining_targeted_branches(void)
 
 static bool test_grow_capacity(void)
 {
+    ssz_error_t (*volatile grow_fn)(size_t, size_t, size_t *) = ssz_merkle_cache_internal_grow_capacity;
     size_t out = 0u;
 
     /* From zero capacity, should pick initial cap of 8 and double to fit. */
-    ASSERT_ERR(ssz_merkle_cache_internal_grow_capacity(0u, 1u, &out), SSZ_SUCCESS);
+    ASSERT_ERR(grow_fn((size_t)0u, (size_t)1u, &out), SSZ_SUCCESS);
     ASSERT_TRUE(out == 8u);
 
-    ASSERT_ERR(ssz_merkle_cache_internal_grow_capacity(0u, 9u, &out), SSZ_SUCCESS);
+    ASSERT_ERR(grow_fn((size_t)0u, (size_t)9u, &out), SSZ_SUCCESS);
     ASSERT_TRUE(out == 16u);
 
     /* From existing capacity, doubles to fit. */
-    ASSERT_ERR(ssz_merkle_cache_internal_grow_capacity(4u, 5u, &out), SSZ_SUCCESS);
+    ASSERT_ERR(grow_fn((size_t)4u, (size_t)5u, &out), SSZ_SUCCESS);
     ASSERT_TRUE(out == 8u);
 
-    ASSERT_ERR(ssz_merkle_cache_internal_grow_capacity(8u, 17u, &out), SSZ_SUCCESS);
+    ASSERT_ERR(grow_fn((size_t)8u, (size_t)17u, &out), SSZ_SUCCESS);
     ASSERT_TRUE(out == 32u);
 
     /* Already sufficient — returns current. */
-    ASSERT_ERR(ssz_merkle_cache_internal_grow_capacity(16u, 16u, &out), SSZ_SUCCESS);
+    ASSERT_ERR(grow_fn((size_t)16u, (size_t)16u, &out), SSZ_SUCCESS);
     ASSERT_TRUE(out == 16u);
 
     /* Overflow: required is so large that doubling overflows SIZE_MAX. */
-    ASSERT_ERR(ssz_merkle_cache_internal_grow_capacity(SIZE_MAX / 2u + 1u, SIZE_MAX, &out),
-               SSZ_ERR_OVERFLOW);
+    {
+        volatile size_t huge_capacity_seed = (SIZE_MAX / 2u) + 1u;
+        volatile size_t huge_required_seed = SIZE_MAX;
+        size_t huge_capacity = huge_capacity_seed;
+        size_t huge_required = huge_required_seed;
+
+        ASSERT_ERR(grow_fn(huge_capacity, huge_required, &out), SSZ_ERR_OVERFLOW);
+    }
 
     return true;
 }

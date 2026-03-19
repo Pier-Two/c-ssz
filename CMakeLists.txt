@@ -154,6 +154,22 @@ target_include_directories(test_merkle_internal PRIVATE
 target_link_libraries(test_merkle_internal PRIVATE ${SSZ_PLATFORM_LIBS} ${SSZ_CRYPTO_LIB})
 add_test(NAME test_merkle_internal COMMAND test_merkle_internal)
 
+# test_types_internal: #includes ssz_types.c — compile everything else
+set(SSZ_SOURCES_NO_TYPES ${SSZ_COMMON_SOURCES})
+list(REMOVE_ITEM SSZ_SOURCES_NO_TYPES src/ssz_types.c)
+
+add_executable(
+  test_types_internal
+  tests/unit/test_types_internal.c
+  ${SSZ_SOURCES_NO_TYPES}
+)
+target_include_directories(test_types_internal PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_link_libraries(test_types_internal PRIVATE ${SSZ_PLATFORM_LIBS} ${SSZ_CRYPTO_LIB})
+add_test(NAME test_types_internal COMMAND test_types_internal)
+
 # test_merkle_cache_internal: #includes ssz_merkle_cache.c — compile everything else
 set(SSZ_SOURCES_NO_MERKLE_CACHE ${SSZ_COMMON_SOURCES})
 list(REMOVE_ITEM SSZ_SOURCES_NO_MERKLE_CACHE src/ssz_merkle_cache.c)
