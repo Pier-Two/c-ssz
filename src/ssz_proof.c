@@ -47,7 +47,8 @@ static size_t ssz_internal_dedup_sorted(ssz_gindex_t *values, size_t count)
     {
         if (values[i] != values[out - 1u])
         {
-            values[out++] = values[i];
+            values[out] = values[i];
+            out++;
         }
     }
 
@@ -105,8 +106,10 @@ static ssz_error_t ssz_internal_compute_helper_indices(
         ssz_gindex_t cur = indices[i];
         while (cur > 1u)
         {
-            branch_indices[branch_pos++] = ssz_generalized_index_sibling(cur);
-            path_indices[path_pos++] = cur;
+            branch_indices[branch_pos] = ssz_generalized_index_sibling(cur);
+            branch_pos++;
+            path_indices[path_pos] = cur;
+            path_pos++;
             cur = ssz_generalized_index_parent(cur);
         }
     }
@@ -125,7 +128,9 @@ static ssz_error_t ssz_internal_compute_helper_indices(
     {
         if ((j >= path_pos) || (branch_indices[i] < path_indices[j]))
         {
-            scratch[diff_count++] = branch_indices[i++];
+            scratch[diff_count] = branch_indices[i];
+            diff_count++;
+            i++;
             continue;
         }
         if (branch_indices[i] == path_indices[j])
@@ -369,7 +374,8 @@ ssz_error_t ssz_get_branch_indices(
     ssz_gindex_t cur = tree_index;
     while (cur > 1u)
     {
-        out_indices[pos++] = ssz_generalized_index_sibling(cur);
+        out_indices[pos] = ssz_generalized_index_sibling(cur);
+        pos++;
         cur = ssz_generalized_index_parent(cur);
     }
 
@@ -411,7 +417,8 @@ ssz_error_t ssz_get_path_indices(
     ssz_gindex_t cur = tree_index;
     while (cur > 1u)
     {
-        out_indices[pos++] = cur;
+        out_indices[pos] = cur;
+        pos++;
         cur = ssz_generalized_index_parent(cur);
     }
 
@@ -463,7 +470,7 @@ ssz_error_t ssz_get_helper_indices(
 
     if (helper_count != 0u)
     {
-        memcpy(out_indices, scratch, helper_count * sizeof(ssz_gindex_t));
+        (void)memcpy(out_indices, scratch, helper_count * sizeof(ssz_gindex_t));
     }
     if (out_len != NULL)
     {

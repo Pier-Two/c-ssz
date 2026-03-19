@@ -20,22 +20,24 @@ ssz_error_t ssz_get_generalized_index(
 
 static inline uint64_t ssz_next_pow_of_two(uint64_t i)
 {
-    if (i <= 1u)
+    uint64_t value = i;
+
+    if (value <= 1u)
     {
         return 1u;
     }
-    if (i > (UINT64_C(1) << 63u))
+    if (value > (UINT64_C(1) << 63u))
     {
         return 0u;
     }
-    i--;
-    i |= i >> 1u;
-    i |= i >> 2u;
-    i |= i >> 4u;
-    i |= i >> 8u;
-    i |= i >> 16u;
-    i |= i >> 32u;
-    return i + 1u;
+    value--;
+    value |= value >> 1u;
+    value |= value >> 2u;
+    value |= value >> 4u;
+    value |= value >> 8u;
+    value |= value >> 16u;
+    value |= value >> 32u;
+    return value + 1u;
 }
 
 ssz_error_t ssz_get_branch_indices(
@@ -53,9 +55,11 @@ ssz_error_t ssz_get_path_indices(
 static inline size_t ssz_generalized_index_length(ssz_gindex_t index)
 {
     size_t length = 0u;
-    while (index > 1u)
+    ssz_gindex_t current_index = index;
+
+    while (current_index > 1u)
     {
-        index >>= 1u;
+        current_index >>= 1u;
         length++;
     }
     return length;

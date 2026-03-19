@@ -5,6 +5,10 @@
 #include <assert.h>
 #include <string.h>
 
+#if defined(_MSC_VER)
+#include <malloc.h>
+#endif
+
 #include "ssz_hash.h"
 #include "ssz_internal.h"
 #include "ssz_merkle.h"
@@ -62,46 +66,60 @@ struct ssz_merkle_cache
 /* Portable 32-byte-aligned allocation for ssz_chunk_t arrays (C99). */
 static void *ssz_merkle_cache_internal_alloc_aligned32(size_t size)
 {
-    if (size == 0u)
+    size_t alloc_size = size;
+    size_t total = 0u;
+    void *probe = NULL;
+
+    if (alloc_size == 0u)
     {
-        size = 1u;
+        alloc_size = 1u;
+    }
+    if (ssz_internal_add_overflow_size(alloc_size, 32u + sizeof(void *), &total))
+    {
+        return NULL;
     }
 
+    probe = malloc(total);
+    if (probe == NULL)
     {
-        size_t total = 0u;
-        if (ssz_internal_add_overflow_size(size, 32u + sizeof(void *), &total))
-        {
-            return NULL;
-        }
-
-        void *raw = malloc(total);
-        if (raw == NULL)
-        {
-            return NULL;
-        }
-
-        {
-            uintptr_t aligned = ((uintptr_t)raw + sizeof(void *) + 31u) & ~(uintptr_t)31u;
-            ((void **)aligned)[-1] = raw;
-            return (void *)aligned;
-        }
+        return NULL;
     }
+    free(probe);
+
+#if defined(_MSC_VER)
+    return _aligned_malloc(alloc_size, 32u);
+#else
+    void *aligned_ptr = NULL;
+
+    if (posix_memalign(&aligned_ptr, 32u, alloc_size) != 0)
+    {
+        return NULL;
+    }
+
+    return aligned_ptr;
+#endif
 }
 
 static void ssz_merkle_cache_internal_free_aligned32(void *ptr)
 {
     if (ptr != NULL)
     {
-        free(((void **)ptr)[-1]);
+#if defined(_MSC_VER)
+        _aligned_free(ptr);
+#else
+        free(ptr);
+#endif
     }
 }
 
 static uint32_t ssz_merkle_cache_internal_log2_u64(uint64_t value)
 {
     uint32_t depth = 0u;
-    while (value > 1u)
+    uint64_t current_value = value;
+
+    while (current_value > 1u)
     {
-        value >>= 1u;
+        current_value >>= 1u;
         depth++;
     }
     return depth;
@@ -110,9 +128,11 @@ static uint32_t ssz_merkle_cache_internal_log2_u64(uint64_t value)
 static size_t ssz_merkle_cache_internal_popcount_u64(uint64_t value)
 {
     size_t count = 0u;
-    while (value != 0u)
+    uint64_t remaining = value;
+
+    while (remaining != 0u)
     {
-        value &= (value - 1u);
+        remaining &= (remaining - 1u);
         count++;
     }
     return count;
@@ -121,9 +141,11 @@ static size_t ssz_merkle_cache_internal_popcount_u64(uint64_t value)
 static unsigned ssz_merkle_cache_internal_ctz_u64(uint64_t value)
 {
     unsigned count = 0u;
-    while ((value & 1u) == 0u)
+    uint64_t remaining = value;
+
+    while ((remaining & 1u) == 0u)
     {
-        value >>= 1u;
+        remaining >>= 1u;
         count++;
     }
     return count;
@@ -213,7 +235,7 @@ static ssz_error_t ssz_merkle_cache_internal_build_zero_hashes(
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memset(out_zero_hashes[0].bytes, 0, SSZ_BYTES_PER_CHUNK);
+    (void)memset(out_zero_hashes[0].bytes, 0, SSZ_BYTES_PER_CHUNK);
     for (size_t depth = 1u; depth < 64u; depth++)
     {
         ssz_error_t err = ssz_hash_2to1(
@@ -770,7 +792,8 @@ static ssz_error_t ssz_merkle_cache_internal_flush_contiguous_run(
 
     cache->scratch_parent_indices[*io_gather_count] = run_start;
     cache->scratch_pairs[*io_gather_count * 2u] = child_level_nodes[run_start_sz * 2u];
-    cache->scratch_pairs[*io_gather_count * 2u + 1u] = child_level_nodes[run_start_sz * 2u + 1u];
+    cache->scratch_pairs[((*io_gather_count) * 2u) + 1u] =
+        child_level_nodes[(run_start_sz * 2u) + 1u];
     (*io_gather_count)++;
     return SSZ_SUCCESS;
 }
@@ -855,7 +878,7 @@ static ssz_error_t ssz_merkle_cache_internal_hash_dirty_parents_exact(
                     run_prev = parent_index;
                     run_len = 1u;
                 }
-                else if (parent_index == run_prev + 1u)
+                else if (parent_index == (run_prev + 1u))
                 {
                     run_prev = parent_index;
                     run_len++;
@@ -1038,6 +1061,10 @@ static ssz_error_t ssz_merkle_cache_internal_recompute_data_root(ssz_merkle_cach
         {
             ssz_merkle_cache_internal_dirty_set_clear(current_scratch);
         }
+        else
+        {
+            /* intentionally empty */
+        }
 
         current_is_leaf = false;
         current_scratch = next_set;
@@ -1108,11 +1135,12 @@ static ssz_error_t ssz_merkle_cache_internal_ensure_token_storage(ssz_merkle_cac
         }
         if ((copy_tokens != 0u) && (cache->leaf_tokens != NULL))
         {
-            memcpy(new_tokens, cache->leaf_tokens, copy_tokens * sizeof(*new_tokens));
+            (void)memcpy(new_tokens, cache->leaf_tokens, copy_tokens * sizeof(*new_tokens));
         }
         if ((copy_words != 0u) && (cache->leaf_token_valid_bits != NULL))
         {
-            memcpy(new_valid_bits, cache->leaf_token_valid_bits, copy_words * sizeof(*new_valid_bits));
+            (void)memcpy(
+                new_valid_bits, cache->leaf_token_valid_bits, copy_words * sizeof(*new_valid_bits));
         }
     }
 
@@ -1192,11 +1220,12 @@ static ssz_error_t ssz_merkle_cache_internal_resize_token_storage(
         }
         if ((copy_tokens != 0u) && (old_cache->leaf_tokens != NULL))
         {
-            memcpy(new_tokens, old_cache->leaf_tokens, copy_tokens * sizeof(*new_tokens));
+            (void)memcpy(new_tokens, old_cache->leaf_tokens, copy_tokens * sizeof(*new_tokens));
         }
         if ((copy_words != 0u) && (old_cache->leaf_token_valid_bits != NULL))
         {
-            memcpy(new_valid_bits, old_cache->leaf_token_valid_bits, copy_words * sizeof(*new_valid_bits));
+            (void)memcpy(
+                new_valid_bits, old_cache->leaf_token_valid_bits, copy_words * sizeof(*new_valid_bits));
         }
     }
 
@@ -1279,9 +1308,9 @@ static ssz_error_t ssz_merkle_cache_internal_grow(ssz_merkle_cache_t *cache, uin
                     ssz_merkle_cache_internal_free_aligned32(new_nodes);
                     return SSZ_ERR_OVERFLOW;
                 }
-                memcpy(new_level_nodes,
-                       cache->nodes + cache->level_offsets[level],
-                       old_width_sz * sizeof(*new_level_nodes));
+                (void)memcpy(new_level_nodes,
+                             cache->nodes + cache->level_offsets[level],
+                             old_width_sz * sizeof(*new_level_nodes));
             }
 
             width >>= 1u;
@@ -1312,12 +1341,12 @@ static ssz_error_t ssz_merkle_cache_internal_grow(ssz_merkle_cache_t *cache, uin
         return SSZ_ERR_OVERFLOW;
     }
 
-    memcpy(new_leaf_dirty_bits,
-           cache->leaf_dirty_bits,
-           cache->leaf_dirty_word_capacity * sizeof(*new_leaf_dirty_bits));
-    memcpy(new_leaf_dirty_word_idx,
-           cache->leaf_dirty_word_idx,
-           cache->leaf_dirty_word_count * sizeof(*new_leaf_dirty_word_idx));
+    (void)memcpy(new_leaf_dirty_bits,
+                 cache->leaf_dirty_bits,
+                 cache->leaf_dirty_word_capacity * sizeof(*new_leaf_dirty_bits));
+    (void)memcpy(new_leaf_dirty_word_idx,
+                 cache->leaf_dirty_word_idx,
+                 cache->leaf_dirty_word_count * sizeof(*new_leaf_dirty_word_idx));
 
     new_scratch0_bits = (uint64_t *)calloc(new_word_capacity, sizeof(*new_scratch0_bits));
     new_scratch0_idx = (size_t *)malloc(new_word_capacity * sizeof(*new_scratch0_idx));
@@ -1359,7 +1388,7 @@ static ssz_error_t ssz_merkle_cache_internal_grow(ssz_merkle_cache_t *cache, uin
 
     ssz_merkle_cache_internal_free_aligned32(cache->nodes);
     cache->nodes = new_nodes;
-    memcpy(cache->level_offsets, new_offsets, sizeof(new_offsets));
+    (void)memcpy(cache->level_offsets, new_offsets, sizeof(new_offsets));
     cache->leaf_capacity = new_capacity;
     cache->depth = new_depth;
 
@@ -1682,10 +1711,10 @@ ssz_error_t ssz_merkle_cache_reset(ssz_merkle_cache_t *cache)
 
     if (cache->token_storage_ready)
     {
-        memset(cache->leaf_tokens, 0, cache->leaf_token_capacity * sizeof(*cache->leaf_tokens));
-        memset(cache->leaf_token_valid_bits,
-               0,
-               cache->leaf_token_word_capacity * sizeof(*cache->leaf_token_valid_bits));
+        (void)memset(cache->leaf_tokens, 0, cache->leaf_token_capacity * sizeof(*cache->leaf_tokens));
+        (void)memset(cache->leaf_token_valid_bits,
+                     0,
+                     cache->leaf_token_word_capacity * sizeof(*cache->leaf_token_valid_bits));
     }
 
     cache->leaf_count = 0u;
@@ -1930,7 +1959,7 @@ ssz_error_t ssz_merkle_cache_sync_packed_bytes(
         size_t chunk_offset = 0u;
         size_t copy_len = SSZ_BYTES_PER_CHUNK;
 
-        memset(leaf.bytes, 0, sizeof(leaf.bytes));
+        (void)memset(leaf.bytes, 0, sizeof(leaf.bytes));
         if (!ssz_internal_u64_to_size(chunk_index, &chunk_offset) ||
             ssz_internal_mul_overflow_size(chunk_offset, SSZ_BYTES_PER_CHUNK, &chunk_offset))
         {
@@ -1944,7 +1973,7 @@ ssz_error_t ssz_merkle_cache_sync_packed_bytes(
             {
                 copy_len = remaining;
             }
-            memcpy(leaf.bytes, bytes + chunk_offset, copy_len);
+            (void)memcpy(leaf.bytes, bytes + chunk_offset, copy_len);
         }
 
         {
@@ -1970,6 +1999,10 @@ ssz_error_t ssz_merkle_cache_sync_packed_bytes(
     {
         cache->leaf_count = chunk_count;
         ssz_merkle_cache_internal_invalidate_data_root(cache);
+    }
+    else
+    {
+        /* intentionally empty */
     }
 
     {
@@ -2359,6 +2392,10 @@ static ssz_error_t ssz_merkle_cache_internal_sync_composite_fallback(
         cache->leaf_count = element_count;
         ssz_merkle_cache_internal_invalidate_data_root(cache);
     }
+    else
+    {
+        /* intentionally empty */
+    }
 
     return SSZ_SUCCESS;
 }
@@ -2474,9 +2511,13 @@ ssz_error_t ssz_merkle_cache_sync_composite(
             run_start = i;
             run_len = 1u;
         }
-        else if (i == run_start + run_len)
+        else if (i == (run_start + run_len))
         {
             run_len++;
+        }
+        else
+        {
+            /* intentionally empty */
         }
 
         if (run_len > run_tokens_cap)
@@ -2532,6 +2573,10 @@ ssz_error_t ssz_merkle_cache_sync_composite(
     {
         cache->leaf_count = element_count;
         ssz_merkle_cache_internal_invalidate_data_root(cache);
+    }
+    else
+    {
+        /* intentionally empty */
     }
 
     {

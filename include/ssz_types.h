@@ -17,14 +17,8 @@ extern "C"
 #define SSZ_NO_LIMIT                UINT64_MAX
 
 #if defined(_MSC_VER)
-#define SSZ_PACKED_BEGIN __pragma(pack(push, 1))
-#define SSZ_PACKED_END   __pragma(pack(pop))
-#define SSZ_PACKED_ATTR
 #define SSZ_ALIGNAS(n) __declspec(align(n))
 #else
-#define SSZ_PACKED_BEGIN
-#define SSZ_PACKED_END
-#define SSZ_PACKED_ATTR __attribute__((packed))
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 #define SSZ_ALIGNAS(n) _Alignas(n)
 #else
@@ -209,7 +203,7 @@ static inline ssz_error_t ssz_default_uint128(uint8_t out_value[16])
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memset(out_value, 0, 16u);
+    (void)memset(out_value, 0, 16u);
     return SSZ_SUCCESS;
 }
 
@@ -220,7 +214,7 @@ static inline ssz_error_t ssz_default_uint256(uint8_t out_value[32])
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memset(out_value, 0, 32u);
+    (void)memset(out_value, 0, 32u);
     return SSZ_SUCCESS;
 }
 
@@ -260,7 +254,7 @@ static inline ssz_error_t ssz_default_bitvector(
 
     if (byte_count != 0u)
     {
-        memset(out_bits_le, 0, byte_count);
+        (void)memset(out_bits_le, 0, byte_count);
     }
 
     return SSZ_SUCCESS;
@@ -307,7 +301,7 @@ static inline ssz_error_t ssz_default_vector_fixed(
 
     if (required != 0u)
     {
-        memset(out_elements, 0, required);
+        (void)memset(out_elements, 0, required);
     }
 
     return SSZ_SUCCESS;

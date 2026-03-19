@@ -108,7 +108,7 @@ ssz_error_t ssz_serialize_uint128(const uint8_t value[16], uint8_t out[16])
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
-    memcpy(out, value, 16u);
+    (void)memcpy(out, value, 16u);
     return SSZ_SUCCESS;
 }
 
@@ -118,7 +118,7 @@ ssz_error_t ssz_serialize_uint256(const uint8_t value[32], uint8_t out[32])
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
-    memcpy(out, value, 32u);
+    (void)memcpy(out, value, 32u);
     return SSZ_SUCCESS;
 }
 
@@ -175,7 +175,7 @@ ssz_error_t ssz_serialize_bitvector(
     }
     if (out != NULL)
     {
-        memcpy(out, bits_le, byte_count);
+        (void)memcpy(out, bits_le, byte_count);
     }
 
     return SSZ_SUCCESS;
@@ -235,10 +235,10 @@ ssz_error_t ssz_serialize_bitlist(
         return SSZ_SUCCESS;
     }
 
-    memset(out, 0, required);
+    (void)memset(out, 0, required);
     if (data_bytes != 0u)
     {
-        memcpy(out, bits_le, data_bytes);
+        (void)memcpy(out, bits_le, data_bytes);
     }
 
     uint8_t delimiter_bit = (uint8_t)(1u << (bit_len % 8u));
@@ -285,7 +285,7 @@ ssz_error_t ssz_serialize_vector_fixed(
     }
     if ((out != NULL) && (required != 0u))
     {
-        memcpy(out, elements, required);
+        (void)memcpy(out, elements, required);
     }
 
     return SSZ_SUCCESS;
@@ -417,7 +417,7 @@ ssz_error_t ssz_serialize_list_fixed(
     }
     if ((out != NULL) && (required != 0u))
     {
-        memcpy(out, elements, required);
+        (void)memcpy(out, elements, required);
     }
 
     return SSZ_SUCCESS;
@@ -649,6 +649,10 @@ ssz_error_t ssz_serialize_container(
         else if (encoded_len != field_fixed_sizes[i])
         {
             return SSZ_ERR_TYPE_MISMATCH;
+        }
+        else
+        {
+            /* intentionally empty */
         }
     }
 

@@ -2,36 +2,59 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(_MSC_VER)
+#include <malloc.h>
+#endif
+
 #include "ssz_internal.h"
 #include "ssz_merkle.h"
 
 /* Portable 32-byte-aligned allocation for ssz_chunk_t arrays (C99). */
 static void *ssz_internal_alloc_aligned32(size_t size)
 {
-    if (size == 0u)
+    size_t alloc_size = size;
+    size_t total = 0u;
+    void *probe = NULL;
+
+    if (alloc_size == 0u)
     {
-        size = 1u;
+        alloc_size = 1u;
     }
-    size_t total = size + 32u + sizeof(void *);
-    if (total < size)
-    {
-        return NULL;
-    }
-    void *raw = malloc(total);
-    if (raw == NULL)
+    if (ssz_internal_add_overflow_size(alloc_size, 32u + sizeof(void *), &total))
     {
         return NULL;
     }
-    uintptr_t addr = ((uintptr_t)raw + sizeof(void *) + 31u) & ~(uintptr_t)31u;
-    ((void **)addr)[-1] = raw;
-    return (void *)addr;
+
+    probe = malloc(total);
+    if (probe == NULL)
+    {
+        return NULL;
+    }
+    free(probe);
+
+#if defined(_MSC_VER)
+    return _aligned_malloc(alloc_size, 32u);
+#else
+    void *aligned_ptr = NULL;
+
+    if (posix_memalign(&aligned_ptr, 32u, alloc_size) != 0)
+    {
+        return NULL;
+    }
+
+    return aligned_ptr;
+#endif
 }
 
 static void ssz_internal_free_aligned32(void *ptr)
 {
     if (ptr != NULL)
     {
-        free(((void **)ptr)[-1]);
+#if defined(_MSC_VER)
+        _aligned_free(ptr);
+#else
+        free(ptr);
+#endif
     }
 }
 
@@ -108,12 +131,12 @@ static ssz_error_t ssz_internal_read_bytes_leaf(
         return SSZ_ERR_OVERFLOW;
     }
 
-    memset(out_leaf->bytes, 0, SSZ_BYTES_PER_CHUNK);
+    (void)memset(out_leaf->bytes, 0, SSZ_BYTES_PER_CHUNK);
     if (start < reader->byte_len)
     {
         size_t remaining = reader->byte_len - start;
         size_t copy_len = (remaining < SSZ_BYTES_PER_CHUNK) ? remaining : SSZ_BYTES_PER_CHUNK;
-        memcpy(out_leaf->bytes, reader->bytes + start, copy_len);
+        (void)memcpy(out_leaf->bytes, reader->bytes + start, copy_len);
     }
 
     return SSZ_SUCCESS;
@@ -138,9 +161,11 @@ static ssz_error_t ssz_internal_read_codec_leaf(
 static uint32_t ssz_internal_log2_u64(uint64_t value)
 {
     uint32_t depth = 0u;
-    while (value > 1u)
+    uint64_t current_value = value;
+
+    while (current_value > 1u)
     {
-        value >>= 1u;
+        current_value >>= 1u;
         depth++;
     }
     return depth;
@@ -156,7 +181,7 @@ static ssz_error_t ssz_internal_build_zero_hashes(
     const ssz_hash_fn_t *hash_fn,
     ssz_chunk_t zero_hashes[64])
 {
-    memset(zero_hashes[0].bytes, 0, SSZ_BYTES_PER_CHUNK);
+    (void)memset(zero_hashes[0].bytes, 0, SSZ_BYTES_PER_CHUNK);
 
     for (uint32_t depth = 1u; depth <= max_depth; depth++)
     {
@@ -553,7 +578,7 @@ static ssz_error_t ssz_internal_merkleize_progressive_reader(
 
     if (leaf_count == 0u)
     {
-        memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
+        (void)memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
         return SSZ_SUCCESS;
     }
 
@@ -702,7 +727,7 @@ ssz_error_t ssz_hash_tree_root_uint8(uint8_t value, ssz_chunk_t *out_root)
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
+    (void)memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
     out_root->bytes[0] = value;
     return SSZ_SUCCESS;
 }
@@ -714,7 +739,7 @@ ssz_error_t ssz_hash_tree_root_uint16(uint16_t value, ssz_chunk_t *out_root)
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
+    (void)memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
     ssz_internal_write_u16_le(out_root->bytes, value);
     return SSZ_SUCCESS;
 }
@@ -726,7 +751,7 @@ ssz_error_t ssz_hash_tree_root_uint32(uint32_t value, ssz_chunk_t *out_root)
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
+    (void)memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
     ssz_internal_write_u32_le(out_root->bytes, value);
     return SSZ_SUCCESS;
 }
@@ -750,8 +775,8 @@ ssz_error_t ssz_hash_tree_root_uint128(const uint8_t value[16], ssz_chunk_t *out
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
-    memcpy(out_root->bytes, value, 16u);
+    (void)memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
+    (void)memcpy(out_root->bytes, value, 16u);
     return SSZ_SUCCESS;
 }
 
@@ -762,7 +787,7 @@ ssz_error_t ssz_hash_tree_root_uint256(const uint8_t value[32], ssz_chunk_t *out
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memcpy(out_root->bytes, value, SSZ_BYTES_PER_CHUNK);
+    (void)memcpy(out_root->bytes, value, SSZ_BYTES_PER_CHUNK);
     return SSZ_SUCCESS;
 }
 
@@ -1114,7 +1139,7 @@ ssz_error_t ssz_hash_tree_root_union(
 
     if (has_none && (selector == 0u))
     {
-        memset(value_root.bytes, 0, SSZ_BYTES_PER_CHUNK);
+        (void)memset(value_root.bytes, 0, SSZ_BYTES_PER_CHUNK);
     }
     else
     {
@@ -1176,7 +1201,7 @@ ssz_error_t ssz_mix_in_length(
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memcpy(length_chunk.bytes, length, SSZ_BYTES_PER_CHUNK);
+    (void)memcpy(length_chunk.bytes, length, SSZ_BYTES_PER_CHUNK);
 
     return ssz_hash_2to1(hash_fn, root, &length_chunk, out_root);
 }
@@ -1206,7 +1231,7 @@ ssz_error_t ssz_mix_in_selector(
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memset(selector_chunk.bytes, 0, SSZ_BYTES_PER_CHUNK);
+    (void)memset(selector_chunk.bytes, 0, SSZ_BYTES_PER_CHUNK);
     selector_chunk.bytes[0] = selector;
 
     return ssz_hash_2to1(hash_fn, root, &selector_chunk, out_root);
@@ -1264,10 +1289,10 @@ ssz_error_t ssz_mix_in_active_fields(
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    memset(active_chunk.bytes, 0, SSZ_BYTES_PER_CHUNK);
+    (void)memset(active_chunk.bytes, 0, SSZ_BYTES_PER_CHUNK);
     if (active_fields_len != 0u)
     {
-        memcpy(active_chunk.bytes, active_fields, active_fields_len);
+        (void)memcpy(active_chunk.bytes, active_fields, active_fields_len);
     }
 
     return ssz_hash_2to1(hash_fn, root, &active_chunk, out_root);

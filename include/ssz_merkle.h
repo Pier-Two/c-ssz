@@ -167,8 +167,16 @@ ssz_error_t ssz_hash_tree_root_progressive_list_roots(
     ssz_chunk_t *out_root);
 
 #define ssz_hash_tree_root_container        ssz_hash_tree_root_vector_composite
-#define ssz_hash_tree_root_container_roots  ssz_hash_tree_root_vector_roots
 #define ssz_hash_tree_root_compatible_union ssz_hash_tree_root_union
+
+static inline ssz_error_t ssz_hash_tree_root_container_roots(
+    const ssz_chunk_t *roots,
+    uint64_t count,
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *out_root)
+{
+    return ssz_hash_tree_root_vector_roots(roots, count, hash_fn, out_root);
+}
 
 #ifdef __cplusplus
 }

@@ -103,10 +103,19 @@ static inline bool ssz_internal_bits_to_bytes(uint64_t bit_count, size_t *out_by
 static inline size_t ssz_internal_count_bits_u8(uint8_t value)
 {
     size_t count = 0u;
-    while (value != 0u)
+    uint8_t remaining = value;
+
+    while (remaining != 0u)
     {
-        count += (size_t)(value & 1u);
-        value >>= 1u;
+        if ((remaining & 1u) != 0u)
+        {
+            count++;
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+        remaining >>= 1u;
     }
     return count;
 }

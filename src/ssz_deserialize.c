@@ -154,7 +154,7 @@ ssz_error_t ssz_deserialize_uint128(const uint8_t in[16], uint8_t out_value[16])
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
-    memcpy(out_value, in, 16u);
+    (void)memcpy(out_value, in, 16u);
     return SSZ_SUCCESS;
 }
 
@@ -164,7 +164,7 @@ ssz_error_t ssz_deserialize_uint256(const uint8_t in[32], uint8_t out_value[32])
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
-    memcpy(out_value, in, 32u);
+    (void)memcpy(out_value, in, 32u);
     return SSZ_SUCCESS;
 }
 
@@ -219,7 +219,7 @@ ssz_error_t ssz_deserialize_bitvector(
 
     if (required != 0u)
     {
-        memcpy(out_bits_le, in, required);
+        (void)memcpy(out_bits_le, in, required);
     }
 
     return SSZ_SUCCESS;
@@ -280,11 +280,11 @@ ssz_error_t ssz_deserialize_bitlist(
     {
         if (delimiter_pos == 0u)
         {
-            memcpy(out_bits_le, in, in_len - 1u);
+            (void)memcpy(out_bits_le, in, in_len - 1u);
         }
         else
         {
-            memcpy(out_bits_le, in, in_len);
+            (void)memcpy(out_bits_le, in, in_len);
             out_bits_le[out_bytes - 1u] &= (uint8_t)((1u << delimiter_pos) - 1u);
         }
     }
@@ -330,7 +330,7 @@ ssz_error_t ssz_deserialize_vector_fixed(
 
     if (required != 0u)
     {
-        memcpy(out_elements, in, required);
+        (void)memcpy(out_elements, in, required);
     }
 
     return SSZ_SUCCESS;
@@ -394,7 +394,7 @@ ssz_error_t ssz_deserialize_list_fixed(
 
     if (in_len != 0u)
     {
-        memcpy(out_elements, in, in_len);
+        (void)memcpy(out_elements, in, in_len);
     }
 
     *out_element_count = (uint64_t)count;
@@ -431,12 +431,14 @@ ssz_error_t ssz_deserialize_list_variable(
     }
 
     uint32_t first_offset = ssz_internal_read_u32_le(in);
+    uint32_t element_count_u32 = 0u;
     if (((size_t)first_offset > in_len) || ((first_offset % SSZ_BYTES_PER_LENGTH_OFFSET) != 0u))
     {
         return SSZ_ERR_OFFSET_INVALID;
     }
 
-    element_count = (uint64_t)(first_offset / SSZ_BYTES_PER_LENGTH_OFFSET);
+    element_count_u32 = first_offset / SSZ_BYTES_PER_LENGTH_OFFSET;
+    element_count = (uint64_t)element_count_u32;
     if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
     {
         return SSZ_ERR_LIMIT_EXCEEDED;
@@ -520,13 +522,17 @@ ssz_error_t ssz_deserialize_container(
             {
                 return SSZ_ERR_OFFSET_INVALID;
             }
+            else
+            {
+                /* intentionally empty */
+            }
 
             prev_offset = offset;
             cursor += SSZ_BYTES_PER_LENGTH_OFFSET;
         }
         else
         {
-            if (cursor + fixed_size > fixed_region)
+            if ((cursor + fixed_size) > fixed_region)
             {
                 return SSZ_ERR_OFFSET_INVALID;
             }
