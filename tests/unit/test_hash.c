@@ -213,6 +213,82 @@ static const ssz_hash_fn_t *internal_copy_ssz_hash_default(void);
 #undef ssz_hash_2to1_batch_inplace
 #undef ssz_hash_default_zero_hashes
 
+/* Force calls through the renamed entry points to stay out-of-line in
+   coverage builds. Otherwise the O3 test build can inline the included copy
+   and leave gcov with no function hits for src/ssz_hash.c. */
+static ssz_error_t call_internal_copy_ssz_hash_sha256(
+    const uint8_t *data,
+    size_t data_len,
+    uint8_t out[32])
+{
+    ssz_error_t (*volatile fn)(const uint8_t *, size_t, uint8_t[32]) = internal_copy_ssz_hash_sha256;
+    return fn(data, data_len, out);
+}
+
+static const ssz_hash_fn_t *call_internal_copy_ssz_hash_default(void)
+{
+    const ssz_hash_fn_t *(*volatile fn)(void) = internal_copy_ssz_hash_default;
+    return fn();
+}
+
+static ssz_error_t call_internal_copy_ssz_hash_2to1(
+    const ssz_hash_fn_t *hash_fn,
+    const ssz_chunk_t *left,
+    const ssz_chunk_t *right,
+    ssz_chunk_t *out)
+{
+    ssz_error_t (*volatile fn)(
+        const ssz_hash_fn_t *,
+        const ssz_chunk_t *,
+        const ssz_chunk_t *,
+        ssz_chunk_t *) = internal_copy_ssz_hash_2to1;
+    return fn(hash_fn, left, right, out);
+}
+
+static ssz_error_t call_internal_copy_ssz_hash_2to1_batch_raw(
+    const ssz_hash_fn_t *hash_fn,
+    const uint8_t *pairs64,
+    size_t pair_count,
+    ssz_chunk_t *out)
+{
+    ssz_error_t (*volatile fn)(
+        const ssz_hash_fn_t *,
+        const uint8_t *,
+        size_t,
+        ssz_chunk_t *) = internal_copy_ssz_hash_2to1_batch_raw;
+    return fn(hash_fn, pairs64, pair_count, out);
+}
+
+static ssz_error_t call_internal_copy_ssz_hash_2to1_batch_inplace(
+    const ssz_hash_fn_t *hash_fn,
+    ssz_chunk_t *nodes,
+    size_t pair_count)
+{
+    ssz_error_t (*volatile fn)(const ssz_hash_fn_t *, ssz_chunk_t *, size_t) =
+        internal_copy_ssz_hash_2to1_batch_inplace;
+    return fn(hash_fn, nodes, pair_count);
+}
+
+static ssz_error_t call_internal_copy_ssz_hash_2to1_batch(
+    const ssz_hash_fn_t *hash_fn,
+    const ssz_chunk_t *pairs,
+    size_t pair_count,
+    ssz_chunk_t *out)
+{
+    ssz_error_t (*volatile fn)(
+        const ssz_hash_fn_t *,
+        const ssz_chunk_t *,
+        size_t,
+        ssz_chunk_t *) = internal_copy_ssz_hash_2to1_batch;
+    return fn(hash_fn, pairs, pair_count, out);
+}
+
+static const ssz_chunk_t *call_internal_copy_ssz_hash_default_zero_hashes(void)
+{
+    const ssz_chunk_t *(*volatile fn)(void) = internal_copy_ssz_hash_default_zero_hashes;
+    return fn();
+}
+
 static bool test_hash_sha256_known_vectors(void)
 {
     uint8_t out[32] = {0u};
@@ -315,12 +391,12 @@ static bool test_hash_internal_copy_sha256_and_zero_hashes_match_public(void)
 
     reset_internal_hash_hooks();
 
-    ASSERT_ERR(internal_copy_ssz_hash_sha256(msg, sizeof(msg), copy_out), SSZ_SUCCESS);
+    ASSERT_ERR(call_internal_copy_ssz_hash_sha256(msg, sizeof(msg), copy_out), SSZ_SUCCESS);
     ASSERT_ERR(ssz_hash_sha256(msg, sizeof(msg), public_out), SSZ_SUCCESS);
     ASSERT_MEM_EQ(copy_out, public_out, sizeof(copy_out));
 
-    copy_zero_hashes = internal_copy_ssz_hash_default_zero_hashes();
-    copy_zero_hashes_cached = internal_copy_ssz_hash_default_zero_hashes();
+    copy_zero_hashes = call_internal_copy_ssz_hash_default_zero_hashes();
+    copy_zero_hashes_cached = call_internal_copy_ssz_hash_default_zero_hashes();
     public_zero_hashes = ssz_hash_default_zero_hashes();
 
     ASSERT_TRUE(copy_zero_hashes != NULL);
@@ -402,7 +478,7 @@ static bool test_hash_2to1_default_contiguous_fast_path_with_output_after_pair(v
 
 static bool test_hash_internal_copy_portable_entry_points_match_public(void)
 {
-    const ssz_hash_fn_t *copy_default = internal_copy_ssz_hash_default();
+    const ssz_hash_fn_t *copy_default = call_internal_copy_ssz_hash_default();
     const ssz_hash_fn_t *public_default = ssz_hash_default();
     const ssz_chunk_t pairs[6] = {
         make_chunk(0x03u), make_chunk(0x13u),
@@ -427,25 +503,27 @@ static bool test_hash_internal_copy_portable_entry_points_match_public(void)
     ASSERT_TRUE(copy_default != NULL);
     ASSERT_TRUE(public_default != NULL);
 
-    ASSERT_ERR(internal_copy_ssz_hash_2to1(copy_default, &pairs[0], &pairs[1], &copy_single), SSZ_SUCCESS);
+    ASSERT_ERR(call_internal_copy_ssz_hash_2to1(copy_default, &pairs[0], &pairs[1], &copy_single),
+               SSZ_SUCCESS);
     ASSERT_ERR(ssz_hash_2to1(public_default, &pairs[0], &pairs[1], &public_single), SSZ_SUCCESS);
     ASSERT_MEM_EQ(copy_single.bytes, public_single.bytes, SSZ_BYTES_PER_CHUNK);
 
-    ASSERT_ERR(internal_copy_ssz_hash_2to1_batch_raw(copy_default, (const uint8_t *)pairs, 2u, copy_raw), SSZ_SUCCESS);
+    ASSERT_ERR(call_internal_copy_ssz_hash_2to1_batch_raw(copy_default, (const uint8_t *)pairs, 2u, copy_raw),
+               SSZ_SUCCESS);
     ASSERT_ERR(ssz_hash_2to1_batch_raw(public_default, (const uint8_t *)pairs, 2u, public_raw), SSZ_SUCCESS);
     for (size_t i = 0u; i < 2u; i++)
     {
         ASSERT_MEM_EQ(copy_raw[i].bytes, public_raw[i].bytes, SSZ_BYTES_PER_CHUNK);
     }
 
-    ASSERT_ERR(internal_copy_ssz_hash_2to1_batch_inplace(copy_default, copy_nodes, 2u), SSZ_SUCCESS);
+    ASSERT_ERR(call_internal_copy_ssz_hash_2to1_batch_inplace(copy_default, copy_nodes, 2u), SSZ_SUCCESS);
     ASSERT_ERR(ssz_hash_2to1_batch_inplace(public_default, public_nodes, 2u), SSZ_SUCCESS);
     for (size_t i = 0u; i < 2u; i++)
     {
         ASSERT_MEM_EQ(copy_nodes[i].bytes, public_nodes[i].bytes, SSZ_BYTES_PER_CHUNK);
     }
 
-    ASSERT_ERR(internal_copy_ssz_hash_2to1_batch(copy_default, pairs, 3u, copy_batch), SSZ_SUCCESS);
+    ASSERT_ERR(call_internal_copy_ssz_hash_2to1_batch(copy_default, pairs, 3u, copy_batch), SSZ_SUCCESS);
     ASSERT_ERR(ssz_hash_2to1_batch(public_default, pairs, 3u, public_batch), SSZ_SUCCESS);
     for (size_t i = 0u; i < 3u; i++)
     {
