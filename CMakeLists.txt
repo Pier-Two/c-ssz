@@ -104,6 +104,10 @@ add_executable(test_types tests/unit/test_types.c)
 target_link_libraries(test_types PRIVATE ssz)
 add_test(NAME test_types COMMAND test_types)
 
+add_executable(test_default tests/unit/test_default.c)
+target_link_libraries(test_default PRIVATE ssz)
+add_test(NAME test_default COMMAND test_default)
+
 # --- Internal tests (#include .c files for static function access) ---
 # These do NOT link against libssz — the tested source file is #included
 # directly, and all other sources are compiled as explicit dependencies.

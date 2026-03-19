@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -105,6 +106,489 @@ typedef struct
 
 typedef uint64_t ssz_path_step_t;
 #define SSZ_PATH_STEP_LENGTH UINT64_MAX
+
+static inline bool ssz_types_internal_mul_overflow_size(size_t a, size_t b, size_t *out)
+{
+    if ((a != 0u) && (b > (SIZE_MAX / a)))
+    {
+        return true;
+    }
+    if (out != NULL)
+    {
+        *out = a * b;
+    }
+    return false;
+}
+
+static inline bool ssz_types_internal_u64_to_size(uint64_t value, size_t *out)
+{
+    if (value > (uint64_t)SIZE_MAX)
+    {
+        return false;
+    }
+    if (out != NULL)
+    {
+        *out = (size_t)value;
+    }
+    return true;
+}
+
+static inline bool ssz_types_internal_bits_to_bytes(uint64_t bit_count, size_t *out_bytes)
+{
+    uint64_t bytes_u64 = 0u;
+
+    if (bit_count > (UINT64_MAX - 7u))
+    {
+        return false;
+    }
+
+    bytes_u64 = (bit_count + 7u) / 8u;
+    return ssz_types_internal_u64_to_size(bytes_u64, out_bytes);
+}
+
+static inline bool ssz_types_internal_bytes_are_zero(const uint8_t *bytes, size_t byte_count)
+{
+    for (size_t i = 0u; i < byte_count; i++)
+    {
+        if (bytes[i] != 0u)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static inline ssz_error_t ssz_default_uint8(uint8_t *out_value)
+{
+    if (out_value == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_value = 0u;
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_default_uint16(uint16_t *out_value)
+{
+    if (out_value == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_value = 0u;
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_default_uint32(uint32_t *out_value)
+{
+    if (out_value == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_value = 0u;
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_default_uint64(uint64_t *out_value)
+{
+    if (out_value == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_value = 0u;
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_default_uint128(uint8_t out_value[16])
+{
+    if (out_value == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    memset(out_value, 0, 16u);
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_default_uint256(uint8_t out_value[32])
+{
+    if (out_value == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    memset(out_value, 0, 32u);
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_default_boolean(uint8_t *out_value)
+{
+    if (out_value == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_value = 0u;
+    return SSZ_SUCCESS;
+}
+
+#define ssz_default_byte ssz_default_uint8
+#define ssz_default_bit  ssz_default_boolean
+
+static inline ssz_error_t ssz_default_bitvector(
+    uint8_t *out_bits_le,
+    size_t out_bits_le_len,
+    uint64_t bit_count)
+{
+    size_t byte_count = 0u;
+
+    if (bit_count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (!ssz_types_internal_bits_to_bytes(bit_count, &byte_count))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((byte_count != 0u) && ((out_bits_le == NULL) || (out_bits_le_len < byte_count)))
+    {
+        return SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+
+    if (byte_count != 0u)
+    {
+        memset(out_bits_le, 0, byte_count);
+    }
+
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_default_bitlist(uint64_t *out_bit_len)
+{
+    if (out_bit_len == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_bit_len = 0u;
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_default_vector_fixed(
+    uint8_t *out_elements,
+    uint64_t element_count,
+    size_t element_size)
+{
+    size_t required = 0u;
+
+    if (element_count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (element_size == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (!ssz_types_internal_u64_to_size(element_count, NULL))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_types_internal_mul_overflow_size((size_t)element_count, element_size, &required))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((required != 0u) && (out_elements == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    if (required != 0u)
+    {
+        memset(out_elements, 0, required);
+    }
+
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_default_vector_composite(uint64_t element_count, ssz_member_codec_t *codec)
+{
+    if (element_count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if ((codec == NULL) || (codec->read == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    for (uint64_t i = 0u; i < element_count; i++)
+    {
+        ssz_error_t err = codec->read(codec->ctx, i, NULL, 0u);
+        if (err != SSZ_SUCCESS)
+        {
+            return err;
+        }
+    }
+
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_default_list(uint64_t *out_element_count)
+{
+    if (out_element_count == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_element_count = 0u;
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_default_progressive_list(uint64_t *out_element_count)
+{
+    return ssz_default_list(out_element_count);
+}
+
+static inline ssz_error_t ssz_default_progressive_bitlist(uint64_t *out_bit_len)
+{
+    return ssz_default_bitlist(out_bit_len);
+}
+
+ssz_error_t ssz_default_container(
+    const size_t *field_fixed_sizes,
+    uint32_t field_count,
+    ssz_member_codec_t *codec);
+
+static inline ssz_error_t ssz_default_progressive_container(
+    const size_t *field_fixed_sizes,
+    uint32_t field_count,
+    ssz_member_codec_t *codec)
+{
+    return ssz_default_container(field_fixed_sizes, field_count, codec);
+}
+
+ssz_error_t ssz_default_union(
+    uint32_t option_count,
+    bool has_none,
+    ssz_member_codec_t *codec,
+    uint8_t *out_selector);
+
+static inline ssz_error_t ssz_is_zero_uint8(uint8_t value, bool *out_is_zero)
+{
+    if (out_is_zero == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_is_zero = (value == 0u);
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_is_zero_uint16(uint16_t value, bool *out_is_zero)
+{
+    if (out_is_zero == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_is_zero = (value == 0u);
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_is_zero_uint32(uint32_t value, bool *out_is_zero)
+{
+    if (out_is_zero == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_is_zero = (value == 0u);
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_is_zero_uint64(uint64_t value, bool *out_is_zero)
+{
+    if (out_is_zero == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_is_zero = (value == 0u);
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_is_zero_uint128(const uint8_t value[16], bool *out_is_zero)
+{
+    if ((value == NULL) || (out_is_zero == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_is_zero = ssz_types_internal_bytes_are_zero(value, 16u);
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_is_zero_uint256(const uint8_t value[32], bool *out_is_zero)
+{
+    if ((value == NULL) || (out_is_zero == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_is_zero = ssz_types_internal_bytes_are_zero(value, 32u);
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_is_zero_boolean(uint8_t value, bool *out_is_zero)
+{
+    if (out_is_zero == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_is_zero = (value == 0u);
+    return SSZ_SUCCESS;
+}
+
+#define ssz_is_zero_byte ssz_is_zero_uint8
+#define ssz_is_zero_bit  ssz_is_zero_boolean
+
+static inline ssz_error_t ssz_is_zero_bitvector(
+    const uint8_t *bits_le,
+    size_t bits_le_len,
+    uint64_t bit_count,
+    bool *out_is_zero)
+{
+    size_t byte_count = 0u;
+
+    if (out_is_zero == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (bit_count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (!ssz_types_internal_bits_to_bytes(bit_count, &byte_count))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((byte_count != 0u) && ((bits_le == NULL) || (bits_le_len < byte_count)))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    if ((bit_count % 8u) != 0u)
+    {
+        uint8_t mask = (uint8_t)((1u << (bit_count % 8u)) - 1u);
+        if ((bits_le[byte_count - 1u] & (uint8_t)(~mask)) != 0u)
+        {
+            return SSZ_ERR_ENCODING_INVALID;
+        }
+    }
+
+    *out_is_zero = (byte_count == 0u) || ssz_types_internal_bytes_are_zero(bits_le, byte_count);
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_is_zero_bitlist(uint64_t bit_len, bool *out_is_zero)
+{
+    if (out_is_zero == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_is_zero = (bit_len == 0u);
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_is_zero_vector_fixed(
+    const uint8_t *elements,
+    uint64_t element_count,
+    size_t element_size,
+    bool *out_is_zero)
+{
+    size_t required = 0u;
+
+    if (out_is_zero == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (element_count == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (element_size == 0u)
+    {
+        return SSZ_ERR_SCHEMA_INVALID;
+    }
+    if (!ssz_types_internal_u64_to_size(element_count, NULL))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if (ssz_types_internal_mul_overflow_size((size_t)element_count, element_size, &required))
+    {
+        return SSZ_ERR_OVERFLOW;
+    }
+    if ((required != 0u) && (elements == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_is_zero = (required == 0u) || ssz_types_internal_bytes_are_zero(elements, required);
+    return SSZ_SUCCESS;
+}
+
+ssz_error_t ssz_is_zero_vector_composite(
+    uint64_t element_count,
+    ssz_member_codec_t *codec,
+    bool *out_is_zero);
+
+static inline ssz_error_t ssz_is_zero_list(uint64_t element_count, bool *out_is_zero)
+{
+    if (out_is_zero == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_is_zero = (element_count == 0u);
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_is_zero_progressive_list(uint64_t element_count, bool *out_is_zero)
+{
+    return ssz_is_zero_list(element_count, out_is_zero);
+}
+
+static inline ssz_error_t ssz_is_zero_progressive_bitlist(uint64_t bit_len, bool *out_is_zero)
+{
+    return ssz_is_zero_bitlist(bit_len, out_is_zero);
+}
+
+ssz_error_t ssz_is_zero_container(
+    const size_t *field_fixed_sizes,
+    uint32_t field_count,
+    ssz_member_codec_t *codec,
+    bool *out_is_zero);
+
+static inline ssz_error_t ssz_is_zero_progressive_container(
+    const size_t *field_fixed_sizes,
+    uint32_t field_count,
+    ssz_member_codec_t *codec,
+    bool *out_is_zero)
+{
+    return ssz_is_zero_container(field_fixed_sizes, field_count, codec, out_is_zero);
+}
+
+ssz_error_t ssz_is_zero_union(
+    uint8_t selector,
+    uint32_t option_count,
+    bool has_none,
+    ssz_member_codec_t *codec,
+    bool *out_is_zero);
 
 const char *ssz_error_string(ssz_error_t error);
 
