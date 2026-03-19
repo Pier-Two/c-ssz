@@ -30,6 +30,29 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
+      - name: Validate CERT C checks catch real violations
+        run: |
+          set -euo pipefail
+
+          # cert-env33-c: calling system()
+          # cert-err34-c: unchecked return of atoi()
+          cat > /tmp/cert_test.c <<'TESTEOF'
+          #include <stdlib.h>
+          int bad(void) {
+            system("echo hello");
+            int x = atoi("123");
+            return x;
+          }
+          TESTEOF
+
+          echo "Testing CERT C checks with known-bad code..."
+          if clang-tidy --checks='-*,cert-*' /tmp/cert_test.c -- -std=c11 2>&1 | grep -E 'cert-'; then
+            echo "CERT C checks are working — detected violations in test file."
+          else
+            echo "ERROR: CERT C checks did not detect known violations!"
+            exit 1
+          fi
+
       - name: List enabled CERT C checks
         run: |
           echo "=== clang-tidy version ==="
