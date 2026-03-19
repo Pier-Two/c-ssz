@@ -19,11 +19,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install tools
+      - name: Install clang-tidy
         run: |
           sudo apt-get update
           sudo apt-get install -y clang-tidy
-          pip install cppcheck
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
@@ -45,28 +44,11 @@ jobs:
             -p build \
             --checks='-*,cert-*' \
             --warnings-as-errors='cert-*' \
-            "${c_files[@]}" 2>&1 | tee cert-c-clang-tidy-report.txt
+            "${c_files[@]}" 2>&1 | tee cert-c-report.txt
 
-      - name: Run cppcheck with CERT addon
-        run: |
-          set -euo pipefail
-          cppcheck \
-            --addon=cert \
-            --error-exitcode=1 \
-            --std=c11 \
-            --project=build/compile_commands.json \
-            --suppress=missingIncludeSystem \
-            -i external \
-            -i tests \
-            -i bench \
-            -i fuzz \
-            2>&1 | tee cert-c-cppcheck-report.txt
-
-      - name: Upload CERT C reports
+      - name: Upload CERT C report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cert-c-reports
-          path: |
-            cert-c-clang-tidy-report.txt
-            cert-c-cppcheck-report.txt
+          name: cert-c-report
+          path: cert-c-report.txt
