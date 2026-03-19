@@ -1,0 +1,47 @@
+name: GCC Analyzer
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gcc-analyzer:
+    name: GCC -fanalyzer
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure
+        env:
+          CC: gcc
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS='-fanalyzer -Werror=analyzer-too-complex -fanalyzer-transitivity'
+
+      - name: Build with -fanalyzer
+        run: cmake --build build --parallel 2>&1 | tee gcc-analyzer-report.txt
+
+      - name: Check for analyzer warnings
+        run: |
+          set -euo pipefail
+          if grep -E '\[-Wanalyzer-' gcc-analyzer-report.txt; then
+            echo "GCC analyzer warnings found!"
+            exit 1
+          fi
+          echo "No GCC analyzer warnings found."
+
+      - name: Upload analyzer report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcc-analyzer-report
+          path: gcc-analyzer-report.txt

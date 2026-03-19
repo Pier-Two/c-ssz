@@ -1,0 +1,96 @@
+name: MISRA C Compliance
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  misra-c:
+    name: MISRA C (cppcheck)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+
+      - name: Verify MISRA addon exists
+        run: |
+          set -euo pipefail
+          addon_path="$(python3 -c "import cppcheck; print(cppcheck.__path__[0] if hasattr(cppcheck, '__path__') else '')" 2>/dev/null || true)"
+
+          # Find the addon in common locations
+          for path in \
+            /usr/share/cppcheck/addons/misra.py \
+            /usr/lib/python3/dist-packages/cppcheck/addons/misra.py \
+            /usr/local/share/cppcheck/addons/misra.py; do
+            if [ -f "$path" ]; then
+              echo "Found MISRA addon at: $path"
+              exit 0
+            fi
+          done
+
+          # Try running it to see if cppcheck finds it
+          echo "Checking if cppcheck can find misra addon..."
+          echo "int main(void) { return 0; }" > /tmp/test.c
+          if cppcheck --addon=misra --error-exitcode=0 /tmp/test.c 2>&1; then
+            echo "MISRA addon is available."
+          else
+            echo "MISRA addon not available — installing cppcheck from source."
+            sudo apt-get install -y cmake g++
+            cd /tmp
+            git clone --depth 1 https://github.com/danmar/cppcheck.git cppcheck-src
+            cd cppcheck-src
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+            cmake --build build --parallel
+            sudo cmake --install build
+            echo "cppcheck installed from source."
+          fi
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: List MISRA rules being checked
+        run: |
+          cppcheck --version
+          echo ""
+          echo "Running MISRA C analysis on project source files..."
+
+      - name: Run MISRA C analysis
+        run: |
+          set -euo pipefail
+          cppcheck \
+            --addon=misra \
+            --error-exitcode=1 \
+            --std=c11 \
+            --project=build/compile_commands.json \
+            --suppress=missingIncludeSystem \
+            --suppress='*:*external/*' \
+            --suppress='*:*tests/*' \
+            --suppress='*:*bench/*' \
+            --suppress='*:*fuzz/*' \
+            -i external \
+            -i tests \
+            -i bench \
+            -i fuzz \
+            2>&1 | tee misra-c-report.txt
+
+      - name: Upload MISRA C report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: misra-c-report
+          path: misra-c-report.txt
