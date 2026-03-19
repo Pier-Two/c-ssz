@@ -2485,7 +2485,7 @@ ssz_error_t ssz_merkle_cache_sync_composite(
             {
                 ssz_error_t cap_err =
                     ssz_merkle_cache_internal_grow_capacity(run_tokens_cap, (size_t)run_len, &new_cap);
-                assert(cap_err == SSZ_SUCCESS);
+                assert(cap_err == SSZ_SUCCESS); /* LCOV_EXCL_LINE */
                 (void)cap_err;
             }
             {

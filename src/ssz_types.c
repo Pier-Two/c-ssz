@@ -33,15 +33,14 @@ static ssz_error_t ssz_internal_capture_member(
 
         size_t written = 0u;
         err = codec->write(codec->ctx, member_id, bytes, expected_len, &written);
+        if ((err == SSZ_SUCCESS) && (written != expected_len))
+        {
+            err = SSZ_ERR_TYPE_MISMATCH;
+        }
         if (err != SSZ_SUCCESS)
         {
             free(bytes);
             return err;
-        }
-        if (written != expected_len)
-        {
-            free(bytes);
-            return SSZ_ERR_TYPE_MISMATCH;
         }
     }
 
