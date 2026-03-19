@@ -30,21 +30,62 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
+      - name: List enabled CERT C checks
+        run: |
+          echo "=== clang-tidy version ==="
+          clang-tidy --version
+          echo ""
+          echo "=== Enabled cert-* checks ==="
+          clang-tidy --list-checks --checks='-*,cert-*'
+          echo ""
+          echo "=== Files in compilation database ==="
+          python3 -c "
+          import json
+          with open('build/compile_commands.json') as f:
+              db = json.load(f)
+          for entry in db:
+              print(entry['file'])
+          " | grep -v external | sort
+
       - name: Run clang-tidy CERT C checks
         run: |
           set -euo pipefail
-          mapfile -t c_files < <(git ls-files 'src/*.c' 'include/*.h')
+
+          # Only check .c files that are in the compilation database and belong to the project
+          mapfile -t c_files < <(
+            python3 -c "
+          import json
+          with open('build/compile_commands.json') as f:
+              db = json.load(f)
+          for entry in db:
+              f = entry['file']
+              if '/external/' not in f and '/tests/' not in f and '/bench/' not in f and '/fuzz/' not in f:
+                  print(f)
+          " | sort -u
+          )
+
           if [ ${#c_files[@]} -eq 0 ]; then
-            echo "No C source files found."
+            echo "No project source files found in compilation database."
             exit 1
           fi
 
-          echo "Checking ${#c_files[@]} files for CERT C compliance..."
+          echo "Checking ${#c_files[@]} project source files for CERT C compliance..."
+          for f in "${c_files[@]}"; do
+            echo "  $f"
+          done
+
           clang-tidy \
             -p build \
             --checks='-*,cert-*' \
             --warnings-as-errors='cert-*' \
             "${c_files[@]}" 2>&1 | tee cert-c-report.txt
+
+          # Verify clang-tidy actually ran checks (not silently empty)
+          if grep -q 'warning:' cert-c-report.txt; then
+            echo "CERT C violations found!"
+            exit 1
+          fi
+          echo "No CERT C violations found."
 
       - name: Upload CERT C report
         if: always()
