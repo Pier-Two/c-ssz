@@ -1,17 +1,9 @@
-#if !defined(_WIN32) && !defined(_GNU_SOURCE)
-#define _GNU_SOURCE
-#endif
-
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-
-#if defined(_MSC_VER)
-#include <malloc.h>
-#endif
 
 #include "ssz_hash.h"
 #include "ssz_internal.h"
@@ -72,7 +64,6 @@ static void *ssz_merkle_cache_internal_alloc_aligned32(size_t size)
 {
     size_t alloc_size = size;
     size_t total = 0u;
-    void *probe = NULL;
 
     if (alloc_size == 0u)
     {
@@ -83,36 +74,24 @@ static void *ssz_merkle_cache_internal_alloc_aligned32(size_t size)
         return NULL;
     }
 
-    probe = malloc(total);
-    if (probe == NULL)
-    {
-        return NULL;
-    }
-    free(probe);
-
-#if defined(_MSC_VER)
-    return _aligned_malloc(alloc_size, 32u);
-#else
-    void *aligned_ptr = NULL;
-
-    if (posix_memalign(&aligned_ptr, 32u, alloc_size) != 0)
+    void *raw = malloc(total);
+    if (raw == NULL)
     {
         return NULL;
     }
 
-    return aligned_ptr;
-#endif
+    {
+        uintptr_t aligned = ((uintptr_t)raw + sizeof(void *) + 31u) & ~(uintptr_t)31u; /* NOLINT(misra-c2012-11.6) */
+        ((void **)aligned)[-1] = raw; /* NOLINT(misra-c2012-11.6) */
+        return (void *)aligned; /* NOLINT(misra-c2012-11.6) */
+    }
 }
 
 static void ssz_merkle_cache_internal_free_aligned32(void *ptr)
 {
     if (ptr != NULL)
     {
-#if defined(_MSC_VER)
-        _aligned_free(ptr);
-#else
-        free(ptr);
-#endif
+        free(((void **)ptr)[-1]); /* NOLINT(misra-c2012-11.6) */
     }
 }
 
