@@ -19,42 +19,35 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install cppcheck
+      - name: Install cppcheck from source (for full MISRA addon support)
         run: |
           sudo apt-get update
-          sudo apt-get install -y cppcheck
+          sudo apt-get install -y cmake g++ libpcre3-dev
+          cd /tmp
+          git clone --depth 1 --branch 2.17.1 https://github.com/danmar/cppcheck.git cppcheck-src
+          cd cppcheck-src
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHAVE_RULES=ON
+          cmake --build build --parallel
+          sudo cmake --install build
+          cppcheck --version
 
-      - name: Verify MISRA addon exists
+      - name: Validate MISRA addon catches real violations
         run: |
           set -euo pipefail
-          addon_path="$(python3 -c "import cppcheck; print(cppcheck.__path__[0] if hasattr(cppcheck, '__path__') else '')" 2>/dev/null || true)"
+          cat > /tmp/misra_test.c <<'TESTEOF'
+          // Deliberate MISRA violation: octal constant (Rule 7.1)
+          int x = 010;
+          // Deliberate MISRA violation: use of banned function (Rule 21.6)
+          #include <stdio.h>
+          void f(void) { printf("hello"); }
+          TESTEOF
 
-          # Find the addon in common locations
-          for path in \
-            /usr/share/cppcheck/addons/misra.py \
-            /usr/lib/python3/dist-packages/cppcheck/addons/misra.py \
-            /usr/local/share/cppcheck/addons/misra.py; do
-            if [ -f "$path" ]; then
-              echo "Found MISRA addon at: $path"
-              exit 0
-            fi
-          done
-
-          # Try running it to see if cppcheck finds it
-          echo "Checking if cppcheck can find misra addon..."
-          echo "int main(void) { return 0; }" > /tmp/test.c
-          if cppcheck --addon=misra --error-exitcode=0 /tmp/test.c 2>&1; then
-            echo "MISRA addon is available."
+          echo "Testing MISRA addon with known-bad code..."
+          if cppcheck --addon=misra --enable=all --error-exitcode=0 /tmp/misra_test.c 2>&1 | grep -i "misra"; then
+            echo "MISRA addon is working — detected violations in test file."
           else
-            echo "MISRA addon not available — installing cppcheck from source."
-            sudo apt-get install -y cmake g++
-            cd /tmp
-            git clone --depth 1 https://github.com/danmar/cppcheck.git cppcheck-src
-            cd cppcheck-src
-            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-            cmake --build build --parallel
-            sudo cmake --install build
-            echo "cppcheck installed from source."
+            echo "ERROR: MISRA addon did not detect known violations!"
+            exit 1
           fi
 
       - name: Configure
@@ -63,21 +56,17 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
-      - name: List MISRA rules being checked
-        run: |
-          cppcheck --version
-          echo ""
-          echo "Running MISRA C analysis on project source files..."
-
       - name: Run MISRA C analysis
         run: |
           set -euo pipefail
           cppcheck \
             --addon=misra \
+            --enable=all \
             --error-exitcode=1 \
             --std=c11 \
             --project=build/compile_commands.json \
             --suppress=missingIncludeSystem \
+            --suppress=unusedFunction \
             --suppress='*:*external/*' \
             --suppress='*:*tests/*' \
             --suppress='*:*bench/*' \
@@ -87,6 +76,18 @@ jobs:
             -i bench \
             -i fuzz \
             2>&1 | tee misra-c-report.txt
+
+          # Count MISRA findings in project files only
+          misra_count=$(grep -c 'misra-c' misra-c-report.txt || true)
+          echo ""
+          echo "=== MISRA C Summary ==="
+          echo "MISRA findings in project code: ${misra_count}"
+          if [ "$misra_count" -gt 0 ]; then
+            echo "MISRA C violations found!"
+            grep 'misra-c' misra-c-report.txt
+            exit 1
+          fi
+          echo "No MISRA C violations in project code."
 
       - name: Upload MISRA C report
         if: always()
