@@ -20,9 +20,6 @@ ssz_error_t ssz_deserialize_uint128(const uint8_t in[16], uint8_t out_value[16])
 ssz_error_t ssz_deserialize_uint256(const uint8_t in[32], uint8_t out_value[32]);
 ssz_error_t ssz_deserialize_boolean(const uint8_t in[1], uint8_t *out_value);
 
-#define ssz_deserialize_byte ssz_deserialize_uint8
-#define ssz_deserialize_bit  ssz_deserialize_boolean
-
 ssz_error_t ssz_deserialize_bitvector(
     const uint8_t *in,
     size_t in_len,

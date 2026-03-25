@@ -264,10 +264,10 @@ static bool test_hash_tree_root_basic_types(void)
         ASSERT_TRUE(root.bytes[i] == 0u);
     }
 
-    ASSERT_ERR(ssz_hash_tree_root_byte(0x42u, &root), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_tree_root_uint8(0x42u, &root), SSZ_SUCCESS);
     ASSERT_TRUE(root.bytes[0] == 0x42u);
 
-    ASSERT_ERR(ssz_hash_tree_root_bit(0u, &root), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_tree_root_boolean(0u, &root), SSZ_SUCCESS);
     ASSERT_TRUE(root.bytes[0] == 0u);
 
     return true;
@@ -474,14 +474,14 @@ static bool test_hash_tree_root_union_and_aliases(void)
 
     ssz_chunk_t container_alias_root;
     ssz_chunk_t container_expected;
-    ASSERT_ERR(ssz_hash_tree_root_container(2u, &container_codec, NULL, &container_alias_root),
+    ASSERT_ERR(ssz_hash_tree_root_vector_composite(2u, &container_codec, NULL, &container_alias_root),
                SSZ_SUCCESS);
     ASSERT_ERR(ssz_hash_tree_root_vector_roots(container_roots, 2u, NULL, &container_expected),
                SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(container_alias_root, container_expected);
 
     ssz_chunk_t compat_union_root;
-    ASSERT_ERR(ssz_hash_tree_root_compatible_union(2u, true, &codec, NULL, &compat_union_root),
+    ASSERT_ERR(ssz_hash_tree_root_union(2u, true, &codec, NULL, &compat_union_root),
                SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(compat_union_root, union_root);
 

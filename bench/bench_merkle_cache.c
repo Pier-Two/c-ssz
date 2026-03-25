@@ -384,7 +384,7 @@ static ssz_error_t bench_cached_eph_list_member_root(
         .root = bench_cached_eph_field_root,
     };
 
-    return ssz_hash_tree_root_container(CACHE_EPH_FIELD_COUNT, &field_codec, NULL, out_root);
+    return ssz_hash_tree_root_vector_composite(CACHE_EPH_FIELD_COUNT, &field_codec, NULL, out_root);
 }
 
 static ssz_error_t bench_cached_eph_get_field_bytes(
@@ -1032,7 +1032,8 @@ UBENCH(merkle_cache, stateless_container_17_hash_tree_root)
     }
 
     ssz_chunk_t root;
-    BENCH_EXPECT_OK(ssz_hash_tree_root_container(CACHE_COMPOSITE_FIELD_COUNT, &g_composite_codec, NULL, &root));
+    BENCH_EXPECT_OK(ssz_hash_tree_root_vector_composite(
+        CACHE_COMPOSITE_FIELD_COUNT, &g_composite_codec, NULL, &root));
     ubench_do_nothing((void *)&root);
 }
 

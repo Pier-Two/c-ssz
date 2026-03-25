@@ -225,10 +225,10 @@ static bool test_deserialize_basic_round_trips(void)
     ASSERT_ERR(ssz_deserialize_boolean(in_bool, &out_bool), SSZ_SUCCESS);
     ASSERT_TRUE(out_bool == 1u);
 
-    ASSERT_ERR(ssz_deserialize_byte(in_u8, &out_byte), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_deserialize_uint8(in_u8, &out_byte), SSZ_SUCCESS);
     ASSERT_TRUE(out_byte == 0xABu);
 
-    ASSERT_ERR(ssz_deserialize_bit(in_bool, &out_bit), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_deserialize_boolean(in_bool, &out_bit), SSZ_SUCCESS);
     ASSERT_TRUE(out_bit == 1u);
 
     return true;

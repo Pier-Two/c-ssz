@@ -229,9 +229,6 @@ static inline ssz_error_t ssz_default_boolean(uint8_t *out_value)
     return SSZ_SUCCESS;
 }
 
-#define ssz_default_byte ssz_default_uint8
-#define ssz_default_bit  ssz_default_boolean
-
 static inline ssz_error_t ssz_default_bitvector(
     uint8_t *out_bits_le,
     size_t out_bits_le_len,
@@ -446,9 +443,6 @@ static inline ssz_error_t ssz_is_zero_boolean(uint8_t value, bool *out_is_zero)
     *out_is_zero = (value == 0u);
     return SSZ_SUCCESS;
 }
-
-#define ssz_is_zero_byte ssz_is_zero_uint8
-#define ssz_is_zero_bit  ssz_is_zero_boolean
 
 static inline ssz_error_t ssz_is_zero_bitvector(
     const uint8_t *bits_le,

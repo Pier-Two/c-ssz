@@ -194,10 +194,10 @@ static void bench_init_hash_data(void)
         return;
     }
 
-    err = ssz_hash_tree_root_container(HASH_CONTAINER_FIELD_COUNT,
-                                       &g_container_codec,
-                                       NULL,
-                                       &sanity_root);
+    err = ssz_hash_tree_root_vector_composite(HASH_CONTAINER_FIELD_COUNT,
+                                              &g_container_codec,
+                                              NULL,
+                                              &sanity_root);
     if (err != SSZ_SUCCESS)
     {
         g_init_state = -1;
@@ -513,10 +513,10 @@ UBENCH(hash, tree_root_container_8_fields)
     }
 
     ssz_chunk_t root;
-    BENCH_EXPECT_OK(ssz_hash_tree_root_container(HASH_CONTAINER_FIELD_COUNT,
-                                                  &g_container_codec,
-                                                  NULL,
-                                                  &root));
+    BENCH_EXPECT_OK(ssz_hash_tree_root_vector_composite(HASH_CONTAINER_FIELD_COUNT,
+                                                        &g_container_codec,
+                                                        NULL,
+                                                        &root));
     ubench_do_nothing((void *)&root);
 }
 

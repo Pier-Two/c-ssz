@@ -20,9 +20,6 @@ ssz_error_t ssz_serialize_uint128(const uint8_t value[16], uint8_t out[16]);
 ssz_error_t ssz_serialize_uint256(const uint8_t value[32], uint8_t out[32]);
 ssz_error_t ssz_serialize_boolean(uint8_t value, uint8_t out[1]);
 
-#define ssz_serialize_byte ssz_serialize_uint8
-#define ssz_serialize_bit  ssz_serialize_boolean
-
 ssz_error_t ssz_serialize_bitvector(
     const uint8_t *bits_le,
     size_t bits_le_len,

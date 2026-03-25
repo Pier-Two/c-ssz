@@ -232,8 +232,8 @@ static bool test_default_scalar_and_alias_helpers(void)
     ASSERT_ERR(ssz_default_uint128(out_u128), SSZ_SUCCESS);
     ASSERT_ERR(ssz_default_uint256(out_u256), SSZ_SUCCESS);
     ASSERT_ERR(ssz_default_boolean(&out_bool), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_default_byte(&out_byte), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_default_bit(&out_bit), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_default_uint8(&out_byte), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_default_boolean(&out_bit), SSZ_SUCCESS);
 
     ASSERT_TRUE(out_u8 == 0u);
     ASSERT_TRUE(out_u16 == 0u);
@@ -510,9 +510,9 @@ static bool test_is_zero_scalar_and_alias_helpers(void)
     ASSERT_ERR(ssz_is_zero_boolean(1u, &is_zero), SSZ_SUCCESS);
     ASSERT_TRUE(!is_zero);
 
-    ASSERT_ERR(ssz_is_zero_byte(0u, &is_zero), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_is_zero_uint8(0u, &is_zero), SSZ_SUCCESS);
     ASSERT_TRUE(is_zero);
-    ASSERT_ERR(ssz_is_zero_bit(1u, &is_zero), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_is_zero_boolean(1u, &is_zero), SSZ_SUCCESS);
     ASSERT_TRUE(!is_zero);
 
     ASSERT_ERR(ssz_is_zero_uint8(0u, NULL), SSZ_ERR_INVALID_ARGUMENT);

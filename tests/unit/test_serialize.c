@@ -228,10 +228,10 @@ static bool test_serialize_basic_types_and_aliases(void)
     ASSERT_ERR(ssz_serialize_boolean(1u, &boolean_out), SSZ_SUCCESS);
     ASSERT_TRUE(boolean_out == 1u);
 
-    ASSERT_ERR(ssz_serialize_byte(0xFEu, &byte_out), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_serialize_uint8(0xFEu, &byte_out), SSZ_SUCCESS);
     ASSERT_TRUE(byte_out == 0xFEu);
 
-    ASSERT_ERR(ssz_serialize_bit(1u, &bit_out), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_serialize_boolean(1u, &bit_out), SSZ_SUCCESS);
     ASSERT_TRUE(bit_out == 1u);
 
     return true;

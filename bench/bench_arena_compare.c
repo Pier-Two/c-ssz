@@ -335,7 +335,7 @@ static ssz_error_t bench_exec_header_list_member_root(
         .root = bench_exec_header_field_root,
     };
 
-    return ssz_hash_tree_root_container(
+    return ssz_hash_tree_root_vector_composite(
         ARENA_EXEC_HEADER_FIELD_COUNT, &field_codec, NULL, out_root);
 }
 
