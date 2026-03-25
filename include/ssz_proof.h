@@ -21,23 +21,29 @@ ssz_error_t ssz_get_generalized_index(
 static inline uint64_t ssz_next_pow_of_two(uint64_t i)
 {
     uint64_t value = i;
+    uint64_t result = 0u;
 
     if (value <= 1u)
     {
-        return 1u;
+        result = 1u;
     }
-    if (value > (UINT64_C(1) << 63u))
+    else if (value > (UINT64_C(1) << 63u))
     {
-        return 0u;
+        result = 0u;
     }
-    value--;
-    value |= value >> 1u;
-    value |= value >> 2u;
-    value |= value >> 4u;
-    value |= value >> 8u;
-    value |= value >> 16u;
-    value |= value >> 32u;
-    return value + 1u;
+    else
+    {
+        value--;
+        value |= value >> 1u;
+        value |= value >> 2u;
+        value |= value >> 4u;
+        value |= value >> 8u;
+        value |= value >> 16u;
+        value |= value >> 32u;
+        result = value + 1u;
+    }
+
+    return result;
 }
 
 ssz_error_t ssz_get_branch_indices(
@@ -77,11 +83,14 @@ static inline ssz_gindex_t ssz_generalized_index_sibling(ssz_gindex_t index)
 
 static inline ssz_gindex_t ssz_generalized_index_child(ssz_gindex_t index, bool right_side)
 {
-    if (index >= (UINT64_C(1) << 63u))
+    ssz_gindex_t child = 0u;
+
+    if (index < (UINT64_C(1) << 63u))
     {
-        return 0u;
+        child = (index << 1u) | (right_side ? 1u : 0u);
     }
-    return (index << 1u) | (right_side ? 1u : 0u);
+
+    return child;
 }
 
 static inline ssz_gindex_t ssz_generalized_index_parent(ssz_gindex_t index)

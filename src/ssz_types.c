@@ -11,52 +11,63 @@ static ssz_error_t ssz_internal_capture_member(
 {
     size_t expected_len = 0u;
     uint8_t *bytes = NULL;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if ((codec == NULL) || (codec->write == NULL) || (out_bytes == NULL) || (out_len == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    ssz_error_t err = codec->write(codec->ctx, member_id, NULL, 0u, &expected_len);
-    if (err != SSZ_SUCCESS)
+    else
     {
-        return err;
+        err = codec->write(codec->ctx, member_id, NULL, 0u, &expected_len);
+        if ((err == SSZ_SUCCESS) && (expected_len != 0u))
+        {
+            size_t written = 0u;
+
+            bytes = (uint8_t *)malloc(expected_len);
+            if (bytes == NULL)
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
+            {
+                err = codec->write(codec->ctx, member_id, bytes, expected_len, &written);
+                if ((err == SSZ_SUCCESS) && (written != expected_len))
+                {
+                    err = SSZ_ERR_TYPE_MISMATCH;
+                }
+                if (err != SSZ_SUCCESS)
+                {
+                    free(bytes);
+                    bytes = NULL;
+                }
+            }
+        }
     }
 
-    if (expected_len != 0u)
+    if (err == SSZ_SUCCESS)
     {
-        bytes = (uint8_t *)malloc(expected_len);
-        if (bytes == NULL)
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-
-        size_t written = 0u;
-        err = codec->write(codec->ctx, member_id, bytes, expected_len, &written);
-        if ((err == SSZ_SUCCESS) && (written != expected_len))
-        {
-            err = SSZ_ERR_TYPE_MISMATCH;
-        }
-        if (err != SSZ_SUCCESS)
-        {
-            free(bytes);
-            return err;
-        }
+        *out_bytes = bytes;
+        *out_len = expected_len;
     }
 
-    *out_bytes = bytes;
-    *out_len = expected_len;
-    return SSZ_SUCCESS;
+    return err;
 }
 
 static ssz_error_t ssz_internal_default_member(ssz_member_codec_t *codec, uint64_t member_id)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if ((codec == NULL) || (codec->read == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        err = codec->read(codec->ctx, member_id, NULL, 0u);
     }
 
-    return codec->read(codec->ctx, member_id, NULL, 0u);
+    return err;
 }
 
 static ssz_error_t ssz_internal_restore_member(
@@ -65,12 +76,18 @@ static ssz_error_t ssz_internal_restore_member(
     const uint8_t *bytes,
     size_t byte_len)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if ((codec == NULL) || (codec->read == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        err = codec->read(codec->ctx, member_id, bytes, byte_len);
     }
 
-    return codec->read(codec->ctx, member_id, bytes, byte_len);
+    return err;
 }
 
 static ssz_error_t ssz_internal_member_is_default(
@@ -83,77 +100,78 @@ static ssz_error_t ssz_internal_member_is_default(
     uint8_t *default_bytes = NULL;
     size_t default_len = 0u;
     bool is_default = false;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if (out_is_default == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if ((codec == NULL) || (codec->read == NULL) || (codec->write == NULL))
+    else if ((codec == NULL) || (codec->read == NULL) || (codec->write == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    ssz_error_t err = ssz_internal_capture_member(codec, member_id, &current_bytes, &current_len);
-    if (err != SSZ_SUCCESS)
+    else
     {
-        return err;
-    }
-
-    err = ssz_internal_default_member(codec, member_id);
-    if (err != SSZ_SUCCESS)
-    {
-        free(current_bytes);
-        return err;
-    }
-
-    err = ssz_internal_capture_member(codec, member_id, &default_bytes, &default_len);
-    if (err != SSZ_SUCCESS)
-    {
-        ssz_error_t restore_err =
-            ssz_internal_restore_member(codec, member_id, current_bytes, current_len);
-        free(current_bytes);
-        if (restore_err != SSZ_SUCCESS)
+        err = ssz_internal_capture_member(codec, member_id, &current_bytes, &current_len);
+        if (err == SSZ_SUCCESS)
         {
-            return restore_err;
+            err = ssz_internal_default_member(codec, member_id);
+            if (err == SSZ_SUCCESS)
+            {
+                err = ssz_internal_capture_member(codec, member_id, &default_bytes, &default_len);
+                if (err == SSZ_SUCCESS)
+                {
+                    is_default =
+                        (current_len == default_len) &&
+                        ((current_len == 0u) || (memcmp(current_bytes, default_bytes, current_len) == 0));
+
+                    err = ssz_internal_restore_member(codec, member_id, current_bytes, current_len);
+                }
+                else
+                {
+                    ssz_error_t restore_err =
+                        ssz_internal_restore_member(codec, member_id, current_bytes, current_len);
+                    if (restore_err != SSZ_SUCCESS)
+                    {
+                        err = restore_err;
+                    }
+                }
+            }
+
+            free(default_bytes);
+            free(current_bytes);
         }
-        return err;
     }
 
-    is_default =
-        (current_len == default_len) &&
-        ((current_len == 0u) || (memcmp(current_bytes, default_bytes, current_len) == 0));
-
-    err = ssz_internal_restore_member(codec, member_id, current_bytes, current_len);
-
-    free(default_bytes);
-    free(current_bytes);
-
-    if (err != SSZ_SUCCESS)
+    if (err == SSZ_SUCCESS)
     {
-        return err;
+        *out_is_default = is_default;
     }
 
-    *out_is_default = is_default;
-    return SSZ_SUCCESS;
+    return err;
 }
 
 static ssz_error_t ssz_internal_default_members(uint64_t member_count, ssz_member_codec_t *codec)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if ((codec == NULL) || (codec->read == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    for (uint64_t i = 0u; i < member_count; i++)
+    else
     {
-        ssz_error_t err = ssz_internal_default_member(codec, i);
-        if (err != SSZ_SUCCESS)
+        for (uint64_t i = 0u; i < member_count; i++)
         {
-            return err;
+            err = ssz_internal_default_member(codec, i);
+            if (err != SSZ_SUCCESS)
+            {
+                break;
+            }
         }
     }
 
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_default_container(
@@ -161,12 +179,18 @@ ssz_error_t ssz_default_container(
     uint32_t field_count,
     ssz_member_codec_t *codec)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if ((field_fixed_sizes == NULL) || (field_count == 0u))
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
+    }
+    else
+    {
+        err = ssz_internal_default_members((uint64_t)field_count, codec);
     }
 
-    return ssz_internal_default_members((uint64_t)field_count, codec);
+    return err;
 }
 
 ssz_error_t ssz_default_union(
@@ -175,31 +199,34 @@ ssz_error_t ssz_default_union(
     ssz_member_codec_t *codec,
     uint8_t *out_selector)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (out_selector == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (option_count == 0u)
+    else if (option_count == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if (option_count > 256u)
+    else if (option_count > 256u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if (has_none && (option_count < 2u))
+    else if (has_none && (option_count < 2u))
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
+    }
+    else
+    {
+        *out_selector = 0u;
+        if (!has_none)
+        {
+            err = ssz_internal_default_member(codec, 0u);
+        }
     }
 
-    *out_selector = 0u;
-
-    if (has_none)
-    {
-        return SSZ_SUCCESS;
-    }
-
-    return ssz_internal_default_member(codec, 0u);
+    return err;
 }
 
 ssz_error_t ssz_is_zero_vector_composite(
@@ -207,36 +234,41 @@ ssz_error_t ssz_is_zero_vector_composite(
     ssz_member_codec_t *codec,
     bool *out_is_zero)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+    bool is_zero = true;
+
     if (out_is_zero == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (element_count == 0u)
+    else if (element_count == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if ((codec == NULL) || (codec->read == NULL) || (codec->write == NULL))
+    else if ((codec == NULL) || (codec->read == NULL) || (codec->write == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
+    else
+    {
+        for (uint64_t i = 0u; (i < element_count) && (err == SSZ_SUCCESS) && is_zero; i++)
+        {
+            bool member_is_zero = false;
 
-    for (uint64_t i = 0u; i < element_count; i++)
-    {
-        bool member_is_zero = false;
-        ssz_error_t err = ssz_internal_member_is_default(codec, i, &member_is_zero);
-        if (err != SSZ_SUCCESS)
-        {
-            return err;
-        }
-        if (!member_is_zero)
-        {
-            *out_is_zero = false;
-            return SSZ_SUCCESS;
+            err = ssz_internal_member_is_default(codec, i, &member_is_zero);
+            if (err == SSZ_SUCCESS)
+            {
+                is_zero = member_is_zero;
+            }
         }
     }
 
-    *out_is_zero = true;
-    return SSZ_SUCCESS;
+    if (err == SSZ_SUCCESS)
+    {
+        *out_is_zero = is_zero;
+    }
+
+    return err;
 }
 
 ssz_error_t ssz_is_zero_container(
@@ -245,36 +277,41 @@ ssz_error_t ssz_is_zero_container(
     ssz_member_codec_t *codec,
     bool *out_is_zero)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+    bool is_zero = true;
+
     if (out_is_zero == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if ((field_fixed_sizes == NULL) || (field_count == 0u))
+    else if ((field_fixed_sizes == NULL) || (field_count == 0u))
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if ((codec == NULL) || (codec->read == NULL) || (codec->write == NULL))
+    else if ((codec == NULL) || (codec->read == NULL) || (codec->write == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
+    else
+    {
+        for (uint32_t i = 0u; (i < field_count) && (err == SSZ_SUCCESS) && is_zero; i++)
+        {
+            bool member_is_zero = false;
 
-    for (uint32_t i = 0u; i < field_count; i++)
-    {
-        bool member_is_zero = false;
-        ssz_error_t err = ssz_internal_member_is_default(codec, i, &member_is_zero);
-        if (err != SSZ_SUCCESS)
-        {
-            return err;
-        }
-        if (!member_is_zero)
-        {
-            *out_is_zero = false;
-            return SSZ_SUCCESS;
+            err = ssz_internal_member_is_default(codec, i, &member_is_zero);
+            if (err == SSZ_SUCCESS)
+            {
+                is_zero = member_is_zero;
+            }
         }
     }
 
-    *out_is_zero = true;
-    return SSZ_SUCCESS;
+    if (err == SSZ_SUCCESS)
+    {
+        *out_is_zero = is_zero;
+    }
+
+    return err;
 }
 
 ssz_error_t ssz_is_zero_union(
@@ -284,74 +321,92 @@ ssz_error_t ssz_is_zero_union(
     ssz_member_codec_t *codec,
     bool *out_is_zero)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (out_is_zero == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (option_count == 0u)
+    else if (option_count == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if (option_count > 256u)
+    else if (option_count > 256u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if (has_none && (option_count < 2u))
+    else if (has_none && (option_count < 2u))
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if ((uint32_t)selector >= option_count)
+    else if ((uint32_t)selector >= option_count)
     {
-        return SSZ_ERR_SELECTOR_INVALID;
+        err = SSZ_ERR_SELECTOR_INVALID;
     }
-
-    if (selector != 0u)
+    else if (selector != 0u)
     {
         *out_is_zero = false;
-        return SSZ_SUCCESS;
     }
-    if (has_none)
+    else if (has_none)
     {
         *out_is_zero = true;
-        return SSZ_SUCCESS;
+    }
+    else
+    {
+        err = ssz_internal_member_is_default(codec, 0u, out_is_zero);
     }
 
-    return ssz_internal_member_is_default(codec, 0u, out_is_zero);
+    return err;
 }
 
 const char *ssz_error_string(ssz_error_t error)
 {
+    const char *error_string = "SSZ_ERR_UNKNOWN";
+
     switch (error)
     {
         case SSZ_SUCCESS:
-            return "SSZ_SUCCESS";
+            error_string = "SSZ_SUCCESS";
+            break;
         case SSZ_ERR_INVALID_ARGUMENT:
-            return "SSZ_ERR_INVALID_ARGUMENT";
+            error_string = "SSZ_ERR_INVALID_ARGUMENT";
+            break;
         case SSZ_ERR_BUFFER_TOO_SMALL:
-            return "SSZ_ERR_BUFFER_TOO_SMALL";
+            error_string = "SSZ_ERR_BUFFER_TOO_SMALL";
+            break;
         case SSZ_ERR_OVERFLOW:
-            return "SSZ_ERR_OVERFLOW";
+            error_string = "SSZ_ERR_OVERFLOW";
+            break;
         case SSZ_ERR_LIMIT_EXCEEDED:
-            return "SSZ_ERR_LIMIT_EXCEEDED";
+            error_string = "SSZ_ERR_LIMIT_EXCEEDED";
+            break;
         case SSZ_ERR_SCHEMA_INVALID:
-            return "SSZ_ERR_SCHEMA_INVALID";
+            error_string = "SSZ_ERR_SCHEMA_INVALID";
+            break;
         case SSZ_ERR_ENCODING_INVALID:
-            return "SSZ_ERR_ENCODING_INVALID";
+            error_string = "SSZ_ERR_ENCODING_INVALID";
+            break;
         case SSZ_ERR_OFFSET_INVALID:
-            return "SSZ_ERR_OFFSET_INVALID";
+            error_string = "SSZ_ERR_OFFSET_INVALID";
+            break;
         case SSZ_ERR_TYPE_MISMATCH:
-            return "SSZ_ERR_TYPE_MISMATCH";
+            error_string = "SSZ_ERR_TYPE_MISMATCH";
+            break;
         case SSZ_ERR_SELECTOR_INVALID:
-            return "SSZ_ERR_SELECTOR_INVALID";
+            error_string = "SSZ_ERR_SELECTOR_INVALID";
+            break;
         case SSZ_ERR_GINDEX_INVALID:
-            return "SSZ_ERR_GINDEX_INVALID";
+            error_string = "SSZ_ERR_GINDEX_INVALID";
+            break;
         case SSZ_ERR_PROOF_INVALID:
-            return "SSZ_ERR_PROOF_INVALID";
+            error_string = "SSZ_ERR_PROOF_INVALID";
+            break;
         case SSZ_ERR_HASH_FAILURE:
-            return "SSZ_ERR_HASH_FAILURE";
+            error_string = "SSZ_ERR_HASH_FAILURE";
+            break;
         default:
             break;
     }
 
-    return "SSZ_ERR_UNKNOWN";
+    return error_string;
 }
