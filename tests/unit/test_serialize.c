@@ -573,7 +573,7 @@ static bool test_serialize_compatible_union_valid_and_invalid_selectors(void)
     return true;
 }
 
-static bool test_serialize_progressive_wrappers(void)
+static bool test_serialize_progressive_direct_calls(void)
 {
     const size_t field_fixed_sizes[3] = {1u, 0u, 2u};
     const uint8_t f0[] = {0x01u};
@@ -627,12 +627,12 @@ static bool test_serialize_progressive_wrappers(void)
                                        sizeof(out_a),
                                        &len_a),
                SSZ_SUCCESS);
-    ASSERT_ERR(ssz_serialize_progressive_container(field_fixed_sizes,
-                                                   3u,
-                                                   &container_codec,
-                                                   out_b,
-                                                   sizeof(out_b),
-                                                   &len_b),
+    ASSERT_ERR(ssz_serialize_container(field_fixed_sizes,
+                                       3u,
+                                       &container_codec,
+                                       out_b,
+                                       sizeof(out_b),
+                                       &len_b),
                SSZ_SUCCESS);
     ASSERT_TRUE(len_a == len_b);
     ASSERT_MEM_EQ(out_a, out_b, len_a);
@@ -640,24 +640,24 @@ static bool test_serialize_progressive_wrappers(void)
     ASSERT_ERR(
         ssz_serialize_list_fixed(fixed_elements, 2u, SSZ_NO_LIMIT, 2u, out_a, sizeof(out_a), &len_a),
         SSZ_SUCCESS);
-    ASSERT_ERR(ssz_serialize_progressive_list_fixed(
-                   fixed_elements, 2u, 2u, out_b, sizeof(out_b), &len_b),
+    ASSERT_ERR(ssz_serialize_list_fixed(
+                   fixed_elements, 2u, SSZ_NO_LIMIT, 2u, out_b, sizeof(out_b), &len_b),
                SSZ_SUCCESS);
     ASSERT_TRUE(len_a == len_b);
     ASSERT_MEM_EQ(out_a, out_b, len_a);
 
     ASSERT_ERR(ssz_serialize_list_variable(2u, SSZ_NO_LIMIT, &list_codec, out_a, sizeof(out_a), &len_a),
                SSZ_SUCCESS);
-    ASSERT_ERR(ssz_serialize_progressive_list_variable(
-                   2u, &list_codec, out_b, sizeof(out_b), &len_b),
+    ASSERT_ERR(ssz_serialize_list_variable(
+                   2u, SSZ_NO_LIMIT, &list_codec, out_b, sizeof(out_b), &len_b),
                SSZ_SUCCESS);
     ASSERT_TRUE(len_a == len_b);
     ASSERT_MEM_EQ(out_a, out_b, len_a);
 
     ASSERT_ERR(ssz_serialize_bitlist(bits, sizeof(bits), 9u, SSZ_NO_LIMIT, out_a, sizeof(out_a), &len_a),
                SSZ_SUCCESS);
-    ASSERT_ERR(ssz_serialize_progressive_bitlist(
-                   bits, sizeof(bits), 9u, out_b, sizeof(out_b), &len_b),
+    ASSERT_ERR(ssz_serialize_bitlist(
+                   bits, sizeof(bits), 9u, SSZ_NO_LIMIT, out_b, sizeof(out_b), &len_b),
                SSZ_SUCCESS);
     ASSERT_TRUE(len_a == len_b);
     ASSERT_MEM_EQ(out_a, out_b, len_a);
@@ -1942,7 +1942,7 @@ int main(void)
         {"serialize_container_mixed_fields_and_size_query", test_serialize_container_mixed_fields_and_size_query},
         {"serialize_union_none_normal_and_size_query", test_serialize_union_none_normal_and_size_query},
         {"serialize_compatible_union_valid_and_invalid_selectors", test_serialize_compatible_union_valid_and_invalid_selectors},
-        {"serialize_progressive_wrappers", test_serialize_progressive_wrappers},
+        {"serialize_progressive_direct_calls", test_serialize_progressive_direct_calls},
         {"serialize_error_cases", test_serialize_error_cases},
         {"serialize_bitvector_and_bitlist_error_paths", test_serialize_bitvector_and_bitlist_error_paths},
         {"serialize_fixed_collection_error_paths", test_serialize_fixed_collection_error_paths},

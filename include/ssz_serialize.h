@@ -95,62 +95,6 @@ ssz_error_t ssz_serialize_compatible_union(
     size_t out_cap,
     size_t *out_len);
 
-static inline ssz_error_t ssz_serialize_progressive_container(
-    const size_t *field_fixed_sizes,
-    uint32_t field_count,
-    const ssz_member_codec_t *codec,
-    uint8_t *out,
-    size_t out_cap,
-    size_t *out_len)
-{
-    return ssz_serialize_container(field_fixed_sizes, field_count, codec, out, out_cap, out_len);
-}
-
-static inline ssz_error_t ssz_serialize_progressive_list_fixed(
-    const uint8_t *elements,
-    uint64_t element_count,
-    size_t element_size,
-    uint8_t *out,
-    size_t out_cap,
-    size_t *out_len)
-{
-    return ssz_serialize_list_fixed(
-        elements,
-        element_count,
-        SSZ_NO_LIMIT,
-        element_size,
-        out,
-        out_cap,
-        out_len);
-}
-
-static inline ssz_error_t ssz_serialize_progressive_list_variable(
-    uint64_t element_count,
-    const ssz_member_codec_t *codec,
-    uint8_t *out,
-    size_t out_cap,
-    size_t *out_len)
-{
-    return ssz_serialize_list_variable(
-        element_count,
-        SSZ_NO_LIMIT,
-        codec,
-        out,
-        out_cap,
-        out_len);
-}
-
-static inline ssz_error_t ssz_serialize_progressive_bitlist(
-    const uint8_t *bits_le,
-    size_t bits_le_len,
-    uint64_t bit_len,
-    uint8_t *out,
-    size_t out_cap,
-    size_t *out_len)
-{
-    return ssz_serialize_bitlist(bits_le, bits_le_len, bit_len, SSZ_NO_LIMIT, out, out_cap, out_len);
-}
-
 #ifdef __cplusplus
 }
 #endif

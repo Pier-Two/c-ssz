@@ -338,28 +338,10 @@ static inline ssz_error_t ssz_default_list(uint64_t *out_element_count)
     return SSZ_SUCCESS;
 }
 
-static inline ssz_error_t ssz_default_progressive_list(uint64_t *out_element_count)
-{
-    return ssz_default_list(out_element_count);
-}
-
-static inline ssz_error_t ssz_default_progressive_bitlist(uint64_t *out_bit_len)
-{
-    return ssz_default_bitlist(out_bit_len);
-}
-
 ssz_error_t ssz_default_container(
     const size_t *field_fixed_sizes,
     uint32_t field_count,
     ssz_member_codec_t *codec);
-
-static inline ssz_error_t ssz_default_progressive_container(
-    const size_t *field_fixed_sizes,
-    uint32_t field_count,
-    ssz_member_codec_t *codec)
-{
-    return ssz_default_container(field_fixed_sizes, field_count, codec);
-}
 
 ssz_error_t ssz_default_union(
     uint32_t option_count,
@@ -546,30 +528,11 @@ static inline ssz_error_t ssz_is_zero_list(uint64_t element_count, bool *out_is_
     return SSZ_SUCCESS;
 }
 
-static inline ssz_error_t ssz_is_zero_progressive_list(uint64_t element_count, bool *out_is_zero)
-{
-    return ssz_is_zero_list(element_count, out_is_zero);
-}
-
-static inline ssz_error_t ssz_is_zero_progressive_bitlist(uint64_t bit_len, bool *out_is_zero)
-{
-    return ssz_is_zero_bitlist(bit_len, out_is_zero);
-}
-
 ssz_error_t ssz_is_zero_container(
     const size_t *field_fixed_sizes,
     uint32_t field_count,
     ssz_member_codec_t *codec,
     bool *out_is_zero);
-
-static inline ssz_error_t ssz_is_zero_progressive_container(
-    const size_t *field_fixed_sizes,
-    uint32_t field_count,
-    ssz_member_codec_t *codec,
-    bool *out_is_zero)
-{
-    return ssz_is_zero_container(field_fixed_sizes, field_count, codec, out_is_zero);
-}
 
 ssz_error_t ssz_is_zero_union(
     uint8_t selector,

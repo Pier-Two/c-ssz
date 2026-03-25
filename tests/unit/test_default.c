@@ -273,8 +273,8 @@ static bool test_default_sequence_helpers(void)
                   sizeof(vector_fixed));
 
     ASSERT_ERR(ssz_default_list(&list_count), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_default_progressive_list(&progressive_count), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_default_progressive_bitlist(&progressive_bit_len), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_default_list(&progressive_count), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_default_bitlist(&progressive_bit_len), SSZ_SUCCESS);
     ASSERT_TRUE(list_count == 0u);
     ASSERT_TRUE(progressive_count == 0u);
     ASSERT_TRUE(progressive_bit_len == 0u);
@@ -286,8 +286,8 @@ static bool test_default_sequence_helpers(void)
     ASSERT_ERR(ssz_default_vector_fixed(vector_fixed, 0u, 1u), SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_default_vector_fixed(vector_fixed, 1u, 0u), SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_default_list(NULL), SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_default_progressive_list(NULL), SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_default_progressive_bitlist(NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_default_list(NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_default_bitlist(NULL), SSZ_ERR_INVALID_ARGUMENT);
 
     return true;
 }
@@ -384,9 +384,7 @@ static bool test_default_composite_helpers(void)
             container_entries[i].default_len);
     }
 
-    ASSERT_ERR(
-        ssz_default_progressive_container((const size_t[]){1u, 0u}, 2u, &progressive_codec),
-        SSZ_SUCCESS);
+    ASSERT_ERR(ssz_default_container((const size_t[]){1u, 0u}, 2u, &progressive_codec), SSZ_SUCCESS);
     ASSERT_TRUE(progressive_entries[0].default_calls == 1u);
     ASSERT_TRUE(progressive_entries[1].default_calls == 1u);
     ASSERT_MEM_EQ(
@@ -406,12 +404,11 @@ static bool test_default_composite_helpers(void)
         SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_default_container(NULL, 1u, &container_codec), SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_default_container(field_fixed_sizes, 0u, &container_codec), SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(
-        ssz_default_progressive_container(
-            (const size_t[]){1u},
-            1u,
-            &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL}),
-        SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_default_container(
+                   (const size_t[]){1u},
+                   1u,
+                   &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL}),
+               SSZ_ERR_INVALID_ARGUMENT);
 
     return true;
 }
@@ -558,18 +555,18 @@ static bool test_is_zero_sequence_helpers(void)
     ASSERT_ERR(ssz_is_zero_list(2u, &is_zero), SSZ_SUCCESS);
     ASSERT_TRUE(!is_zero);
 
-    ASSERT_ERR(ssz_is_zero_progressive_list(0u, &is_zero), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_is_zero_list(0u, &is_zero), SSZ_SUCCESS);
     ASSERT_TRUE(is_zero);
-    ASSERT_ERR(ssz_is_zero_progressive_list(3u, &is_zero), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_is_zero_list(3u, &is_zero), SSZ_SUCCESS);
     ASSERT_TRUE(!is_zero);
 
-    ASSERT_ERR(ssz_is_zero_progressive_bitlist(0u, &is_zero), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_is_zero_bitlist(0u, &is_zero), SSZ_SUCCESS);
     ASSERT_TRUE(is_zero);
-    ASSERT_ERR(ssz_is_zero_progressive_bitlist(4u, &is_zero), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_is_zero_bitlist(4u, &is_zero), SSZ_SUCCESS);
     ASSERT_TRUE(!is_zero);
 
     ASSERT_ERR(ssz_is_zero_list(0u, NULL), SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_is_zero_progressive_bitlist(0u, NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_is_zero_bitlist(0u, NULL), SSZ_ERR_INVALID_ARGUMENT);
 
     return true;
 }
@@ -671,9 +668,8 @@ static bool test_is_zero_composite_helpers(void)
         ssz_is_zero_container((const size_t[]){1u, 0u}, 2u, &container_codec, &is_zero),
         SSZ_SUCCESS);
     ASSERT_TRUE(is_zero);
-    ASSERT_ERR(
-        ssz_is_zero_progressive_container((const size_t[]){1u, 0u}, 2u, &container_codec, &is_zero),
-        SSZ_SUCCESS);
+    ASSERT_ERR(ssz_is_zero_container((const size_t[]){1u, 0u}, 2u, &container_codec, &is_zero),
+               SSZ_SUCCESS);
     ASSERT_TRUE(is_zero);
 
     ASSERT_ERR(
@@ -683,13 +679,12 @@ static bool test_is_zero_composite_helpers(void)
             &is_zero),
         SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_is_zero_container(NULL, 1u, &container_codec, &is_zero), SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(
-        ssz_is_zero_progressive_container(
-            (const size_t[]){1u},
-            1u,
-            &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL},
-            &is_zero),
-        SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_is_zero_container(
+                   (const size_t[]){1u},
+                   1u,
+                   &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL},
+                   &is_zero),
+               SSZ_ERR_INVALID_ARGUMENT);
 
     return true;
 }

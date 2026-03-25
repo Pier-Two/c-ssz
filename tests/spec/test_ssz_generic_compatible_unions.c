@@ -380,7 +380,7 @@ static ssz_error_t compute_progressive_bitlist_value(const yaml_node_t *node, co
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    err = ssz_deserialize_progressive_bitlist(encoded, encoded_len, bits, bitfield_len, &bit_len);
+    err = ssz_deserialize_bitlist(encoded, encoded_len, SSZ_NO_LIMIT, bits, bitfield_len, &bit_len);
     if (err != SSZ_SUCCESS)
     {
         free(encoded);
@@ -388,7 +388,7 @@ static ssz_error_t compute_progressive_bitlist_value(const yaml_node_t *node, co
         return err;
     }
 
-    err = ssz_serialize_progressive_bitlist(bits, bitfield_len, bit_len, NULL, 0u, &out_len);
+    err = ssz_serialize_bitlist(bits, bitfield_len, bit_len, SSZ_NO_LIMIT, NULL, 0u, &out_len);
     if (err != SSZ_SUCCESS)
     {
         free(encoded);
@@ -404,7 +404,7 @@ static ssz_error_t compute_progressive_bitlist_value(const yaml_node_t *node, co
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    err = ssz_serialize_progressive_bitlist(bits, bitfield_len, bit_len, serialized, out_len, &out_len);
+    err = ssz_serialize_bitlist(bits, bitfield_len, bit_len, SSZ_NO_LIMIT, serialized, out_len, &out_len);
     if (err != SSZ_SUCCESS)
     {
         free(encoded);
@@ -510,7 +510,7 @@ static ssz_error_t compute_progressive_container(
     codec.read = NULL;
     codec.root = computed_root_cb;
 
-    err = ssz_serialize_progressive_container(fixed_sizes, field_count, &codec, NULL, 0u, &out_len);
+    err = ssz_serialize_container(fixed_sizes, field_count, &codec, NULL, 0u, &out_len);
     if (err != SSZ_SUCCESS)
     {
         return err;
@@ -522,7 +522,7 @@ static ssz_error_t compute_progressive_container(
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    err = ssz_serialize_progressive_container(
+    err = ssz_serialize_container(
         fixed_sizes,
         field_count,
         &codec,
@@ -760,7 +760,7 @@ static ssz_error_t validate_progressive_bitlist_bytes(const uint8_t *data, size_
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    err = ssz_deserialize_progressive_bitlist(data, data_len, bits, bitfield_cap, &bit_len);
+    err = ssz_deserialize_bitlist(data, data_len, SSZ_NO_LIMIT, bits, bitfield_cap, &bit_len);
     free(bits);
     return err;
 }
@@ -822,7 +822,7 @@ static ssz_error_t validate_payload_single_field(const uint8_t *data, size_t dat
     codec.read = validate_single_field_read;
     codec.root = NULL;
 
-    err = ssz_deserialize_progressive_container(data, data_len, fixed_sizes, 1u, &codec);
+    err = ssz_deserialize_container(data, data_len, fixed_sizes, 1u, &codec);
     if (err != SSZ_SUCCESS)
     {
         return err;
@@ -865,7 +865,7 @@ static ssz_error_t validate_payload_single_list(const uint8_t *data, size_t data
     codec.read = validate_single_list_read;
     codec.root = NULL;
 
-    err = ssz_deserialize_progressive_container(data, data_len, fixed_sizes, 1u, &codec);
+    err = ssz_deserialize_container(data, data_len, fixed_sizes, 1u, &codec);
     if (err != SSZ_SUCCESS)
     {
         return err;
@@ -926,7 +926,7 @@ static ssz_error_t validate_payload_var(const uint8_t *data, size_t data_len)
     codec.read = validate_var_read;
     codec.root = NULL;
 
-    err = ssz_deserialize_progressive_container(data, data_len, fixed_sizes, 3u, &codec);
+    err = ssz_deserialize_container(data, data_len, fixed_sizes, 3u, &codec);
     if (err != SSZ_SUCCESS)
     {
         return err;

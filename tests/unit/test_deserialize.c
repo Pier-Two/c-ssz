@@ -604,7 +604,7 @@ static bool test_deserialize_compatible_union_valid_invalid(void)
     return true;
 }
 
-static bool test_deserialize_progressive_wrappers(void)
+static bool test_deserialize_progressive_direct_calls(void)
 {
     const size_t field_fixed_sizes[3] = {1u, 0u, 2u};
     const uint8_t container_encoded[9] = {
@@ -629,11 +629,11 @@ static bool test_deserialize_progressive_wrappers(void)
         .root = NULL,
     };
 
-    ASSERT_ERR(ssz_deserialize_progressive_container(container_encoded,
-                                                     sizeof(container_encoded),
-                                                     field_fixed_sizes,
-                                                     3u,
-                                                     &container_codec),
+    ASSERT_ERR(ssz_deserialize_container(container_encoded,
+                                         sizeof(container_encoded),
+                                         field_fixed_sizes,
+                                         3u,
+                                         &container_codec),
                SSZ_SUCCESS);
     ASSERT_TRUE(all_read_entries_seen(&container_ctx));
 
@@ -641,12 +641,13 @@ static bool test_deserialize_progressive_wrappers(void)
     uint8_t list_fixed_out[4] = {0u};
     uint64_t list_fixed_count = 0u;
 
-    ASSERT_ERR(ssz_deserialize_progressive_list_fixed(list_fixed_encoded,
-                                                      sizeof(list_fixed_encoded),
-                                                      2u,
-                                                      list_fixed_out,
-                                                      sizeof(list_fixed_out),
-                                                      &list_fixed_count),
+    ASSERT_ERR(ssz_deserialize_list_fixed(list_fixed_encoded,
+                                          sizeof(list_fixed_encoded),
+                                          SSZ_NO_LIMIT,
+                                          2u,
+                                          list_fixed_out,
+                                          sizeof(list_fixed_out),
+                                          &list_fixed_count),
                SSZ_SUCCESS);
     ASSERT_TRUE(list_fixed_count == 2u);
     ASSERT_MEM_EQ(list_fixed_out, list_fixed_encoded, sizeof(list_fixed_encoded));
@@ -673,11 +674,12 @@ static bool test_deserialize_progressive_wrappers(void)
     };
     uint64_t list_count = 0u;
 
-    ASSERT_ERR(ssz_deserialize_progressive_list_variable(list_variable_encoded,
-                                                         sizeof(list_variable_encoded),
-                                                         1u,
-                                                         &list_codec,
-                                                         &list_count),
+    ASSERT_ERR(ssz_deserialize_list_variable(list_variable_encoded,
+                                             sizeof(list_variable_encoded),
+                                             SSZ_NO_LIMIT,
+                                             1u,
+                                             &list_codec,
+                                             &list_count),
                SSZ_SUCCESS);
     ASSERT_TRUE(list_count == 2u);
     ASSERT_TRUE(all_read_entries_seen(&list_ctx));
@@ -686,11 +688,12 @@ static bool test_deserialize_progressive_wrappers(void)
     uint8_t bitlist_out[2] = {0u};
     uint64_t bit_len = 0u;
 
-    ASSERT_ERR(ssz_deserialize_progressive_bitlist(bitlist_encoded,
-                                                   sizeof(bitlist_encoded),
-                                                   bitlist_out,
-                                                   sizeof(bitlist_out),
-                                                   &bit_len),
+    ASSERT_ERR(ssz_deserialize_bitlist(bitlist_encoded,
+                                       sizeof(bitlist_encoded),
+                                       SSZ_NO_LIMIT,
+                                       bitlist_out,
+                                       sizeof(bitlist_out),
+                                       &bit_len),
                SSZ_SUCCESS);
     ASSERT_TRUE(bit_len == 9u);
     ASSERT_MEM_EQ(bitlist_out, ((const uint8_t[2]){0x03u, 0x01u}), 2u);
@@ -1168,7 +1171,7 @@ int main(void)
         {"deserialize_container_mixed_fields", test_deserialize_container_mixed_fields},
         {"deserialize_union_cases", test_deserialize_union_cases},
         {"deserialize_compatible_union_valid_invalid", test_deserialize_compatible_union_valid_invalid},
-        {"deserialize_progressive_wrappers", test_deserialize_progressive_wrappers},
+        {"deserialize_progressive_direct_calls", test_deserialize_progressive_direct_calls},
         {"deserialize_error_cases", test_deserialize_error_cases},
         {"deserialize_bitfield_error_paths", test_deserialize_bitfield_error_paths},
         {"deserialize_variable_sequence_error_paths", test_deserialize_variable_sequence_error_paths},
