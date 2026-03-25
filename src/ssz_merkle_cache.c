@@ -358,7 +358,7 @@ static void ssz_merkle_cache_internal_fill_zero_tree(ssz_merkle_cache_t *cache)
         }
         else
         {
-            ssz_chunk_t *level_nodes = cache->nodes + cache->level_offsets[level];
+            ssz_chunk_t *level_nodes = &cache->nodes[cache->level_offsets[level]];
             for (size_t i = 0u; i < width_sz; i++)
             {
                 level_nodes[i] = cache->zero_hashes[level];
@@ -668,7 +668,7 @@ static ssz_error_t ssz_merkle_cache_internal_set_leaf(
     }
     else
     {
-        leaf_slot = cache->nodes + cache->level_offsets[0] + leaf_index_sz;
+        leaf_slot = &cache->nodes[cache->level_offsets[0] + leaf_index_sz];
         changed = (memcmp(leaf_slot->bytes, leaf->bytes, SSZ_BYTES_PER_CHUNK) != 0);
         if (changed)
         {
@@ -878,9 +878,9 @@ static ssz_error_t ssz_merkle_cache_internal_flush_contiguous_run(
     else if (run_len >= 2u)
     {
         err = ssz_hash_2to1_batch(cache->hash_fn,
-                                  child_level_nodes + (run_start_sz * 2u),
+                                  &child_level_nodes[run_start_sz * 2u],
                                   run_len_sz,
-                                  parent_level_nodes + run_start_sz);
+                                  &parent_level_nodes[run_start_sz]);
     }
     else if (*io_gather_count >= cache->scratch_pair_capacity)
     {
@@ -948,8 +948,8 @@ static ssz_error_t ssz_merkle_cache_internal_hash_dirty_parents_exact(
         }
         if ((err == SSZ_SUCCESS) && (dirty_count != 0u))
         {
-            child_level_nodes = cache->nodes + cache->level_offsets[level];
-            parent_level_nodes = cache->nodes + cache->level_offsets[level + 1u];
+            child_level_nodes = &cache->nodes[cache->level_offsets[level]];
+            parent_level_nodes = &cache->nodes[cache->level_offsets[level + 1u]];
 
             for (size_t wi = 0u; (wi < dirty_parents->word_count) && (err == SSZ_SUCCESS); wi++)
             {
@@ -1357,7 +1357,7 @@ static ssz_error_t ssz_merkle_cache_internal_resize_token_storage(
 static ssz_error_t ssz_merkle_cache_internal_grow(ssz_merkle_cache_t *cache, uint64_t new_capacity)
 {
     ssz_chunk_t *new_nodes = NULL;
-    size_t new_offsets[64] = {0u};
+    size_t new_offsets[64];
     uint32_t new_depth = 0u;
     size_t new_word_capacity = 0u;
     uint64_t *new_leaf_dirty_bits = NULL;
@@ -1382,6 +1382,7 @@ static ssz_error_t ssz_merkle_cache_internal_grow(ssz_merkle_cache_t *cache, uin
     }
     else
     {
+        (void)memset(new_offsets, 0, sizeof(new_offsets));
         new_depth = ssz_merkle_cache_internal_log2_u64(new_capacity);
         assert(new_depth < 64u);
 
@@ -1405,7 +1406,7 @@ static ssz_error_t ssz_merkle_cache_internal_grow(ssz_merkle_cache_t *cache, uin
                 }
                 else
                 {
-                    ssz_chunk_t *new_level_nodes = new_nodes + new_offsets[level];
+                    ssz_chunk_t *new_level_nodes = &new_nodes[new_offsets[level]];
                     for (size_t i = 0u; i < width_sz; i++)
                     {
                         new_level_nodes[i] = cache->zero_hashes[level];
@@ -1423,7 +1424,7 @@ static ssz_error_t ssz_merkle_cache_internal_grow(ssz_merkle_cache_t *cache, uin
                         else
                         {
                             (void)memcpy(new_level_nodes,
-                                         cache->nodes + cache->level_offsets[level],
+                                         &cache->nodes[cache->level_offsets[level]],
                                          old_width_sz * sizeof(*new_level_nodes));
                         }
                     }
@@ -1984,12 +1985,11 @@ ssz_error_t ssz_merkle_cache_zero_range(
 {
     uint64_t end_index = 0u;
     uint64_t max_index = 0u;
-    const ssz_chunk_t zero_leaf = {
-        .bytes = {0u},
-    };
+    ssz_chunk_t zero_leaf;
     uint64_t old_leaf_count = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
+    (void)memset(&zero_leaf, 0, sizeof(zero_leaf));
     if (cache == NULL)
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
@@ -2116,7 +2116,7 @@ ssz_error_t ssz_merkle_cache_sync_packed_bytes(
                     {
                         copy_len = remaining;
                     }
-                    (void)memcpy(leaf.bytes, bytes + chunk_offset, copy_len);
+                    (void)memcpy(leaf.bytes, &bytes[chunk_offset], copy_len);
                 }
 
                 err = ssz_merkle_cache_internal_set_leaf(cache, chunk_index, &leaf, false);

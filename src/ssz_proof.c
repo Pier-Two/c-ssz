@@ -116,7 +116,7 @@ static ssz_error_t ssz_internal_compute_helper_indices(
             else
             {
                 ssz_gindex_t *branch_indices = scratch;
-                ssz_gindex_t *path_indices = scratch + branch_total;
+                ssz_gindex_t *path_indices = &scratch[branch_total];
                 size_t branch_pos = 0u;
                 size_t path_pos = 0u;
                 size_t i = 0u;
@@ -228,9 +228,10 @@ static void ssz_internal_sort_pairs_desc(
     for (size_t i = 1u; i < count; i++)
     {
         ssz_gindex_t key_index = indices[i];
-        ssz_chunk_t key_node = nodes[i];
+        ssz_chunk_t key_node;
         size_t j = i;
 
+        key_node = nodes[i];
         while ((j > 0u) && (indices[j - 1u] < key_index))
         {
             indices[j] = indices[j - 1u];
@@ -579,7 +580,9 @@ ssz_error_t ssz_calculate_merkle_root(
         }
         else
         {
-            ssz_chunk_t current = *leaf;
+            ssz_chunk_t current;
+
+            current = *leaf;
             for (size_t i = 0u; (i < proof_len) && (err == SSZ_SUCCESS); i++)
             {
                 if (ssz_generalized_index_bit(index, i))
@@ -646,7 +649,7 @@ ssz_error_t ssz_calculate_multi_merkle_root(
                 }
                 else
                 {
-                    map_indices = scratch_indices + map_offset;
+                    map_indices = &scratch_indices[map_offset];
                     map_cap = scratch_cap - map_offset;
                     if (map_cap == 0u)
                     {

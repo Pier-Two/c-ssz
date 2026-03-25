@@ -93,7 +93,7 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
         for (uint64_t i = 0u; i < element_count; i++)
         {
             size_t offset_pos = (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET;
-            uint32_t offset = ssz_internal_read_u32_le(in + offset_pos);
+            uint32_t offset = ssz_internal_read_u32_le(&in[offset_pos]);
 
             if (((size_t)offset < fixed_region) || ((size_t)offset > in_len) || (offset < prev_offset))
             {
@@ -109,12 +109,12 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
         for (uint64_t i = 0u; (i < element_count) && (err == SSZ_SUCCESS); i++)
         {
             size_t offset_pos = (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET;
-            size_t start = (size_t)ssz_internal_read_u32_le(in + offset_pos);
+            size_t start = (size_t)ssz_internal_read_u32_le(&in[offset_pos]);
             size_t end = in_len;
 
             if ((i + 1u) < element_count)
             {
-                end = (size_t)ssz_internal_read_u32_le(in + offset_pos + SSZ_BYTES_PER_LENGTH_OFFSET);
+                end = (size_t)ssz_internal_read_u32_le(&in[offset_pos + SSZ_BYTES_PER_LENGTH_OFFSET]);
             }
             if ((end < start) || ((end - start) < min_element_size))
             {
@@ -122,7 +122,7 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
             }
             else
             {
-                err = codec->read(codec->ctx, i, in + start, end - start);
+                err = codec->read(codec->ctx, i, &in[start], end - start);
             }
         }
     }
@@ -324,8 +324,11 @@ ssz_error_t ssz_deserialize_bitlist(
     }
     if (err == SSZ_SUCCESS)
     {
-        for (uint8_t tmp = last; (tmp >>= 1u) != 0u;)
+        uint8_t tmp = last;
+
+        while (tmp > 1u)
         {
+            tmp >>= 1u;
             delimiter_pos++;
         }
     }
@@ -611,7 +614,7 @@ ssz_error_t ssz_deserialize_container(
 
             if (fixed_size == 0u)
             {
-                uint32_t offset = ssz_internal_read_u32_le(in + cursor);
+                uint32_t offset = ssz_internal_read_u32_le(&in[cursor]);
 
                 if ((size_t)offset > in_len)
                 {
@@ -651,7 +654,7 @@ ssz_error_t ssz_deserialize_container(
                 }
                 else
                 {
-                    err = codec->read(codec->ctx, i, in + cursor, fixed_size);
+                    err = codec->read(codec->ctx, i, &in[cursor], fixed_size);
                     if (err == SSZ_SUCCESS)
                     {
                         cursor += fixed_size;
@@ -685,7 +688,7 @@ ssz_error_t ssz_deserialize_container(
             }
             else
             {
-                size_t start = (size_t)ssz_internal_read_u32_le(in + cursor);
+                size_t start = (size_t)ssz_internal_read_u32_le(&in[cursor]);
                 size_t end = in_len;
                 size_t look_cursor = cursor + SSZ_BYTES_PER_LENGTH_OFFSET;
 
@@ -693,7 +696,7 @@ ssz_error_t ssz_deserialize_container(
                 {
                     if (field_fixed_sizes[j] == 0u)
                     {
-                        end = (size_t)ssz_internal_read_u32_le(in + look_cursor);
+                        end = (size_t)ssz_internal_read_u32_le(&in[look_cursor]);
                         break;
                     }
                     look_cursor += field_fixed_sizes[j];
@@ -705,7 +708,7 @@ ssz_error_t ssz_deserialize_container(
                 }
                 else
                 {
-                    err = codec->read(codec->ctx, i, in + start, end - start);
+                    err = codec->read(codec->ctx, i, &in[start], end - start);
                     if (err == SSZ_SUCCESS)
                     {
                         cursor += SSZ_BYTES_PER_LENGTH_OFFSET;
@@ -769,7 +772,7 @@ ssz_error_t ssz_deserialize_union(
         }
         else
         {
-            err = codec->read(codec->ctx, selector, in + 1u, in_len - 1u);
+            err = codec->read(codec->ctx, selector, &in[1u], in_len - 1u);
         }
     }
 
@@ -819,7 +822,7 @@ ssz_error_t ssz_deserialize_compatible_union(
                 }
                 else
                 {
-                    err = codec->read(codec->ctx, selector, in + 1u, in_len - 1u);
+                    err = codec->read(codec->ctx, selector, &in[1u], in_len - 1u);
                 }
             }
         }

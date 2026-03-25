@@ -414,8 +414,8 @@ ssz_error_t ssz_serialize_vector_variable(
                 err = codec->write(codec->ctx, i, NULL, 0u, &expected_len);
                 if (err == SSZ_SUCCESS)
                 {
-                    ssz_internal_write_u32_le(out + (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET, (uint32_t)cursor);
-                    err = codec->write(codec->ctx, i, out + cursor, out_cap - cursor, &written);
+                    ssz_internal_write_u32_le(&out[(size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET], (uint32_t)cursor);
+                    err = codec->write(codec->ctx, i, &out[cursor], out_cap - cursor, &written);
                     if ((err == SSZ_SUCCESS) && (written != expected_len))
                     {
                         err = SSZ_ERR_TYPE_MISMATCH;
@@ -531,7 +531,7 @@ ssz_error_t ssz_serialize_list_variable(
                 }
                 else
                 {
-                    ssz_internal_write_u32_le(out + (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET, (uint32_t)cursor);
+                    ssz_internal_write_u32_le(&out[(size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET], (uint32_t)cursor);
 
                     if (cursor > out_cap)
                     {
@@ -541,7 +541,7 @@ ssz_error_t ssz_serialize_list_variable(
                     {
                         size_t written = 0u;
 
-                        err = codec->write(codec->ctx, i, out + cursor, out_cap - cursor, &written);
+                        err = codec->write(codec->ctx, i, &out[cursor], out_cap - cursor, &written);
                         if ((err == SSZ_SUCCESS) && ssz_internal_add_overflow_size(cursor, written, &cursor))
                         {
                             err = SSZ_ERR_OVERFLOW;
@@ -652,7 +652,7 @@ ssz_error_t ssz_serialize_container(
                     }
                     else
                     {
-                        ssz_internal_write_u32_le(out + fixed_cursor, (uint32_t)variable_cursor);
+                        ssz_internal_write_u32_le(&out[fixed_cursor], (uint32_t)variable_cursor);
                         fixed_cursor += SSZ_BYTES_PER_LENGTH_OFFSET;
 
                         if (variable_cursor > out_cap)
@@ -661,7 +661,7 @@ ssz_error_t ssz_serialize_container(
                         }
                         else
                         {
-                            err = codec->write(codec->ctx, i, out + variable_cursor, out_cap - variable_cursor, &written);
+                            err = codec->write(codec->ctx, i, &out[variable_cursor], out_cap - variable_cursor, &written);
                             if ((err == SSZ_SUCCESS) &&
                                 ssz_internal_add_overflow_size(variable_cursor, written, &variable_cursor))
                             {
@@ -672,7 +672,7 @@ ssz_error_t ssz_serialize_container(
                 }
                 else
                 {
-                    err = codec->write(codec->ctx, i, out + fixed_cursor, fixed_size, &written);
+                    err = codec->write(codec->ctx, i, &out[fixed_cursor], fixed_size, &written);
                     if ((err == SSZ_SUCCESS) && (written != fixed_size))
                     {
                         err = SSZ_ERR_TYPE_MISMATCH;
@@ -804,7 +804,7 @@ ssz_error_t ssz_serialize_union(
         {
             size_t written = 0u;
 
-            err = codec->write(codec->ctx, selector, out + 1u, out_cap - 1u, &written);
+            err = codec->write(codec->ctx, selector, &out[1u], out_cap - 1u, &written);
             if ((err == SSZ_SUCCESS) && (written != payload_len))
             {
                 err = SSZ_ERR_TYPE_MISMATCH;
@@ -860,7 +860,7 @@ ssz_error_t ssz_serialize_compatible_union(
             size_t written = 0u;
 
             out[0] = selector;
-            err = codec->write(codec->ctx, selector, out + 1u, out_cap - 1u, &written);
+            err = codec->write(codec->ctx, selector, &out[1u], out_cap - 1u, &written);
             if ((err == SSZ_SUCCESS) && (written != payload_len))
             {
                 err = SSZ_ERR_TYPE_MISMATCH;

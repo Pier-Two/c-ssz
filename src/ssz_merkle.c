@@ -67,7 +67,7 @@ typedef struct
     uint64_t count;
 } ssz_internal_codec_reader_ctx_t;
 
-#define SSZ_INTERNAL_FAST_MERKLE_MAX_LEAVES  UINT64_C(131072)
+#define SSZ_INTERNAL_FAST_MERKLE_MAX_LEAVES  131072u
 #define SSZ_INTERNAL_STACK_MERKLE_MAX_LEAVES 64u
 
 static ssz_error_t ssz_internal_read_chunk_leaf(
@@ -128,7 +128,7 @@ static ssz_error_t ssz_internal_read_bytes_leaf(
         {
             size_t remaining = reader->byte_len - start;
             size_t copy_len = (remaining < SSZ_BYTES_PER_CHUNK) ? remaining : SSZ_BYTES_PER_CHUNK;
-            (void)memcpy(out_leaf->bytes, reader->bytes + start, copy_len);
+            (void)memcpy(out_leaf->bytes, &reader->bytes[start], copy_len);
         }
     }
 
@@ -280,7 +280,7 @@ static ssz_error_t ssz_internal_merkleize_reader_fast(
             if ((chunk_reader != NULL) && ((chunk_reader->chunks != NULL) || (leaf_count == 0u)) &&
                 (source_end <= chunk_reader->count))
             {
-                const ssz_chunk_t *source_chunks = chunk_reader->chunks + source_start_sz;
+                const ssz_chunk_t *source_chunks = &chunk_reader->chunks[source_start_sz];
 
                 level_storage_cap = tree_size_sz >> 1u;
                 if (ssz_internal_mul_overflow_size(level_storage_cap, sizeof(*level_storage), &level_storage_bytes))
@@ -338,7 +338,7 @@ static ssz_error_t ssz_internal_merkleize_reader_fast(
                     {
                         ret = ssz_hash_2to1_batch_raw(
                             hash_fn,
-                            bytes_reader->bytes + source_offset,
+                            &bytes_reader->bytes[source_offset],
                             level_storage_cap,
                             level_storage);
                         if (ret == SSZ_SUCCESS)
@@ -1380,9 +1380,10 @@ ssz_error_t ssz_mix_in_length_u64(
     const ssz_hash_fn_t *hash_fn,
     ssz_chunk_t *out_root)
 {
-    uint8_t length_bytes[32] = {0u};
+    uint8_t length_bytes[32];
     ssz_error_t err = SSZ_SUCCESS;
 
+    (void)memset(length_bytes, 0, sizeof(length_bytes));
     ssz_internal_write_u64_le(length_bytes, length);
     err = ssz_mix_in_length(root, length_bytes, hash_fn, out_root);
 

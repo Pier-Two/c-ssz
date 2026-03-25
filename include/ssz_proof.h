@@ -20,6 +20,7 @@ ssz_error_t ssz_get_generalized_index(
 
 static inline uint64_t ssz_next_pow_of_two(uint64_t i)
 {
+    const uint64_t max_power_of_two = UINT64_MAX - (UINT64_MAX >> 1u);
     uint64_t value = i;
     uint64_t result = 0u;
 
@@ -27,7 +28,7 @@ static inline uint64_t ssz_next_pow_of_two(uint64_t i)
     {
         result = 1u;
     }
-    else if (value > (UINT64_C(1) << 63u))
+    else if (value > max_power_of_two)
     {
         result = 0u;
     }
@@ -83,9 +84,10 @@ static inline ssz_gindex_t ssz_generalized_index_sibling(ssz_gindex_t index)
 
 static inline ssz_gindex_t ssz_generalized_index_child(ssz_gindex_t index, bool right_side)
 {
+    const uint64_t max_power_of_two = UINT64_MAX - (UINT64_MAX >> 1u);
     ssz_gindex_t child = 0u;
 
-    if (index < (UINT64_C(1) << 63u))
+    if (index < max_power_of_two)
     {
         child = (index << 1u) | (right_side ? 1u : 0u);
     }
