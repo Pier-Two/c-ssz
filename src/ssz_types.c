@@ -2,7 +2,7 @@
 
 #include "ssz_internal.h"
 
-static ssz_error_t ssz_internal_measure_member(
+static ssz_error_t ssz_types_internal_measure_member(
     ssz_member_codec_t *codec,
     uint64_t member_id,
     size_t *out_len)
@@ -21,7 +21,7 @@ static ssz_error_t ssz_internal_measure_member(
     return err;
 }
 
-static ssz_error_t ssz_internal_capture_member(
+static ssz_error_t ssz_types_internal_capture_member(
     ssz_member_codec_t *codec,
     uint64_t member_id,
     uint8_t *out_bytes,
@@ -59,7 +59,7 @@ static ssz_error_t ssz_internal_capture_member(
     return err;
 }
 
-static ssz_error_t ssz_internal_default_member(ssz_member_codec_t *codec, uint64_t member_id)
+static ssz_error_t ssz_types_internal_default_member(ssz_member_codec_t *codec, uint64_t member_id)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
@@ -75,7 +75,7 @@ static ssz_error_t ssz_internal_default_member(ssz_member_codec_t *codec, uint64
     return err;
 }
 
-static ssz_error_t ssz_internal_restore_member(
+static ssz_error_t ssz_types_internal_restore_member(
     ssz_member_codec_t *codec,
     uint64_t member_id,
     const uint8_t *bytes,
@@ -95,7 +95,7 @@ static ssz_error_t ssz_internal_restore_member(
     return err;
 }
 
-static ssz_error_t ssz_internal_member_is_default(
+static ssz_error_t ssz_types_internal_member_is_default(
     ssz_member_codec_t *codec,
     uint64_t member_id,
     uint8_t *scratch,
@@ -120,7 +120,7 @@ static ssz_error_t ssz_internal_member_is_default(
     }
     else
     {
-        err = ssz_internal_measure_member(codec, member_id, &current_len);
+        err = ssz_types_internal_measure_member(codec, member_id, &current_len);
         if (err == SSZ_SUCCESS)
         {
             current_bytes = scratch;
@@ -131,16 +131,16 @@ static ssz_error_t ssz_internal_member_is_default(
             }
             else
             {
-                err = ssz_internal_capture_member(codec, member_id, current_bytes, current_len, current_len);
+                err = ssz_types_internal_capture_member(codec, member_id, current_bytes, current_len, current_len);
             }
             if (err == SSZ_SUCCESS)
             {
-                err = ssz_internal_default_member(codec, member_id);
+                err = ssz_types_internal_default_member(codec, member_id);
                 if (err == SSZ_SUCCESS)
                 {
                     ssz_error_t restore_err = SSZ_SUCCESS;
 
-                    err = ssz_internal_measure_member(codec, member_id, &default_len);
+                    err = ssz_types_internal_measure_member(codec, member_id, &default_len);
                     if (err == SSZ_SUCCESS)
                     {
                         if (ssz_internal_add_overflow_size(current_len, default_len, &total_len))
@@ -154,7 +154,7 @@ static ssz_error_t ssz_internal_member_is_default(
                         else
                         {
                             default_bytes = &scratch[current_len];
-                            err = ssz_internal_capture_member(
+                            err = ssz_types_internal_capture_member(
                                 codec, member_id, default_bytes, default_len, default_len);
                             if (err == SSZ_SUCCESS)
                             {
@@ -166,7 +166,7 @@ static ssz_error_t ssz_internal_member_is_default(
                         }
                     }
 
-                    restore_err = ssz_internal_restore_member(codec, member_id, current_bytes, current_len);
+                    restore_err = ssz_types_internal_restore_member(codec, member_id, current_bytes, current_len);
                     if (restore_err != SSZ_SUCCESS)
                     {
                         err = restore_err;
@@ -184,7 +184,7 @@ static ssz_error_t ssz_internal_member_is_default(
     return err;
 }
 
-static ssz_error_t ssz_internal_default_members(uint64_t member_count, ssz_member_codec_t *codec)
+static ssz_error_t ssz_types_internal_default_members(uint64_t member_count, ssz_member_codec_t *codec)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
@@ -196,7 +196,7 @@ static ssz_error_t ssz_internal_default_members(uint64_t member_count, ssz_membe
     {
         for (uint64_t i = 0u; i < member_count; i++)
         {
-            err = ssz_internal_default_member(codec, i);
+            err = ssz_types_internal_default_member(codec, i);
             if (err != SSZ_SUCCESS)
             {
                 break;
@@ -220,7 +220,7 @@ ssz_error_t ssz_default_container(
     }
     else
     {
-        err = ssz_internal_default_members((uint64_t)field_count, codec);
+        err = ssz_types_internal_default_members((uint64_t)field_count, codec);
     }
 
     return err;
@@ -255,7 +255,7 @@ ssz_error_t ssz_default_union(
         *out_selector = 0u;
         if (!has_none)
         {
-            err = ssz_internal_default_member(codec, 0u);
+            err = ssz_types_internal_default_member(codec, 0u);
         }
     }
 
@@ -290,7 +290,7 @@ ssz_error_t ssz_is_zero_vector_composite(
         {
             bool member_is_zero = false;
 
-            err = ssz_internal_member_is_default(codec, i, scratch, scratch_len, &member_is_zero);
+            err = ssz_types_internal_member_is_default(codec, i, scratch, scratch_len, &member_is_zero);
             if (err == SSZ_SUCCESS)
             {
                 is_zero = member_is_zero;
@@ -335,7 +335,7 @@ ssz_error_t ssz_is_zero_container(
         {
             bool member_is_zero = false;
 
-            err = ssz_internal_member_is_default(codec, i, scratch, scratch_len, &member_is_zero);
+            err = ssz_types_internal_member_is_default(codec, i, scratch, scratch_len, &member_is_zero);
             if (err == SSZ_SUCCESS)
             {
                 is_zero = member_is_zero;
@@ -392,7 +392,7 @@ ssz_error_t ssz_is_zero_union(
     }
     else
     {
-        err = ssz_internal_member_is_default(codec, 0u, scratch, scratch_len, out_is_zero);
+        err = ssz_types_internal_member_is_default(codec, 0u, scratch, scratch_len, out_is_zero);
     }
 
     return err;

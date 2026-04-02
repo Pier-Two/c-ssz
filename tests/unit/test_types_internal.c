@@ -229,9 +229,9 @@ static ssz_member_codec_t make_codec(codec_ctx_t *ctx)
 static bool test_capture_member_error_paths(void)
 {
     ssz_error_t (*volatile measure_fn)(ssz_member_codec_t *, uint64_t, size_t *) =
-        ssz_internal_measure_member;
+        ssz_types_internal_measure_member;
     ssz_error_t (*volatile capture_fn)(ssz_member_codec_t *, uint64_t, uint8_t *, size_t, size_t) =
-        ssz_internal_capture_member;
+        ssz_types_internal_capture_member;
     size_t byte_len = 0u;
 
     {
@@ -302,7 +302,7 @@ static bool test_member_is_default_error_paths(void)
         uint8_t *,
         size_t,
         bool *) =
-        ssz_internal_member_is_default;
+        ssz_types_internal_member_is_default;
     bool is_default = false;
     uint8_t scratch[3u] = {0u};
 
