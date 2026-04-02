@@ -50,8 +50,8 @@ jobs:
             exit 1
           fi
 
-      - name: Configure
-        run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - name: Configure (library only)
+        run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSSZ_BUILD_TESTS=OFF
 
       - name: Build
         run: cmake --build build --parallel

@@ -74,6 +74,9 @@ target_include_directories(ssz
 
 target_link_libraries(ssz PUBLIC ${SSZ_PLATFORM_LIBS} ${SSZ_CRYPTO_LIB})
 
+option(SSZ_BUILD_TESTS "Build c-ssz unit and spec tests" ON)
+
+if(SSZ_BUILD_TESTS)
 enable_testing()
 
 add_executable(test_serialize tests/unit/test_serialize.c)
@@ -282,6 +285,8 @@ if(EXISTS "${SSZ_SPEC_FIXTURES_DIR}")
 else()
   message(STATUS "Spec fixtures not found at ${SSZ_SPEC_FIXTURES_DIR} — skipping spec tests")
 endif()
+
+endif() # SSZ_BUILD_TESTS
 
 find_package(Doxygen QUIET)
 if(DOXYGEN_FOUND)
