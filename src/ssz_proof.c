@@ -1,52 +1,41 @@
-#include <stdlib.h>
 #include <string.h>
 
 #include "ssz_hash.h"
 #include "ssz_internal.h"
 #include "ssz_proof.h"
 
-static int ssz_internal_compare_gindex_asc(const void *a, const void *b)
+static void ssz_internal_sort_gindex_asc(ssz_gindex_t *arr, size_t count)
 {
-    ssz_gindex_t ia = *(const ssz_gindex_t *)a;
-    ssz_gindex_t ib = *(const ssz_gindex_t *)b;
-    int comparison = 0;
+    for (size_t i = 1u; i < count; i++)
+    {
+        ssz_gindex_t key = arr[i];
+        size_t j = i;
 
-    if (ia < ib)
-    {
-        comparison = -1;
-    }
-    else if (ia > ib)
-    {
-        comparison = 1;
-    }
-    else
-    {
-        /* intentionally empty */
-    }
+        while ((j > 0u) && (arr[j - 1u] > key))
+        {
+            arr[j] = arr[j - 1u];
+            j--;
+        }
 
-    return comparison;
+        arr[j] = key;
+    }
 }
 
-static int ssz_internal_compare_gindex_desc(const void *a, const void *b)
+static void ssz_internal_sort_gindex_desc(ssz_gindex_t *arr, size_t count)
 {
-    ssz_gindex_t ia = *(const ssz_gindex_t *)a;
-    ssz_gindex_t ib = *(const ssz_gindex_t *)b;
-    int comparison = 0;
+    for (size_t i = 1u; i < count; i++)
+    {
+        ssz_gindex_t key = arr[i];
+        size_t j = i;
 
-    if (ia < ib)
-    {
-        comparison = 1;
-    }
-    else if (ia > ib)
-    {
-        comparison = -1;
-    }
-    else
-    {
-        /* intentionally empty */
-    }
+        while ((j > 0u) && (arr[j - 1u] < key))
+        {
+            arr[j] = arr[j - 1u];
+            j--;
+        }
 
-    return comparison;
+        arr[j] = key;
+    }
 }
 
 static size_t ssz_internal_dedup_sorted(ssz_gindex_t *values, size_t count)
@@ -136,8 +125,8 @@ static ssz_error_t ssz_internal_compute_helper_indices(
                     }
                 }
 
-                qsort(branch_indices, branch_pos, sizeof(ssz_gindex_t), ssz_internal_compare_gindex_asc);
-                qsort(path_indices, path_pos, sizeof(ssz_gindex_t), ssz_internal_compare_gindex_asc);
+                ssz_internal_sort_gindex_asc(branch_indices, branch_pos);
+                ssz_internal_sort_gindex_asc(path_indices, path_pos);
 
                 branch_pos = ssz_internal_dedup_sorted(branch_indices, branch_pos);
                 path_pos = ssz_internal_dedup_sorted(path_indices, path_pos);
@@ -160,7 +149,7 @@ static ssz_error_t ssz_internal_compute_helper_indices(
                     }
                 }
 
-                qsort(scratch, diff_count, sizeof(ssz_gindex_t), ssz_internal_compare_gindex_desc);
+                ssz_internal_sort_gindex_desc(scratch, diff_count);
                 *out_count = diff_count;
             }
         }

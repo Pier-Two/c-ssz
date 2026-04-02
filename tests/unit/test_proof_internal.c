@@ -26,21 +26,38 @@ typedef struct
         }                                                                                            \
     } while (0)
 
-static bool test_compare_gindex_desc_all_branches(void)
+static bool test_sort_gindex_desc(void)
 {
-    /* Exercise all three branches of ssz_internal_compare_gindex_desc:
-       ia < ib  →  return 1
-       ia > ib  →  return -1
-       ia == ib →  return 0 */
-    volatile ssz_gindex_t a_seed = 5u;
-    volatile ssz_gindex_t b_seed = 10u;
-    ssz_gindex_t a = a_seed;
-    ssz_gindex_t b = b_seed;
-    int (*volatile cmp_fn)(const void *, const void *) = ssz_internal_compare_gindex_desc;
+    ssz_gindex_t arr[] = {3u, 10u, 1u, 7u, 5u};
+    ssz_internal_sort_gindex_desc(arr, 5u);
 
-    ASSERT_TRUE(cmp_fn(&a, &b) == 1);   /* ia < ib */
-    ASSERT_TRUE(cmp_fn(&b, &a) == -1);  /* ia > ib */
-    ASSERT_TRUE(cmp_fn(&a, &a) == 0);   /* ia == ib */
+    ASSERT_TRUE(arr[0] == 10u);
+    ASSERT_TRUE(arr[1] == 7u);
+    ASSERT_TRUE(arr[2] == 5u);
+    ASSERT_TRUE(arr[3] == 3u);
+    ASSERT_TRUE(arr[4] == 1u);
+
+    /* Single element */
+    ssz_gindex_t single[] = {42u};
+    ssz_internal_sort_gindex_desc(single, 1u);
+    ASSERT_TRUE(single[0] == 42u);
+
+    /* Empty */
+    ssz_internal_sort_gindex_desc(NULL, 0u);
+
+    return true;
+}
+
+static bool test_sort_gindex_asc(void)
+{
+    ssz_gindex_t arr[] = {10u, 3u, 7u, 1u, 5u};
+    ssz_internal_sort_gindex_asc(arr, 5u);
+
+    ASSERT_TRUE(arr[0] == 1u);
+    ASSERT_TRUE(arr[1] == 3u);
+    ASSERT_TRUE(arr[2] == 5u);
+    ASSERT_TRUE(arr[3] == 7u);
+    ASSERT_TRUE(arr[4] == 10u);
 
     return true;
 }
@@ -48,7 +65,8 @@ static bool test_compare_gindex_desc_all_branches(void)
 int main(void)
 {
     const test_case_t tests[] = {
-        {"compare_gindex_desc_all_branches", test_compare_gindex_desc_all_branches},
+        {"sort_gindex_desc", test_sort_gindex_desc},
+        {"sort_gindex_asc", test_sort_gindex_asc},
     };
 
     size_t passed = 0u;
