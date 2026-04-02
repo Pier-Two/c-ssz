@@ -27,50 +27,6 @@ static ssz_error_t ssz_internal_prepare_output(
     return err;
 }
 
-static bool ssz_internal_selector_allowed(
-    uint8_t selector,
-    const uint8_t *allowed_selectors,
-    uint32_t allowed_selector_count)
-{
-    bool allowed = false;
-
-    for (uint32_t i = 0u; i < allowed_selector_count; i++)
-    {
-        if (allowed_selectors[i] == selector)
-        {
-            allowed = true;
-            break;
-        }
-    }
-
-    return allowed;
-}
-
-static ssz_error_t ssz_internal_validate_compatible_union_schema(
-    const uint8_t *allowed_selectors,
-    uint32_t allowed_selector_count)
-{
-    ssz_error_t err = SSZ_SUCCESS;
-
-    if ((allowed_selectors == NULL) || (allowed_selector_count == 0u))
-    {
-        err = SSZ_ERR_SCHEMA_INVALID;
-    }
-    else
-    {
-        for (uint32_t i = 0u; i < allowed_selector_count; i++)
-        {
-            if ((allowed_selectors[i] == 0u) || (allowed_selectors[i] > 127u))
-            {
-                err = SSZ_ERR_SCHEMA_INVALID;
-                break;
-            }
-        }
-    }
-
-    return err;
-}
-
 ssz_error_t ssz_serialize_uint8(uint8_t value, uint8_t out[1])
 {
     ssz_error_t err = SSZ_SUCCESS;
