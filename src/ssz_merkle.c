@@ -533,96 +533,110 @@ static ssz_error_t ssz_internal_merkleize_subtree(
     const ssz_chunk_t zero_hashes[64],
     ssz_chunk_t *out_root)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (node_start >= leaf_count)
     {
         *out_root = zero_hashes[depth];
-        return SSZ_SUCCESS;
     }
-
-    if (subtree_size == 1u)
+    else if (subtree_size == 1u)
     {
         uint64_t source_index = 0u;
 
         if (ssz_internal_add_overflow_u64(source_start, node_start, &source_index))
         {
-            return SSZ_ERR_OVERFLOW;
-        }
-        return ssz_internal_read_leaf(source, source_index, out_root);
-    }
-
-    if ((subtree_size <= SSZ_INTERNAL_FAST_MERKLE_MAX_LEAVES) &&
-        ((leaf_count - node_start) >= subtree_size))
-    {
-        uint64_t subtree_source_start = 0u;
-        ssz_error_t fast_err = SSZ_SUCCESS;
-
-        if (ssz_internal_add_overflow_u64(source_start, node_start, &subtree_source_start))
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-
-        fast_err = ssz_internal_merkleize_reader_fast(source,
-                                                      subtree_source_start,
-                                                      subtree_size,
-                                                      subtree_size,
-                                                      scratch,
-                                                      hash_fn,
-                                                      zero_hashes,
-                                                      out_root);
-        if (fast_err == SSZ_SUCCESS)
-        {
-            return SSZ_SUCCESS;
-        }
-        if (fast_err != SSZ_ERR_BUFFER_TOO_SMALL)
-        {
-            return fast_err;
-        }
-    }
-
-    {
-        uint64_t half = subtree_size >> 1u;
-        uint64_t right_start = 0u;
-        ssz_chunk_t left_root;
-        ssz_chunk_t right_root;
-        ssz_error_t err = SSZ_SUCCESS;
-
-        if (ssz_internal_add_overflow_u64(node_start, half, &right_start))
-        {
             err = SSZ_ERR_OVERFLOW;
         }
         else
         {
-            err = ssz_internal_merkleize_subtree(source,
-                                                 source_start,
-                                                 leaf_count,
-                                                 node_start,
-                                                 half,
-                                                 depth - 1u,
-                                                 scratch,
-                                                 hash_fn,
-                                                 zero_hashes,
-                                                 &left_root);
-            if (err == SSZ_SUCCESS)
+            err = ssz_internal_read_leaf(source, source_index, out_root);
+        }
+    }
+    else
+    {
+        bool used_fast_path = false;
+
+        if ((subtree_size <= SSZ_INTERNAL_FAST_MERKLE_MAX_LEAVES) &&
+            ((leaf_count - node_start) >= subtree_size))
+        {
+            uint64_t subtree_source_start = 0u;
+
+            if (ssz_internal_add_overflow_u64(source_start, node_start, &subtree_source_start))
+            {
+                err = SSZ_ERR_OVERFLOW;
+                used_fast_path = true;
+            }
+            else
+            {
+                ssz_error_t fast_err = ssz_internal_merkleize_reader_fast(source,
+                                                                          subtree_source_start,
+                                                                          subtree_size,
+                                                                          subtree_size,
+                                                                          scratch,
+                                                                          hash_fn,
+                                                                          zero_hashes,
+                                                                          out_root);
+                if (fast_err == SSZ_SUCCESS)
+                {
+                    used_fast_path = true;
+                }
+                else if (fast_err != SSZ_ERR_BUFFER_TOO_SMALL)
+                {
+                    err = fast_err;
+                    used_fast_path = true;
+                }
+                else
+                {
+                    /* SSZ_ERR_BUFFER_TOO_SMALL — fall through to recursive path */
+                }
+            }
+        }
+
+        if ((err == SSZ_SUCCESS) && !used_fast_path)
+        {
+            uint64_t half = subtree_size >> 1u;
+            uint64_t right_start = 0u;
+            ssz_chunk_t left_root;
+            ssz_chunk_t right_root;
+
+            if (ssz_internal_add_overflow_u64(node_start, half, &right_start))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
             {
                 err = ssz_internal_merkleize_subtree(source,
                                                      source_start,
                                                      leaf_count,
-                                                     right_start,
+                                                     node_start,
                                                      half,
                                                      depth - 1u,
                                                      scratch,
                                                      hash_fn,
                                                      zero_hashes,
-                                                     &right_root);
+                                                     &left_root);
                 if (err == SSZ_SUCCESS)
                 {
-                    err = ssz_hash_2to1(hash_fn, &left_root, &right_root, out_root);
+                    err = ssz_internal_merkleize_subtree(source,
+                                                         source_start,
+                                                         leaf_count,
+                                                         right_start,
+                                                         half,
+                                                         depth - 1u,
+                                                         scratch,
+                                                         hash_fn,
+                                                         zero_hashes,
+                                                         &right_root);
+                    if (err == SSZ_SUCCESS)
+                    {
+                        err = ssz_hash_2to1(hash_fn, &left_root, &right_root, out_root);
+                    }
                 }
             }
         }
-
-        return err;
     }
+
+    return err;
 }
 
 static ssz_error_t ssz_internal_merkleize_reader(
