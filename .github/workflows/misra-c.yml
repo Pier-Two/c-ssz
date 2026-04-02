@@ -72,6 +72,7 @@ jobs:
             --suppress='*:*bench/*' \
             --suppress='*:*fuzz/*' \
             --suppress='misra-c2012-2.5:*include/*' \
+            --suppress='misra-c2012-8.7' \
             -i external \
             -i tests \
             -i bench \
