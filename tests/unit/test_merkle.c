@@ -5,6 +5,140 @@
 
 #include "ssz.h"
 
+static ssz_chunk_t g_test_merkle_scratch_chunks[SSZ_MERKLE_SCRATCH_MAX_CHUNKS];
+static const ssz_merkle_scratch_t g_test_merkle_scratch = {
+    .chunks = g_test_merkle_scratch_chunks,
+    .chunk_count = SSZ_MERKLE_SCRATCH_MAX_CHUNKS,
+};
+
+#define ssz_hash_tree_root_bitvector(bits_le, bits_le_len, bit_count, hash_fn, out_root)           \
+    ssz_hash_tree_root_bitvector(                                                                    \
+        (bits_le),                                                                                   \
+        (bits_le_len),                                                                               \
+        (bit_count),                                                                                 \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_bitlist(bits_le, bits_le_len, bit_len, bit_limit, hash_fn, out_root)    \
+    ssz_hash_tree_root_bitlist(                                                                      \
+        (bits_le),                                                                                   \
+        (bits_le_len),                                                                               \
+        (bit_len),                                                                                   \
+        (bit_limit),                                                                                 \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_vector_fixed(elements, element_count, element_size, hash_fn, out_root)   \
+    ssz_hash_tree_root_vector_fixed(                                                                 \
+        (elements),                                                                                  \
+        (element_count),                                                                             \
+        (element_size),                                                                              \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_vector_composite(element_count, codec, hash_fn, out_root)                \
+    ssz_hash_tree_root_vector_composite(                                                             \
+        (element_count),                                                                             \
+        (codec),                                                                                     \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_vector_roots(roots, count, hash_fn, out_root)                            \
+    ssz_hash_tree_root_vector_roots(                                                                 \
+        (roots),                                                                                     \
+        (count),                                                                                     \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_list_fixed(elements, element_count, element_limit, element_size, hash_fn, out_root) \
+    ssz_hash_tree_root_list_fixed(                                                                   \
+        (elements),                                                                                  \
+        (element_count),                                                                             \
+        (element_limit),                                                                             \
+        (element_size),                                                                              \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_list_composite(element_count, element_limit, codec, hash_fn, out_root)   \
+    ssz_hash_tree_root_list_composite(                                                               \
+        (element_count),                                                                             \
+        (element_limit),                                                                             \
+        (codec),                                                                                     \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_list_roots(roots, count, limit, hash_fn, out_root)                       \
+    ssz_hash_tree_root_list_roots(                                                                   \
+        (roots),                                                                                     \
+        (count),                                                                                     \
+        (limit),                                                                                     \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_merkleize(chunks, chunk_count, limit, hash_fn, out_root)                                \
+    ssz_merkleize(                                                                                   \
+        (chunks),                                                                                    \
+        (chunk_count),                                                                               \
+        (limit),                                                                                     \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_merkleize_progressive(chunks, chunk_count, hash_fn, out_root)                           \
+    ssz_merkleize_progressive(                                                                       \
+        (chunks),                                                                                    \
+        (chunk_count),                                                                               \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_progressive_container(field_count, active_fields, active_fields_len, codec, hash_fn, out_root) \
+    ssz_hash_tree_root_progressive_container(                                                        \
+        (field_count),                                                                               \
+        (active_fields),                                                                             \
+        (active_fields_len),                                                                         \
+        (codec),                                                                                     \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_progressive_list_fixed(elements, element_count, element_size, hash_fn, out_root) \
+    ssz_hash_tree_root_progressive_list_fixed(                                                       \
+        (elements),                                                                                  \
+        (element_count),                                                                             \
+        (element_size),                                                                              \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_progressive_list_composite(element_count, codec, hash_fn, out_root)      \
+    ssz_hash_tree_root_progressive_list_composite(                                                   \
+        (element_count),                                                                             \
+        (codec),                                                                                     \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_progressive_bitlist(bits_le, bits_le_len, bit_len, hash_fn, out_root)   \
+    ssz_hash_tree_root_progressive_bitlist(                                                          \
+        (bits_le),                                                                                   \
+        (bits_le_len),                                                                               \
+        (bit_len),                                                                                   \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_progressive_container_roots(roots, count, active_fields, active_fields_len, hash_fn, out_root) \
+    ssz_hash_tree_root_progressive_container_roots(                                                  \
+        (roots),                                                                                     \
+        (count),                                                                                     \
+        (active_fields),                                                                             \
+        (active_fields_len),                                                                         \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_progressive_list_roots(roots, count, hash_fn, out_root)                  \
+    ssz_hash_tree_root_progressive_list_roots(                                                       \
+        (roots),                                                                                     \
+        (count),                                                                                     \
+        &g_test_merkle_scratch,                                                                      \
+        (hash_fn),                                                                                   \
+        (out_root))
+
 typedef bool (*test_fn_t)(void);
 
 typedef struct
@@ -506,7 +640,7 @@ static bool test_merkleize_edge_cases(void)
 
     ssz_chunk_t expected2;
     ASSERT_ERR(ssz_hash_2to1(NULL, &c0, &c1, &expected2), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_merkleize((const ssz_chunk_t[]){c0, c1}, 2u, SSZ_NO_LIMIT, NULL, &root), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_merkleize(((const ssz_chunk_t[]){c0, c1}), 2u, SSZ_NO_LIMIT, NULL, &root), SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(root, expected2);
 
     ssz_chunk_t h01;
@@ -523,17 +657,17 @@ static bool test_merkleize_edge_cases(void)
     ssz_chunk_t expected3;
     ASSERT_ERR(ssz_hash_2to1(NULL, &c2, &zero, &h2z), SSZ_SUCCESS);
     ASSERT_ERR(ssz_hash_2to1(NULL, &h01, &h2z, &expected3), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_merkleize((const ssz_chunk_t[]){c0, c1, c2}, 3u, SSZ_NO_LIMIT, NULL, &root), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_merkleize(((const ssz_chunk_t[]){c0, c1, c2}), 3u, SSZ_NO_LIMIT, NULL, &root), SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(root, expected3);
 
     ssz_chunk_t zz;
     ssz_chunk_t expected_limit4;
     ASSERT_ERR(ssz_hash_2to1(NULL, &zero, &zero, &zz), SSZ_SUCCESS);
     ASSERT_ERR(ssz_hash_2to1(NULL, &expected2, &zz, &expected_limit4), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_merkleize((const ssz_chunk_t[]){c0, c1}, 2u, 4u, NULL, &root), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_merkleize(((const ssz_chunk_t[]){c0, c1}), 2u, 4u, NULL, &root), SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(root, expected_limit4);
 
-    ASSERT_ERR(ssz_merkleize((const ssz_chunk_t[]){c0, c1, c2}, 3u, 2u, NULL, &root),
+    ASSERT_ERR(ssz_merkleize(((const ssz_chunk_t[]){c0, c1, c2}), 3u, 2u, NULL, &root),
                SSZ_ERR_LIMIT_EXCEEDED);
 
     return true;
@@ -614,7 +748,7 @@ static bool test_merkleize_progressive_cases(void)
     ASSERT_ERR(ssz_hash_2to1(NULL, &left_for_right, &zero, &right_branch), SSZ_SUCCESS);
     ASSERT_ERR(ssz_hash_2to1(NULL, &c0, &right_branch, &expected), SSZ_SUCCESS);
 
-    ASSERT_ERR(ssz_merkleize_progressive((const ssz_chunk_t[]){c0, c1, c2}, 3u, NULL, &root), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_merkleize_progressive(((const ssz_chunk_t[]){c0, c1, c2}), 3u, NULL, &root), SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(root, expected);
 
     return true;
@@ -785,7 +919,7 @@ static bool test_merkle_additional_error_paths(void)
     ASSERT_ERR(ssz_hash_tree_root_bitvector(&one_byte, 1u, 0u, NULL, &root), SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_hash_tree_root_bitvector(&one_byte, 1u, UINT64_MAX, NULL, &root), SSZ_ERR_OVERFLOW);
     ASSERT_ERR(ssz_hash_tree_root_bitvector(NULL, 0u, 8u, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_hash_tree_root_bitvector((const uint8_t[2]){0xFFu, 0xC0u}, 2u, 10u, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_bitvector(((const uint8_t[2]){0xFFu, 0xC0u}), 2u, 10u, NULL, &root),
                SSZ_ERR_ENCODING_INVALID);
 #if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(ssz_hash_tree_root_bitvector(&one_byte, SIZE_MAX, UINT64_MAX - 15u, NULL, &root),
@@ -799,18 +933,18 @@ static bool test_merkle_additional_error_paths(void)
                SSZ_ERR_OVERFLOW);
     ASSERT_ERR(ssz_hash_tree_root_bitlist(NULL, 0u, 1u, SSZ_NO_LIMIT, NULL, &root),
                SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_hash_tree_root_bitlist((const uint8_t[2]){0x00u, 0xF0u}, 2u, 9u, SSZ_NO_LIMIT, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_bitlist(((const uint8_t[2]){0x00u, 0xF0u}), 2u, 9u, SSZ_NO_LIMIT, NULL, &root),
                SSZ_ERR_ENCODING_INVALID);
     ASSERT_ERR(ssz_hash_tree_root_bitlist(NULL, 0u, 0u, UINT64_MAX - 1u, NULL, &root), SSZ_ERR_OVERFLOW);
 
-    ASSERT_ERR(ssz_hash_tree_root_vector_fixed((const uint8_t[]){0x01u}, 1u, 1u, NULL, NULL),
+    ASSERT_ERR(ssz_hash_tree_root_vector_fixed(((const uint8_t[]){0x01u}), 1u, 1u, NULL, NULL),
                SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_hash_tree_root_vector_fixed((const uint8_t[]){0x01u}, 0u, 1u, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_vector_fixed(((const uint8_t[]){0x01u}), 0u, 1u, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(ssz_hash_tree_root_vector_fixed((const uint8_t[]){0x01u}, 1u, 0u, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_vector_fixed(((const uint8_t[]){0x01u}), 1u, 0u, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
 #if SIZE_MAX > UINT32_MAX
-    ASSERT_ERR(ssz_hash_tree_root_vector_fixed((const uint8_t[]){0x01u},
+    ASSERT_ERR(ssz_hash_tree_root_vector_fixed(((const uint8_t[]){0x01u}),
                                                ((uint64_t)SIZE_MAX / 2u) + 1u,
                                                2u,
                                                NULL,
@@ -824,38 +958,38 @@ static bool test_merkle_additional_error_paths(void)
 
     ASSERT_ERR(ssz_hash_tree_root_vector_composite(1u, NULL, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_tree_root_vector_composite(1u,
-                                                   &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = fail_if_called_root},
+                                                   (&(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = fail_if_called_root}),
                                                    NULL,
                                                    NULL),
                SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_tree_root_vector_composite(0u,
-                                                   &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = fail_if_called_root},
+                                                   (&(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = fail_if_called_root}),
                                                    NULL,
                                                    &root),
                SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_hash_tree_root_vector_composite(1u,
-                                                   &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL},
+                                                   (&(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL}),
                                                    NULL,
                                                    &root),
                SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_hash_tree_root_vector_roots((const ssz_chunk_t[]){make_chunk(0x01u)}, 0u, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_vector_roots(((const ssz_chunk_t[]){make_chunk(0x01u)}), 0u, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
 #if SIZE_MAX < UINT64_MAX
-    ASSERT_ERR(ssz_hash_tree_root_vector_roots((const ssz_chunk_t[]){make_chunk(0x01u)},
+    ASSERT_ERR(ssz_hash_tree_root_vector_roots(((const ssz_chunk_t[]){make_chunk(0x01u)}),
                                                (uint64_t)SIZE_MAX + 1u,
                                                NULL,
                                                &root),
                SSZ_ERR_OVERFLOW);
 #endif
 
-    ASSERT_ERR(ssz_hash_tree_root_list_fixed((const uint8_t[]){0x01u}, 1u, SSZ_NO_LIMIT, 1u, NULL, NULL),
+    ASSERT_ERR(ssz_hash_tree_root_list_fixed(((const uint8_t[]){0x01u}), 1u, SSZ_NO_LIMIT, 1u, NULL, NULL),
                SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_hash_tree_root_list_fixed((const uint8_t[]){0x01u}, 1u, SSZ_NO_LIMIT, 0u, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_list_fixed(((const uint8_t[]){0x01u}), 1u, SSZ_NO_LIMIT, 0u, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(ssz_hash_tree_root_list_fixed((const uint8_t[]){0x01u}, 2u, 1u, 1u, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_list_fixed(((const uint8_t[]){0x01u}), 2u, 1u, 1u, NULL, &root),
                SSZ_ERR_LIMIT_EXCEEDED);
 #if SIZE_MAX > UINT32_MAX
-    ASSERT_ERR(ssz_hash_tree_root_list_fixed((const uint8_t[]){0x01u},
+    ASSERT_ERR(ssz_hash_tree_root_list_fixed(((const uint8_t[]){0x01u}),
                                              ((uint64_t)SIZE_MAX / 2u) + 1u,
                                              SSZ_NO_LIMIT,
                                              2u,
@@ -873,29 +1007,29 @@ static bool test_merkle_additional_error_paths(void)
                SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_tree_root_list_composite(1u,
                                                  SSZ_NO_LIMIT,
-                                                 &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = fail_if_called_root},
+                                                 (&(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = fail_if_called_root}),
                                                  NULL,
                                                  NULL),
                SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_tree_root_list_composite(2u,
                                                  1u,
-                                                 &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = fail_if_called_root},
+                                                 (&(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = fail_if_called_root}),
                                                  NULL,
                                                  &root),
                SSZ_ERR_LIMIT_EXCEEDED);
     ASSERT_ERR(ssz_hash_tree_root_list_composite(1u,
                                                  SSZ_NO_LIMIT,
-                                                 &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL},
+                                                 (&(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL}),
                                                  NULL,
                                                  &root),
                SSZ_ERR_INVALID_ARGUMENT);
 
-    ASSERT_ERR(ssz_hash_tree_root_list_roots((const ssz_chunk_t[]){make_chunk(0x01u)}, 1u, SSZ_NO_LIMIT, NULL, NULL),
+    ASSERT_ERR(ssz_hash_tree_root_list_roots(((const ssz_chunk_t[]){make_chunk(0x01u)}), 1u, SSZ_NO_LIMIT, NULL, NULL),
                SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_hash_tree_root_list_roots((const ssz_chunk_t[]){make_chunk(0x01u)}, 2u, 1u, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_list_roots(((const ssz_chunk_t[]){make_chunk(0x01u)}), 2u, 1u, NULL, &root),
                SSZ_ERR_LIMIT_EXCEEDED);
 #if SIZE_MAX < UINT64_MAX
-    ASSERT_ERR(ssz_hash_tree_root_list_roots((const ssz_chunk_t[]){make_chunk(0x01u)},
+    ASSERT_ERR(ssz_hash_tree_root_list_roots(((const ssz_chunk_t[]){make_chunk(0x01u)}),
                                              (uint64_t)SIZE_MAX + 1u,
                                              SSZ_NO_LIMIT,
                                              NULL,
@@ -906,11 +1040,11 @@ static bool test_merkle_additional_error_paths(void)
     ASSERT_ERR(ssz_hash_tree_root_union(1u, true, NULL, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_tree_root_union(1u, false, NULL, NULL, NULL), SSZ_ERR_INVALID_ARGUMENT);
 
-    ASSERT_ERR(ssz_merkleize((const ssz_chunk_t[]){make_chunk(0x01u)}, 1u, SSZ_NO_LIMIT, NULL, NULL),
+    ASSERT_ERR(ssz_merkleize(((const ssz_chunk_t[]){make_chunk(0x01u)}), 1u, SSZ_NO_LIMIT, NULL, NULL),
                SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_merkleize(NULL, 1u, SSZ_NO_LIMIT, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
 #if SIZE_MAX > UINT32_MAX
-    ASSERT_ERR(ssz_merkleize((const ssz_chunk_t[]){make_chunk(0x01u)}, SIZE_MAX, SSZ_NO_LIMIT, NULL, &root),
+    ASSERT_ERR(ssz_merkleize(((const ssz_chunk_t[]){make_chunk(0x01u)}), SIZE_MAX, SSZ_NO_LIMIT, NULL, &root),
                SSZ_ERR_OVERFLOW);
 #endif
 
@@ -922,7 +1056,7 @@ static bool test_merkle_additional_error_paths(void)
     ASSERT_ERR(ssz_mix_in_selector(NULL, 1u, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_mix_in_selector(&root, 1u, NULL, NULL), SSZ_ERR_INVALID_ARGUMENT);
 
-    ASSERT_ERR(ssz_merkleize_progressive((const ssz_chunk_t[]){make_chunk(0x01u)}, 1u, NULL, NULL),
+    ASSERT_ERR(ssz_merkleize_progressive(((const ssz_chunk_t[]){make_chunk(0x01u)}), 1u, NULL, NULL),
                SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_merkleize_progressive(NULL, 1u, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
 
@@ -935,23 +1069,23 @@ static bool test_merkle_additional_error_paths(void)
                SSZ_ERR_INVALID_ARGUMENT);
 
     ASSERT_ERR(ssz_hash_tree_root_progressive_container(1u,
-                                                        (const uint8_t[]){0x01u},
+                                                        ((const uint8_t[]){0x01u}),
                                                         1u,
                                                         NULL,
                                                         NULL,
                                                         &root),
                SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_tree_root_progressive_container(1u,
-                                                        (const uint8_t[]){0x01u},
+                                                        ((const uint8_t[]){0x01u}),
                                                         1u,
-                                                        &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL},
+                                                        (&(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL}),
                                                         NULL,
                                                         &root),
                SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_tree_root_progressive_container(1u,
-                                                        (const uint8_t[]){0x01u},
+                                                        ((const uint8_t[]){0x01u}),
                                                         1u,
-                                                        &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = fail_if_called_root},
+                                                        (&(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = fail_if_called_root}),
                                                         NULL,
                                                         NULL),
                SSZ_ERR_INVALID_ARGUMENT);
@@ -979,12 +1113,12 @@ static bool test_merkle_additional_error_paths(void)
     ASSERT_ERR(ssz_hash_tree_root_progressive_list_composite(1u, NULL, NULL, &root),
                SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_tree_root_progressive_list_composite(1u,
-                                                             &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL},
+                                                             (&(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL}),
                                                              NULL,
                                                              &root),
                SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_hash_tree_root_progressive_list_composite(1u,
-                                                             &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = fail_if_called_root},
+                                                             (&(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = fail_if_called_root}),
                                                              NULL,
                                                              NULL),
                SSZ_ERR_INVALID_ARGUMENT);
@@ -995,24 +1129,24 @@ static bool test_merkle_additional_error_paths(void)
                SSZ_ERR_OVERFLOW);
     ASSERT_ERR(ssz_hash_tree_root_progressive_bitlist(NULL, 0u, 1u, NULL, &root),
                SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_hash_tree_root_progressive_bitlist((const uint8_t[2]){0x00u, 0xFFu}, 2u, 9u, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_progressive_bitlist(((const uint8_t[2]){0x00u, 0xFFu}), 2u, 9u, NULL, &root),
                SSZ_ERR_ENCODING_INVALID);
 
-    ASSERT_ERR(ssz_hash_tree_root_progressive_container_roots((const ssz_chunk_t[]){make_chunk(0x01u)},
+    ASSERT_ERR(ssz_hash_tree_root_progressive_container_roots(((const ssz_chunk_t[]){make_chunk(0x01u)}),
                                                               1u,
-                                                              (const uint8_t[]){0x01u},
+                                                              ((const uint8_t[]){0x01u}),
                                                               1u,
                                                               NULL,
                                                               NULL),
                SSZ_ERR_INVALID_ARGUMENT);
 
-    ASSERT_ERR(ssz_hash_tree_root_progressive_list_roots((const ssz_chunk_t[]){make_chunk(0x01u)},
+    ASSERT_ERR(ssz_hash_tree_root_progressive_list_roots(((const ssz_chunk_t[]){make_chunk(0x01u)}),
                                                          1u,
                                                          NULL,
                                                          NULL),
                SSZ_ERR_INVALID_ARGUMENT);
 #if SIZE_MAX < UINT64_MAX
-    ASSERT_ERR(ssz_hash_tree_root_progressive_list_roots((const ssz_chunk_t[]){make_chunk(0x01u)},
+    ASSERT_ERR(ssz_hash_tree_root_progressive_list_roots(((const ssz_chunk_t[]){make_chunk(0x01u)}),
                                                          (uint64_t)SIZE_MAX + 1u,
                                                          NULL,
                                                          &root),
@@ -1042,24 +1176,24 @@ static bool test_merkle_active_field_validation_errors(void)
     const ssz_chunk_t roots[2] = {entries[0].root, entries[1].root};
 
     ASSERT_ERR(ssz_hash_tree_root_progressive_container(
-                   0u, (const uint8_t[]){0x01u}, 1u, &codec, NULL, &root),
+                   0u, ((const uint8_t[]){0x01u}), 1u, &codec, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_hash_tree_root_progressive_container(2u, NULL, 1u, &codec, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(ssz_hash_tree_root_progressive_container(2u, (const uint8_t[]){0x01u}, 0u, &codec, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_progressive_container(2u, ((const uint8_t[]){0x01u}), 0u, &codec, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(ssz_hash_tree_root_progressive_container(2u, (const uint8_t[33]){0u}, 33u, &codec, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_progressive_container(2u, ((const uint8_t[33]){0u}), 33u, &codec, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(ssz_hash_tree_root_progressive_container(2u, (const uint8_t[]){0x80u, 0x00u}, 2u, &codec, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_progressive_container(2u, ((const uint8_t[]){0x80u, 0x00u}), 2u, &codec, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(ssz_hash_tree_root_progressive_container(2u, (const uint8_t[]){0x01u}, 1u, &codec, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_progressive_container(2u, ((const uint8_t[]){0x01u}), 1u, &codec, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
 
     ASSERT_ERR(ssz_hash_tree_root_progressive_container_roots(roots, 2u, NULL, 1u, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(ssz_hash_tree_root_progressive_container_roots(roots, 2u, (const uint8_t[]){0x01u}, 0u, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_progressive_container_roots(roots, 2u, ((const uint8_t[]){0x01u}), 0u, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(ssz_hash_tree_root_progressive_container_roots(roots, 2u, (const uint8_t[]){0x80u, 0x00u}, 2u, NULL, &root),
+    ASSERT_ERR(ssz_hash_tree_root_progressive_container_roots(roots, 2u, ((const uint8_t[]){0x80u, 0x00u}), 2u, NULL, &root),
                SSZ_ERR_SCHEMA_INVALID);
 
     return true;
@@ -1085,10 +1219,10 @@ static bool test_merkle_failure_propagation_paths(void)
     ASSERT_ERR(ssz_merkleize_progressive(merkle_chunks, 2u, &failing_hash, &root), SSZ_ERR_HASH_FAILURE);
 
     ASSERT_ERR(ssz_hash_tree_root_bitlist(
-                   (const uint8_t[]){0xAAu, 0xBBu, 0xCCu, 0xDDu, 0xEEu, 0xFFu, 0x11u, 0x22u, 0x33u, 0x44u,
+                   ((const uint8_t[]){0xAAu, 0xBBu, 0xCCu, 0xDDu, 0xEEu, 0xFFu, 0x11u, 0x22u, 0x33u, 0x44u,
                                      0x55u, 0x66u, 0x77u, 0x88u, 0x99u, 0xAAu, 0xBBu, 0xCCu, 0xDDu, 0xEEu,
                                      0xFFu, 0x11u, 0x22u, 0x33u, 0x44u, 0x55u, 0x66u, 0x77u, 0x88u, 0x99u,
-                                     0xAAu, 0xBBu, 0x0Cu},
+                                     0xAAu, 0xBBu, 0x0Cu}),
                    33u,
                    260u,
                    SSZ_NO_LIMIT,
@@ -1096,10 +1230,10 @@ static bool test_merkle_failure_propagation_paths(void)
                    &root),
                SSZ_ERR_HASH_FAILURE);
     ASSERT_ERR(ssz_hash_tree_root_list_fixed(
-                   (const uint8_t[]){0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x08u, 0x09u, 0x0Au,
+                   ((const uint8_t[]){0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x08u, 0x09u, 0x0Au,
                                      0x0Bu, 0x0Cu, 0x0Du, 0x0Eu, 0x0Fu, 0x10u, 0x11u, 0x12u, 0x13u, 0x14u,
                                      0x15u, 0x16u, 0x17u, 0x18u, 0x19u, 0x1Au, 0x1Bu, 0x1Cu, 0x1Du, 0x1Eu,
-                                     0x1Fu, 0x20u, 0x21u},
+                                     0x1Fu, 0x20u, 0x21u}),
                    33u,
                    SSZ_NO_LIMIT,
                    1u,
@@ -1156,26 +1290,26 @@ static bool test_merkle_failure_propagation_paths(void)
                SSZ_ERR_TYPE_MISMATCH);
 
     ASSERT_ERR(ssz_hash_tree_root_progressive_container(
-                   2u, active_fields, sizeof(active_fields), &(ssz_member_codec_t){.ctx = (void *)&map, .write = NULL, .read = NULL, .root = root_map_root}, &failing_hash, &root),
+                   2u, active_fields, sizeof(active_fields), (&(ssz_member_codec_t){.ctx = (void *)&map, .write = NULL, .read = NULL, .root = root_map_root}), &failing_hash, &root),
                SSZ_ERR_HASH_FAILURE);
     ASSERT_ERR(ssz_hash_tree_root_progressive_list_fixed(
-                   (const uint8_t[]){0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x08u, 0x09u, 0x0Au,
+                   ((const uint8_t[]){0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x08u, 0x09u, 0x0Au,
                                      0x0Bu, 0x0Cu, 0x0Du, 0x0Eu, 0x0Fu, 0x10u, 0x11u, 0x12u, 0x13u, 0x14u,
                                      0x15u, 0x16u, 0x17u, 0x18u, 0x19u, 0x1Au, 0x1Bu, 0x1Cu, 0x1Du, 0x1Eu,
-                                     0x1Fu, 0x20u, 0x21u},
+                                     0x1Fu, 0x20u, 0x21u}),
                    33u,
                    1u,
                    &failing_hash,
                    &root),
                SSZ_ERR_HASH_FAILURE);
     ASSERT_ERR(ssz_hash_tree_root_progressive_list_composite(
-                   2u, &(ssz_member_codec_t){.ctx = (void *)&map, .write = NULL, .read = NULL, .root = root_map_root}, &failing_hash, &root),
+                   2u, (&(ssz_member_codec_t){.ctx = (void *)&map, .write = NULL, .read = NULL, .root = root_map_root}), &failing_hash, &root),
                SSZ_ERR_HASH_FAILURE);
     ASSERT_ERR(ssz_hash_tree_root_progressive_bitlist(
-                   (const uint8_t[]){0xAAu, 0xBBu, 0xCCu, 0xDDu, 0xEEu, 0xFFu, 0x11u, 0x22u, 0x33u, 0x44u,
+                   ((const uint8_t[]){0xAAu, 0xBBu, 0xCCu, 0xDDu, 0xEEu, 0xFFu, 0x11u, 0x22u, 0x33u, 0x44u,
                                      0x55u, 0x66u, 0x77u, 0x88u, 0x99u, 0xAAu, 0xBBu, 0xCCu, 0xDDu, 0xEEu,
                                      0xFFu, 0x11u, 0x22u, 0x33u, 0x44u, 0x55u, 0x66u, 0x77u, 0x88u, 0x99u,
-                                     0xAAu, 0xBBu, 0x0Cu},
+                                     0xAAu, 0xBBu, 0x0Cu}),
                    33u,
                    260u,
                    &failing_hash,

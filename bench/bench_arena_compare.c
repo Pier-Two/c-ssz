@@ -112,6 +112,12 @@ static ssz_member_codec_t g_exec_header_list_hash_codec;
         }                                                                                            \
     } while (0)
 
+static ssz_chunk_t g_bench_arena_scratch_chunks[SSZ_MERKLE_SCRATCH_MAX_CHUNKS];
+static const ssz_merkle_scratch_t g_bench_arena_scratch = {
+    .chunks = g_bench_arena_scratch_chunks,
+    .chunk_count = SSZ_MERKLE_SCRATCH_MAX_CHUNKS,
+};
+
 static void bench_fill_pattern(uint8_t *dst, size_t len, uint8_t seed, uint64_t item_index)
 {
     uint8_t item_mix = (uint8_t)((item_index * 29u) & 0xFFu);
@@ -252,7 +258,8 @@ static ssz_error_t bench_hash_tree_root_fixed_bytes(
     size_t byte_len,
     ssz_chunk_t *out_root)
 {
-    return ssz_hash_tree_root_vector_fixed(bytes, (uint64_t)byte_len, 1u, NULL, out_root);
+    return ssz_hash_tree_root_vector_fixed(
+        bytes, (uint64_t)byte_len, 1u, &g_bench_arena_scratch, NULL, out_root);
 }
 
 static ssz_error_t bench_exec_header_field_root(
@@ -293,6 +300,7 @@ static ssz_error_t bench_exec_header_field_root(
                                              (uint64_t)sizeof(header->extra_data),
                                              ARENA_EXEC_HEADER_EXTRA_DATA_MAX_LEN,
                                              1u,
+                                             &g_bench_arena_scratch,
                                              NULL,
                                              out_root);
     case 11u:
@@ -336,7 +344,7 @@ static ssz_error_t bench_exec_header_list_member_root(
     };
 
     return ssz_hash_tree_root_vector_composite(
-        ARENA_EXEC_HEADER_FIELD_COUNT, &field_codec, NULL, out_root);
+        ARENA_EXEC_HEADER_FIELD_COUNT, &field_codec, &g_bench_arena_scratch, NULL, out_root);
 }
 
 static void bench_init_arena_compare_data(void)
@@ -491,6 +499,7 @@ UBENCH(arena_compare, list_u64_1m_hash_tree_root)
                                                   ARENA_LIST_U64_COUNT,
                                                   ARENA_LIST_U64_LIMIT,
                                                   ARENA_LIST_U64_ELEMENT_SIZE,
+                                                  &g_bench_arena_scratch,
                                                   NULL,
                                                   &root));
 
@@ -552,6 +561,7 @@ UBENCH(arena_compare, execution_payload_header_list_1000_hash_tree_root)
     BENCH_EXPECT_OK(ssz_hash_tree_root_list_composite(ARENA_EXEC_HEADER_COUNT,
                                                       ARENA_EXEC_HEADER_LIMIT,
                                                       &g_exec_header_list_hash_codec,
+                                                      &g_bench_arena_scratch,
                                                       NULL,
                                                       &root));
 

@@ -108,6 +108,11 @@ static ssz_member_codec_t g_cached_eph_list_codec;
 
 static uint64_t g_cached_eph_incremental_1_tick = 1u;
 static uint64_t g_cached_eph_incremental_10_tick = 1u;
+static ssz_chunk_t g_bench_merkle_cache_scratch_chunks[SSZ_MERKLE_SCRATCH_MAX_CHUNKS];
+static const ssz_merkle_scratch_t g_bench_merkle_cache_scratch = {
+    .chunks = g_bench_merkle_cache_scratch_chunks,
+    .chunk_count = SSZ_MERKLE_SCRATCH_MAX_CHUNKS,
+};
 
 static uint64_t bench_make_u64_value(uint64_t index, uint64_t salt)
 {
@@ -295,7 +300,8 @@ static ssz_error_t bench_cached_eph_hash_tree_root_fixed_bytes(
     size_t byte_len,
     ssz_chunk_t *out_root)
 {
-    return ssz_hash_tree_root_vector_fixed(bytes, (uint64_t)byte_len, 1u, NULL, out_root);
+    return ssz_hash_tree_root_vector_fixed(
+        bytes, (uint64_t)byte_len, 1u, &g_bench_merkle_cache_scratch, NULL, out_root);
 }
 
 static ssz_error_t bench_cached_eph_field_root(
@@ -337,6 +343,7 @@ static ssz_error_t bench_cached_eph_field_root(
                                              (uint64_t)sizeof(header->extra_data),
                                              CACHE_EPH_EXTRA_DATA_MAX_LEN,
                                              1u,
+                                             &g_bench_merkle_cache_scratch,
                                              NULL,
                                              out_root);
     case 11u:
@@ -384,7 +391,8 @@ static ssz_error_t bench_cached_eph_list_member_root(
         .root = bench_cached_eph_field_root,
     };
 
-    return ssz_hash_tree_root_vector_composite(CACHE_EPH_FIELD_COUNT, &field_codec, NULL, out_root);
+    return ssz_hash_tree_root_vector_composite(
+        CACHE_EPH_FIELD_COUNT, &field_codec, &g_bench_merkle_cache_scratch, NULL, out_root);
 }
 
 static ssz_error_t bench_cached_eph_get_field_bytes(
@@ -662,7 +670,7 @@ static ssz_error_t bench_cached_eph_verify_root_equivalence(
     };
 
     err = ssz_hash_tree_root_list_composite(
-        CACHE_EPH_COUNT, CACHE_EPH_LIMIT, &list_codec, NULL, &stateless_root);
+        CACHE_EPH_COUNT, CACHE_EPH_LIMIT, &list_codec, &g_bench_merkle_cache_scratch, NULL, &stateless_root);
     if (err != SSZ_SUCCESS)
     {
         return err;
@@ -923,6 +931,7 @@ UBENCH(merkle_cache, stateless_list_u64_1m_hash_tree_root)
                                                   CACHE_LIST_U64_COUNT,
                                                   CACHE_LIST_U64_LIMIT,
                                                   CACHE_LIST_U64_ELEMENT_SIZE,
+                                                  &g_bench_merkle_cache_scratch,
                                                   NULL,
                                                   &root));
     ubench_do_nothing((void *)&root);
@@ -1033,7 +1042,7 @@ UBENCH(merkle_cache, stateless_container_17_hash_tree_root)
 
     ssz_chunk_t root;
     BENCH_EXPECT_OK(ssz_hash_tree_root_vector_composite(
-        CACHE_COMPOSITE_FIELD_COUNT, &g_composite_codec, NULL, &root));
+        CACHE_COMPOSITE_FIELD_COUNT, &g_composite_codec, &g_bench_merkle_cache_scratch, NULL, &root));
     ubench_do_nothing((void *)&root);
 }
 
@@ -1069,6 +1078,7 @@ UBENCH(merkle_cache, stateless_execution_payload_header_list_1000_hash_tree_root
     BENCH_EXPECT_OK(ssz_hash_tree_root_list_composite(CACHE_EPH_COUNT,
                                                       CACHE_EPH_LIMIT,
                                                       &g_cached_eph_list_codec,
+                                                      &g_bench_merkle_cache_scratch,
                                                       NULL,
                                                       &root));
     ubench_do_nothing((void *)&root);

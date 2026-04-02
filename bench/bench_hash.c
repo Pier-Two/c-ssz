@@ -96,6 +96,11 @@ static bench_root_ctx_t g_container_ctx;
 static ssz_member_codec_t g_vector_composite_codec;
 static ssz_member_codec_t g_list_composite_codec;
 static ssz_member_codec_t g_container_codec;
+static ssz_chunk_t g_bench_hash_scratch_chunks[SSZ_MERKLE_SCRATCH_MAX_CHUNKS];
+static const ssz_merkle_scratch_t g_bench_hash_scratch = {
+    .chunks = g_bench_hash_scratch_chunks,
+    .chunk_count = SSZ_MERKLE_SCRATCH_MAX_CHUNKS,
+};
 
 static void bench_init_hash_data(void)
 {
@@ -186,6 +191,7 @@ static void bench_init_hash_data(void)
                                                  sizeof(g_bitlist_bits),
                                                  HASH_BITLIST_BIT_LEN,
                                                  HASH_BITLIST_BIT_MAX,
+                                                 &g_bench_hash_scratch,
                                                  NULL,
                                                  &sanity_root);
     if (err != SSZ_SUCCESS)
@@ -196,6 +202,7 @@ static void bench_init_hash_data(void)
 
     err = ssz_hash_tree_root_vector_composite(HASH_CONTAINER_FIELD_COUNT,
                                               &g_container_codec,
+                                              &g_bench_hash_scratch,
                                               NULL,
                                               &sanity_root);
     if (err != SSZ_SUCCESS)
@@ -208,6 +215,7 @@ static void bench_init_hash_data(void)
                                                    g_progressive_active_fields,
                                                    sizeof(g_progressive_active_fields),
                                                    &g_container_codec,
+                                                   &g_bench_hash_scratch,
                                                    NULL,
                                                    &sanity_root);
     if (err != SSZ_SUCCESS)
@@ -220,6 +228,7 @@ static void bench_init_hash_data(void)
                                                          HASH_CONTAINER_FIELD_COUNT,
                                                          g_progressive_active_fields,
                                                          sizeof(g_progressive_active_fields),
+                                                         &g_bench_hash_scratch,
                                                          NULL,
                                                          &sanity_root);
     if (err != SSZ_SUCCESS)
@@ -363,6 +372,7 @@ UBENCH(hash, tree_root_vector_fixed_128x32)
     BENCH_EXPECT_OK(ssz_hash_tree_root_vector_fixed(g_vector_fixed_data,
                                                      HASH_VECTOR_SMALL_COUNT,
                                                      HASH_ELEMENT_SIZE,
+                                                     &g_bench_hash_scratch,
                                                      NULL,
                                                      &root));
     ubench_do_nothing((void *)&root);
@@ -380,6 +390,7 @@ UBENCH(hash, tree_root_vector_fixed_1024x32)
     BENCH_EXPECT_OK(ssz_hash_tree_root_vector_fixed(g_vector_fixed_data,
                                                      HASH_VECTOR_LARGE_COUNT,
                                                      HASH_ELEMENT_SIZE,
+                                                     &g_bench_hash_scratch,
                                                      NULL,
                                                      &root));
     ubench_do_nothing((void *)&root);
@@ -398,6 +409,7 @@ UBENCH(hash, tree_root_list_fixed_128x32)
                                                    HASH_LIST_SMALL_COUNT,
                                                    HASH_LIST_SMALL_LIMIT,
                                                    HASH_ELEMENT_SIZE,
+                                                   &g_bench_hash_scratch,
                                                    NULL,
                                                    &root));
     ubench_do_nothing((void *)&root);
@@ -416,6 +428,7 @@ UBENCH(hash, tree_root_list_fixed_1024x32)
                                                    HASH_LIST_LARGE_COUNT,
                                                    HASH_LIST_LARGE_LIMIT,
                                                    HASH_ELEMENT_SIZE,
+                                                   &g_bench_hash_scratch,
                                                    NULL,
                                                    &root));
     ubench_do_nothing((void *)&root);
@@ -432,6 +445,7 @@ UBENCH(hash, tree_root_vector_composite_256)
     ssz_chunk_t root;
     BENCH_EXPECT_OK(ssz_hash_tree_root_vector_composite(HASH_COMPOSITE_VECTOR_COUNT,
                                                          &g_vector_composite_codec,
+                                                         &g_bench_hash_scratch,
                                                          NULL,
                                                          &root));
     ubench_do_nothing((void *)&root);
@@ -449,6 +463,7 @@ UBENCH(hash, tree_root_list_composite_256)
     BENCH_EXPECT_OK(ssz_hash_tree_root_list_composite(HASH_COMPOSITE_LIST_COUNT,
                                                        HASH_COMPOSITE_LIST_LIMIT,
                                                        &g_list_composite_codec,
+                                                       &g_bench_hash_scratch,
                                                        NULL,
                                                        &root));
     ubench_do_nothing((void *)&root);
@@ -465,6 +480,7 @@ UBENCH(hash, tree_root_vector_roots_256)
     ssz_chunk_t root;
     BENCH_EXPECT_OK(ssz_hash_tree_root_vector_roots(g_vector_roots,
                                                     HASH_COMPOSITE_VECTOR_COUNT,
+                                                    &g_bench_hash_scratch,
                                                     NULL,
                                                     &root));
     ubench_do_nothing((void *)&root);
@@ -482,6 +498,7 @@ UBENCH(hash, tree_root_list_roots_256)
     BENCH_EXPECT_OK(ssz_hash_tree_root_list_roots(g_list_roots,
                                                   HASH_COMPOSITE_LIST_COUNT,
                                                   HASH_COMPOSITE_LIST_LIMIT,
+                                                  &g_bench_hash_scratch,
                                                   NULL,
                                                   &root));
     ubench_do_nothing((void *)&root);
@@ -515,6 +532,7 @@ UBENCH(hash, tree_root_container_8_fields)
     ssz_chunk_t root;
     BENCH_EXPECT_OK(ssz_hash_tree_root_vector_composite(HASH_CONTAINER_FIELD_COUNT,
                                                         &g_container_codec,
+                                                        &g_bench_hash_scratch,
                                                         NULL,
                                                         &root));
     ubench_do_nothing((void *)&root);
@@ -532,6 +550,7 @@ UBENCH(hash, tree_root_bitvector_8192)
     BENCH_EXPECT_OK(ssz_hash_tree_root_bitvector(g_bitvector_bits,
                                                   sizeof(g_bitvector_bits),
                                                   HASH_BITVECTOR_BIT_COUNT,
+                                                  &g_bench_hash_scratch,
                                                   NULL,
                                                   &root));
     ubench_do_nothing((void *)&root);
@@ -550,6 +569,7 @@ UBENCH(hash, tree_root_bitlist_8190)
                                                sizeof(g_bitlist_bits),
                                                HASH_BITLIST_BIT_LEN,
                                                HASH_BITLIST_BIT_MAX,
+                                               &g_bench_hash_scratch,
                                                NULL,
                                                &root));
     ubench_do_nothing((void *)&root);
@@ -568,6 +588,7 @@ UBENCH(hash, tree_root_progressive_container_8_fields)
                                                              g_progressive_active_fields,
                                                              sizeof(g_progressive_active_fields),
                                                              &g_container_codec,
+                                                             &g_bench_hash_scratch,
                                                              NULL,
                                                              &root));
     ubench_do_nothing((void *)&root);
@@ -586,6 +607,7 @@ UBENCH(hash, tree_root_progressive_container_roots_8)
                                                                    HASH_CONTAINER_FIELD_COUNT,
                                                                    g_progressive_active_fields,
                                                                    sizeof(g_progressive_active_fields),
+                                                                   &g_bench_hash_scratch,
                                                                    NULL,
                                                                    &root));
     ubench_do_nothing((void *)&root);
@@ -603,6 +625,7 @@ UBENCH(hash, tree_root_progressive_list_fixed_128x32)
     BENCH_EXPECT_OK(ssz_hash_tree_root_progressive_list_fixed(g_list_fixed_data,
                                                               HASH_LIST_SMALL_COUNT,
                                                               HASH_ELEMENT_SIZE,
+                                                              &g_bench_hash_scratch,
                                                               NULL,
                                                               &root));
     ubench_do_nothing((void *)&root);
@@ -619,6 +642,7 @@ UBENCH(hash, tree_root_progressive_list_composite_256)
     ssz_chunk_t root;
     BENCH_EXPECT_OK(ssz_hash_tree_root_progressive_list_composite(HASH_COMPOSITE_LIST_COUNT,
                                                                   &g_list_composite_codec,
+                                                                  &g_bench_hash_scratch,
                                                                   NULL,
                                                                   &root));
     ubench_do_nothing((void *)&root);
@@ -635,6 +659,7 @@ UBENCH(hash, tree_root_progressive_list_roots_256)
     ssz_chunk_t root;
     BENCH_EXPECT_OK(ssz_hash_tree_root_progressive_list_roots(g_list_roots,
                                                               HASH_COMPOSITE_LIST_COUNT,
+                                                              &g_bench_hash_scratch,
                                                               NULL,
                                                               &root));
     ubench_do_nothing((void *)&root);
@@ -652,6 +677,7 @@ UBENCH(hash, tree_root_progressive_bitlist_8190)
     BENCH_EXPECT_OK(ssz_hash_tree_root_progressive_bitlist(g_bitlist_bits,
                                                            sizeof(g_bitlist_bits),
                                                            HASH_BITLIST_BIT_LEN,
+                                                           &g_bench_hash_scratch,
                                                            NULL,
                                                            &root));
     ubench_do_nothing((void *)&root);

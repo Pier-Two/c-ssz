@@ -5,6 +5,63 @@
 
 #include "ssz.h"
 
+static ssz_chunk_t g_test_merkle_cache_scratch_chunks[SSZ_MERKLE_SCRATCH_MAX_CHUNKS];
+static const ssz_merkle_scratch_t g_test_merkle_cache_scratch = {
+    .chunks = g_test_merkle_cache_scratch_chunks,
+    .chunk_count = SSZ_MERKLE_SCRATCH_MAX_CHUNKS,
+};
+
+#define ssz_hash_tree_root_bitvector(bits_le, bits_le_len, bit_count, hash_fn, out_root)           \
+    ssz_hash_tree_root_bitvector(                                                                    \
+        (bits_le),                                                                                   \
+        (bits_le_len),                                                                               \
+        (bit_count),                                                                                 \
+        &g_test_merkle_cache_scratch,                                                                \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_bitlist(bits_le, bits_le_len, bit_len, bit_limit, hash_fn, out_root)    \
+    ssz_hash_tree_root_bitlist(                                                                      \
+        (bits_le),                                                                                   \
+        (bits_le_len),                                                                               \
+        (bit_len),                                                                                   \
+        (bit_limit),                                                                                 \
+        &g_test_merkle_cache_scratch,                                                                \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_vector_fixed(elements, element_count, element_size, hash_fn, out_root)   \
+    ssz_hash_tree_root_vector_fixed(                                                                 \
+        (elements),                                                                                  \
+        (element_count),                                                                             \
+        (element_size),                                                                              \
+        &g_test_merkle_cache_scratch,                                                                \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_list_fixed(elements, element_count, element_limit, element_size, hash_fn, out_root) \
+    ssz_hash_tree_root_list_fixed(                                                                   \
+        (elements),                                                                                  \
+        (element_count),                                                                             \
+        (element_limit),                                                                             \
+        (element_size),                                                                              \
+        &g_test_merkle_cache_scratch,                                                                \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_hash_tree_root_list_roots(roots, count, limit, hash_fn, out_root)                       \
+    ssz_hash_tree_root_list_roots(                                                                   \
+        (roots),                                                                                     \
+        (count),                                                                                     \
+        (limit),                                                                                     \
+        &g_test_merkle_cache_scratch,                                                                \
+        (hash_fn),                                                                                   \
+        (out_root))
+#define ssz_merkleize(chunks, chunk_count, limit, hash_fn, out_root)                                \
+    ssz_merkleize(                                                                                   \
+        (chunks),                                                                                    \
+        (chunk_count),                                                                               \
+        (limit),                                                                                     \
+        &g_test_merkle_cache_scratch,                                                                \
+        (hash_fn),                                                                                   \
+        (out_root))
+
 typedef bool (*test_fn_t)(void);
 
 typedef struct
