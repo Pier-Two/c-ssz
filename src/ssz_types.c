@@ -51,6 +51,10 @@ static ssz_error_t ssz_internal_capture_member(
             err = SSZ_ERR_TYPE_MISMATCH;
         }
     }
+    else
+    {
+        /* No action required — expected_len is zero and preconditions are met */
+    }
 
     return err;
 }
