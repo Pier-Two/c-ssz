@@ -574,6 +574,7 @@ static bool test_is_zero_sequence_helpers(void)
 static bool test_is_zero_composite_helpers(void)
 {
     bool is_zero = false;
+    uint8_t scratch[4u] = {0u};
 
     stateful_entry_t vector_true_entries[] = {
         {
@@ -597,7 +598,8 @@ static bool test_is_zero_composite_helpers(void)
     };
     ssz_member_codec_t vector_true_codec = make_stateful_codec(&vector_true_ctx);
 
-    ASSERT_ERR(ssz_is_zero_vector_composite(2u, &vector_true_codec, &is_zero), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_is_zero_vector_composite(2u, &vector_true_codec, scratch, sizeof(scratch), &is_zero),
+               SSZ_SUCCESS);
     ASSERT_TRUE(is_zero);
     for (size_t i = 0u; i < vector_true_ctx.entry_count; i++)
     {
@@ -632,7 +634,9 @@ static bool test_is_zero_composite_helpers(void)
     };
     ssz_member_codec_t vector_false_codec = make_stateful_codec(&vector_false_ctx);
 
-    ASSERT_ERR(ssz_is_zero_vector_composite(2u, &vector_false_codec, &is_zero), SSZ_SUCCESS);
+    ASSERT_ERR(
+        ssz_is_zero_vector_composite(2u, &vector_false_codec, scratch, sizeof(scratch), &is_zero),
+        SSZ_SUCCESS);
     ASSERT_TRUE(!is_zero);
     ASSERT_TRUE(vector_false_entries[0].default_calls == 1u);
     ASSERT_TRUE(vector_false_entries[0].restore_calls == 1u);
@@ -665,10 +669,12 @@ static bool test_is_zero_composite_helpers(void)
     ssz_member_codec_t container_codec = make_stateful_codec(&container_ctx);
 
     ASSERT_ERR(
-        ssz_is_zero_container((const size_t[]){1u, 0u}, 2u, &container_codec, &is_zero),
+        ssz_is_zero_container(
+            (const size_t[]){1u, 0u}, 2u, &container_codec, scratch, sizeof(scratch), &is_zero),
         SSZ_SUCCESS);
     ASSERT_TRUE(is_zero);
-    ASSERT_ERR(ssz_is_zero_container((const size_t[]){1u, 0u}, 2u, &container_codec, &is_zero),
+    ASSERT_ERR(ssz_is_zero_container(
+                   (const size_t[]){1u, 0u}, 2u, &container_codec, scratch, sizeof(scratch), &is_zero),
                SSZ_SUCCESS);
     ASSERT_TRUE(is_zero);
 
@@ -676,13 +682,19 @@ static bool test_is_zero_composite_helpers(void)
         ssz_is_zero_vector_composite(
             1u,
             &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = stateful_read, .root = NULL},
+            scratch,
+            sizeof(scratch),
             &is_zero),
         SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_is_zero_container(NULL, 1u, &container_codec, &is_zero), SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(
+        ssz_is_zero_container(NULL, 1u, &container_codec, scratch, sizeof(scratch), &is_zero),
+        SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_is_zero_container(
                    (const size_t[]){1u},
                    1u,
                    &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL},
+                   scratch,
+                   sizeof(scratch),
                    &is_zero),
                SSZ_ERR_INVALID_ARGUMENT);
 
@@ -692,6 +704,7 @@ static bool test_is_zero_composite_helpers(void)
 static bool test_is_zero_union_helper(void)
 {
     bool is_zero = false;
+    uint8_t scratch[4u] = {0u};
     stateful_entry_t default_entry[] = {
         {
             .id = 0u,
@@ -707,7 +720,9 @@ static bool test_is_zero_union_helper(void)
     };
     ssz_member_codec_t default_codec = make_stateful_codec(&default_ctx);
 
-    ASSERT_ERR(ssz_is_zero_union(0u, 2u, false, &default_codec, &is_zero), SSZ_SUCCESS);
+    ASSERT_ERR(
+        ssz_is_zero_union(0u, 2u, false, &default_codec, scratch, sizeof(scratch), &is_zero),
+        SSZ_SUCCESS);
     ASSERT_TRUE(is_zero);
     ASSERT_TRUE(default_entry[0].default_calls == 1u);
     ASSERT_TRUE(default_entry[0].restore_calls == 1u);
@@ -728,11 +743,15 @@ static bool test_is_zero_union_helper(void)
     };
     ssz_member_codec_t nondefault_codec = make_stateful_codec(&nondefault_ctx);
 
-    ASSERT_ERR(ssz_is_zero_union(0u, 2u, false, &nondefault_codec, &is_zero), SSZ_SUCCESS);
+    ASSERT_ERR(
+        ssz_is_zero_union(0u, 2u, false, &nondefault_codec, scratch, sizeof(scratch), &is_zero),
+        SSZ_SUCCESS);
     ASSERT_TRUE(!is_zero);
     ASSERT_MEM_EQ(nondefault_entry[0].current, ((const uint8_t[1]){0x09u}), 1u);
 
-    ASSERT_ERR(ssz_is_zero_union(1u, 2u, false, &nondefault_codec, &is_zero), SSZ_SUCCESS);
+    ASSERT_ERR(
+        ssz_is_zero_union(1u, 2u, false, &nondefault_codec, scratch, sizeof(scratch), &is_zero),
+        SSZ_SUCCESS);
     ASSERT_TRUE(!is_zero);
 
     ASSERT_ERR(
@@ -741,20 +760,27 @@ static bool test_is_zero_union_helper(void)
             2u,
             true,
             &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = fail_if_called_read, .root = NULL},
+            scratch,
+            sizeof(scratch),
             &is_zero),
         SSZ_SUCCESS);
     ASSERT_TRUE(is_zero);
 
-    ASSERT_ERR(ssz_is_zero_union(2u, 2u, false, &nondefault_codec, &is_zero),
+    ASSERT_ERR(ssz_is_zero_union(2u, 2u, false, &nondefault_codec, scratch, sizeof(scratch), &is_zero),
                SSZ_ERR_SELECTOR_INVALID);
-    ASSERT_ERR(ssz_is_zero_union(0u, 0u, false, &nondefault_codec, &is_zero),
+    ASSERT_ERR(ssz_is_zero_union(0u, 0u, false, &nondefault_codec, scratch, sizeof(scratch), &is_zero),
                SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(ssz_is_zero_union(0u, 257u, false, &nondefault_codec, &is_zero),
-               SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(ssz_is_zero_union(0u, 1u, true, &nondefault_codec, &is_zero),
-               SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(ssz_is_zero_union(0u, 2u, false, NULL, &is_zero), SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_is_zero_union(0u, 2u, false, &nondefault_codec, NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(
+        ssz_is_zero_union(0u, 257u, false, &nondefault_codec, scratch, sizeof(scratch), &is_zero),
+        SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(
+        ssz_is_zero_union(0u, 1u, true, &nondefault_codec, scratch, sizeof(scratch), &is_zero),
+        SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(ssz_is_zero_union(0u, 2u, false, NULL, scratch, sizeof(scratch), &is_zero),
+               SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(
+        ssz_is_zero_union(0u, 2u, false, &nondefault_codec, scratch, sizeof(scratch), NULL),
+        SSZ_ERR_INVALID_ARGUMENT);
 
     return true;
 }

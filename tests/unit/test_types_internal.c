@@ -1,57 +1,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "ssz.h"
 
-typedef struct
-{
-    size_t malloc_calls;
-    size_t malloc_fail_at;
-    size_t free_calls;
-} alloc_hook_state_t;
-
-static alloc_hook_state_t g_alloc_hooks;
-
-static void reset_alloc_hooks(void)
-{
-    memset(&g_alloc_hooks, 0, sizeof(g_alloc_hooks));
-}
-
-static bool alloc_hook_should_fail(size_t *counter, size_t fail_at)
-{
-    (*counter)++;
-    return (fail_at != 0u) && (*counter == fail_at);
-}
-
-static void *hook_malloc(size_t size)
-{
-    if (alloc_hook_should_fail(&g_alloc_hooks.malloc_calls, g_alloc_hooks.malloc_fail_at))
-    {
-        return NULL;
-    }
-    return malloc(size);
-}
-
-static void hook_free(void *ptr)
-{
-    if (ptr != NULL)
-    {
-        g_alloc_hooks.free_calls++;
-    }
-    free(ptr);
-}
-
-#define malloc hook_malloc
-#define free hook_free
 /* Include the source file directly to access static functions.
    Use the bare filename (src/ is in the include path via CMake) so that
    gcov attributes coverage to src/ssz_types.c, not a path through tests/. */
 #include "ssz_types.c"
-#undef malloc
-#undef free
 
 typedef bool (*test_fn_t)(void);
 
@@ -271,9 +228,10 @@ static ssz_member_codec_t make_codec(codec_ctx_t *ctx)
 
 static bool test_capture_member_error_paths(void)
 {
-    ssz_error_t (*volatile capture_fn)(ssz_member_codec_t *, uint64_t, uint8_t **, size_t *) =
+    ssz_error_t (*volatile measure_fn)(ssz_member_codec_t *, uint64_t, size_t *) =
+        ssz_internal_measure_member;
+    ssz_error_t (*volatile capture_fn)(ssz_member_codec_t *, uint64_t, uint8_t *, size_t, size_t) =
         ssz_internal_capture_member;
-    uint8_t *bytes = NULL;
     size_t byte_len = 0u;
 
     {
@@ -287,12 +245,11 @@ static bool test_capture_member_error_paths(void)
             .entry_count = 1u,
         };
         ssz_member_codec_t codec = make_codec(&ctx);
+        uint8_t bytes[1];
 
-        reset_alloc_hooks();
-        g_alloc_hooks.malloc_fail_at = 1u;
-        ASSERT_ERR(capture_fn(&codec, 0u, &bytes, &byte_len), SSZ_ERR_OVERFLOW);
+        ASSERT_ERR(measure_fn(&codec, 0u, &byte_len), SSZ_SUCCESS);
+        ASSERT_ERR(capture_fn(&codec, 0u, bytes, sizeof(bytes), byte_len), SSZ_ERR_BUFFER_TOO_SMALL);
         ASSERT_SIZE_EQ(entry.write_calls, 1u);
-        ASSERT_SIZE_EQ(g_alloc_hooks.free_calls, 0u);
     }
 
     {
@@ -308,11 +265,11 @@ static bool test_capture_member_error_paths(void)
             .entry_count = 1u,
         };
         ssz_member_codec_t codec = make_codec(&ctx);
+        uint8_t bytes[2];
 
-        reset_alloc_hooks();
-        ASSERT_ERR(capture_fn(&codec, 0u, &bytes, &byte_len), SSZ_ERR_HASH_FAILURE);
+        ASSERT_ERR(measure_fn(&codec, 0u, &byte_len), SSZ_SUCCESS);
+        ASSERT_ERR(capture_fn(&codec, 0u, bytes, sizeof(bytes), byte_len), SSZ_ERR_HASH_FAILURE);
         ASSERT_SIZE_EQ(entry.write_calls, 2u);
-        ASSERT_SIZE_EQ(g_alloc_hooks.free_calls, 1u);
     }
 
     {
@@ -327,11 +284,11 @@ static bool test_capture_member_error_paths(void)
             .entry_count = 1u,
         };
         ssz_member_codec_t codec = make_codec(&ctx);
+        uint8_t bytes[2];
 
-        reset_alloc_hooks();
-        ASSERT_ERR(capture_fn(&codec, 0u, &bytes, &byte_len), SSZ_ERR_TYPE_MISMATCH);
+        ASSERT_ERR(measure_fn(&codec, 0u, &byte_len), SSZ_SUCCESS);
+        ASSERT_ERR(capture_fn(&codec, 0u, bytes, sizeof(bytes), byte_len), SSZ_ERR_TYPE_MISMATCH);
         ASSERT_SIZE_EQ(entry.write_calls, 2u);
-        ASSERT_SIZE_EQ(g_alloc_hooks.free_calls, 1u);
     }
 
     return true;
@@ -339,9 +296,39 @@ static bool test_capture_member_error_paths(void)
 
 static bool test_member_is_default_error_paths(void)
 {
-    ssz_error_t (*volatile member_is_default_fn)(ssz_member_codec_t *, uint64_t, bool *) =
+    ssz_error_t (*volatile member_is_default_fn)(
+        ssz_member_codec_t *,
+        uint64_t,
+        uint8_t *,
+        size_t,
+        bool *) =
         ssz_internal_member_is_default;
     bool is_default = false;
+    uint8_t scratch[3u] = {0u};
+
+    {
+        codec_entry_t entry = {
+            .id = 0u,
+            .current = {0xA0u, 0xA1u},
+            .current_len = 2u,
+            .default_bytes = {0x01u},
+            .default_len = 1u,
+        };
+        codec_ctx_t ctx = {
+            .entries = &entry,
+            .entry_count = 1u,
+        };
+        ssz_member_codec_t codec = make_codec(&ctx);
+        uint8_t small_scratch[2u] = {0u};
+
+        ASSERT_ERR(
+            member_is_default_fn(&codec, 0u, small_scratch, sizeof(small_scratch), &is_default),
+            SSZ_ERR_BUFFER_TOO_SMALL);
+        ASSERT_SIZE_EQ(entry.write_calls, 3u);
+        ASSERT_SIZE_EQ(entry.default_calls, 1u);
+        ASSERT_SIZE_EQ(entry.restore_calls, 1u);
+        ASSERT_MEM_EQ(entry.current, ((const uint8_t[]){0xA0u, 0xA1u}), 2u);
+    }
 
     {
         codec_entry_t entry = {
@@ -359,12 +346,11 @@ static bool test_member_is_default_error_paths(void)
         };
         ssz_member_codec_t codec = make_codec(&ctx);
 
-        reset_alloc_hooks();
-        ASSERT_ERR(member_is_default_fn(&codec, 0u, &is_default), SSZ_ERR_SELECTOR_INVALID);
+        ASSERT_ERR(member_is_default_fn(&codec, 0u, scratch, sizeof(scratch), &is_default),
+                   SSZ_ERR_SELECTOR_INVALID);
         ASSERT_SIZE_EQ(entry.write_calls, 2u);
         ASSERT_SIZE_EQ(entry.default_calls, 1u);
         ASSERT_SIZE_EQ(entry.restore_calls, 0u);
-        ASSERT_SIZE_EQ(g_alloc_hooks.free_calls, 1u);
         ASSERT_MEM_EQ(entry.current, ((const uint8_t[]){0xA0u, 0xA1u}), 2u);
     }
 
@@ -384,12 +370,11 @@ static bool test_member_is_default_error_paths(void)
         };
         ssz_member_codec_t codec = make_codec(&ctx);
 
-        reset_alloc_hooks();
-        ASSERT_ERR(member_is_default_fn(&codec, 0u, &is_default), SSZ_ERR_HASH_FAILURE);
+        ASSERT_ERR(member_is_default_fn(&codec, 0u, scratch, sizeof(scratch), &is_default),
+                   SSZ_ERR_HASH_FAILURE);
         ASSERT_SIZE_EQ(entry.write_calls, 4u);
         ASSERT_SIZE_EQ(entry.default_calls, 1u);
         ASSERT_SIZE_EQ(entry.restore_calls, 1u);
-        ASSERT_SIZE_EQ(g_alloc_hooks.free_calls, 2u);
         ASSERT_MEM_EQ(entry.current, ((const uint8_t[]){0xB0u, 0xB1u}), 2u);
     }
 
@@ -411,12 +396,11 @@ static bool test_member_is_default_error_paths(void)
         };
         ssz_member_codec_t codec = make_codec(&ctx);
 
-        reset_alloc_hooks();
-        ASSERT_ERR(member_is_default_fn(&codec, 0u, &is_default), SSZ_ERR_PROOF_INVALID);
+        ASSERT_ERR(member_is_default_fn(&codec, 0u, scratch, sizeof(scratch), &is_default),
+                   SSZ_ERR_PROOF_INVALID);
         ASSERT_SIZE_EQ(entry.write_calls, 4u);
         ASSERT_SIZE_EQ(entry.default_calls, 1u);
         ASSERT_SIZE_EQ(entry.restore_calls, 1u);
-        ASSERT_SIZE_EQ(g_alloc_hooks.free_calls, 2u);
         ASSERT_TRUE(entry.current_len == 1u);
         ASSERT_MEM_EQ(entry.current, entry.default_bytes, entry.default_len);
     }
@@ -428,6 +412,7 @@ static bool test_container_error_and_early_return_paths(void)
 {
     const size_t field_fixed_sizes[3] = {1u, 1u, 1u};
     bool is_zero = true;
+    uint8_t scratch[2u] = {0u};
 
     {
         codec_entry_t entries[] = {
@@ -499,8 +484,10 @@ static bool test_container_error_and_early_return_paths(void)
         };
         ssz_member_codec_t codec = make_codec(&ctx);
 
-        reset_alloc_hooks();
-        ASSERT_ERR(ssz_is_zero_container(field_fixed_sizes, 3u, &codec, &is_zero), SSZ_ERR_SELECTOR_INVALID);
+        ASSERT_ERR(
+            ssz_is_zero_container(
+                field_fixed_sizes, 3u, &codec, scratch, sizeof(scratch), &is_zero),
+            SSZ_ERR_SELECTOR_INVALID);
         ASSERT_SIZE_EQ(entries[0].write_calls, 4u);
         ASSERT_SIZE_EQ(entries[0].default_calls, 1u);
         ASSERT_SIZE_EQ(entries[0].restore_calls, 1u);
@@ -508,7 +495,6 @@ static bool test_container_error_and_early_return_paths(void)
         ASSERT_SIZE_EQ(entries[1].default_calls, 1u);
         ASSERT_SIZE_EQ(entries[1].restore_calls, 0u);
         ASSERT_SIZE_EQ(entries[2].write_calls, 0u);
-        ASSERT_SIZE_EQ(g_alloc_hooks.free_calls, 3u);
     }
 
     {
@@ -536,9 +522,11 @@ static bool test_container_error_and_early_return_paths(void)
         };
         ssz_member_codec_t codec = make_codec(&ctx);
 
-        reset_alloc_hooks();
         is_zero = true;
-        ASSERT_ERR(ssz_is_zero_container((const size_t[]){1u, 1u}, 2u, &codec, &is_zero), SSZ_SUCCESS);
+        ASSERT_ERR(
+            ssz_is_zero_container(
+                (const size_t[]){1u, 1u}, 2u, &codec, scratch, sizeof(scratch), &is_zero),
+            SSZ_SUCCESS);
         ASSERT_FALSE(is_zero);
         ASSERT_SIZE_EQ(entries[0].write_calls, 4u);
         ASSERT_SIZE_EQ(entries[0].default_calls, 1u);
@@ -546,7 +534,6 @@ static bool test_container_error_and_early_return_paths(void)
         ASSERT_SIZE_EQ(entries[1].write_calls, 0u);
         ASSERT_SIZE_EQ(entries[1].default_calls, 0u);
         ASSERT_SIZE_EQ(entries[1].restore_calls, 0u);
-        ASSERT_SIZE_EQ(g_alloc_hooks.free_calls, 2u);
         ASSERT_MEM_EQ(entries[0].current, ((const uint8_t[]){0x77u}), 1u);
     }
 
@@ -563,7 +550,6 @@ int main(void)
 
     for (size_t i = 0u; i < (sizeof(tests) / sizeof(tests[0])); i++)
     {
-        reset_alloc_hooks();
         if (!tests[i].fn())
         {
             fprintf(stderr, "FAILED: %s\n", tests[i].name);

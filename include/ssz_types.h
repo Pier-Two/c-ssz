@@ -641,9 +641,12 @@ static inline ssz_error_t ssz_is_zero_vector_fixed(
     return err;
 }
 
+/* Composite zero checks split scratch into two equal halves for current/default snapshots. */
 ssz_error_t ssz_is_zero_vector_composite(
     uint64_t element_count,
     ssz_member_codec_t *codec,
+    uint8_t *scratch,
+    size_t scratch_len,
     bool *out_is_zero);
 
 static inline ssz_error_t ssz_is_zero_list(uint64_t element_count, bool *out_is_zero)
@@ -666,6 +669,8 @@ ssz_error_t ssz_is_zero_container(
     const size_t *field_fixed_sizes,
     uint32_t field_count,
     ssz_member_codec_t *codec,
+    uint8_t *scratch,
+    size_t scratch_len,
     bool *out_is_zero);
 
 ssz_error_t ssz_is_zero_union(
@@ -673,6 +678,8 @@ ssz_error_t ssz_is_zero_union(
     uint32_t option_count,
     bool has_none,
     ssz_member_codec_t *codec,
+    uint8_t *scratch,
+    size_t scratch_len,
     bool *out_is_zero);
 
 const char *ssz_error_string(ssz_error_t error);
