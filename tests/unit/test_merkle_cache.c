@@ -1,3 +1,9 @@
+/* Required for posix_memalign in C99 mode */
+#if !defined(_POSIX_C_SOURCE) || (_POSIX_C_SOURCE < 200112L)
+#undef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200112L
+#endif
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
