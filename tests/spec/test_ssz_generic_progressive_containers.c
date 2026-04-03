@@ -741,7 +741,7 @@ static ssz_error_t compute_bitvector_like(
             return SSZ_ERR_INVALID_ARGUMENT;
         }
 
-        err = ssz_deserialize_progressive_bitlist(encoded, encoded_len, bits, bitfield_len, &bit_len);
+        err = ssz_deserialize_bitlist(encoded, encoded_len, SSZ_NO_LIMIT, bits, bitfield_len, &bit_len);
         if (err != SSZ_SUCCESS)
         {
             free(encoded);
@@ -749,7 +749,7 @@ static ssz_error_t compute_bitvector_like(
             return err;
         }
 
-        err = ssz_serialize_progressive_bitlist(bits, bitfield_len, bit_len, NULL, 0u, &out_len);
+        err = ssz_serialize_bitlist(bits, bitfield_len, bit_len, SSZ_NO_LIMIT, NULL, 0u, &out_len);
         if (err != SSZ_SUCCESS)
         {
             free(encoded);
@@ -765,7 +765,7 @@ static ssz_error_t compute_bitvector_like(
             return SSZ_ERR_INVALID_ARGUMENT;
         }
 
-        err = ssz_serialize_progressive_bitlist(bits, bitfield_len, bit_len, out_bytes, out_len, &out_len);
+        err = ssz_serialize_bitlist(bits, bitfield_len, bit_len, SSZ_NO_LIMIT, out_bytes, out_len, &out_len);
         if (err != SSZ_SUCCESS)
         {
             free(encoded);
@@ -1198,9 +1198,10 @@ static ssz_error_t compute_list_like(
 
         if (type->kind == TYPE_PROGRESSIVE_LIST)
         {
-            err = ssz_serialize_progressive_list_fixed(
+            err = ssz_serialize_list_fixed(
                 flat,
                 child_count,
+                SSZ_NO_LIMIT,
                 elem_size,
                 NULL,
                 0u,
@@ -1228,9 +1229,10 @@ static ssz_error_t compute_list_like(
 
         if (type->kind == TYPE_PROGRESSIVE_LIST)
         {
-            err = ssz_serialize_progressive_list_fixed(
+            err = ssz_serialize_list_fixed(
                 flat,
                 child_count,
+                SSZ_NO_LIMIT,
                 elem_size,
                 serialized,
                 serialized_len,
@@ -1260,7 +1262,7 @@ static ssz_error_t compute_list_like(
 
         if (type->kind == TYPE_PROGRESSIVE_LIST)
         {
-            err = ssz_serialize_progressive_list_variable(child_count, &codec, NULL, 0u,
+            err = ssz_serialize_list_variable(child_count, SSZ_NO_LIMIT, &codec, NULL, 0u,
                 &serialized_len);
         }
         else
@@ -1283,7 +1285,7 @@ static ssz_error_t compute_list_like(
 
         if (type->kind == TYPE_PROGRESSIVE_LIST)
         {
-            err = ssz_serialize_progressive_list_variable(child_count, &codec, serialized,
+            err = ssz_serialize_list_variable(child_count, SSZ_NO_LIMIT, &codec, serialized,
                 serialized_len, &serialized_len);
         }
         else
@@ -1554,7 +1556,7 @@ static ssz_error_t compute_container(
             return err;
         }
 
-        err = ssz_serialize_progressive_container(
+        err = ssz_serialize_container(
             fixed_sizes,
             container->field_count,
             &codec,
@@ -1589,7 +1591,7 @@ static ssz_error_t compute_container(
 
     if (container->is_progressive)
     {
-        err = ssz_serialize_progressive_container(
+        err = ssz_serialize_container(
             fixed_sizes,
             container->field_count,
             &codec,
@@ -1862,7 +1864,7 @@ static ssz_error_t validate_value_bytes(
             return SSZ_ERR_INVALID_ARGUMENT;
         }
 
-        err = ssz_deserialize_progressive_bitlist(bytes, len, bits, bitfield_len, &out_len);
+        err = ssz_deserialize_bitlist(bytes, len, SSZ_NO_LIMIT, bits, bitfield_len, &out_len);
         free(bits);
         return err;
     }
@@ -1949,7 +1951,7 @@ static ssz_error_t validate_value_bytes(
 
             if (type->kind == TYPE_PROGRESSIVE_LIST)
             {
-                err = ssz_deserialize_progressive_list_fixed(bytes, len, elem_size, copy, len, &count);
+                err = ssz_deserialize_list_fixed(bytes, len, SSZ_NO_LIMIT, elem_size, copy, len, &count);
             }
             else
             {
@@ -1989,7 +1991,7 @@ static ssz_error_t validate_value_bytes(
 
             if (type->kind == TYPE_PROGRESSIVE_LIST)
             {
-                return ssz_deserialize_progressive_list_variable(bytes, len, min_size, &codec, &count);
+                return ssz_deserialize_list_variable(bytes, len, SSZ_NO_LIMIT, min_size, &codec, &count);
             }
             else
             {
@@ -2029,7 +2031,7 @@ static ssz_error_t validate_value_bytes(
 
         if (type->container->is_progressive)
         {
-            err = ssz_deserialize_progressive_container(
+            err = ssz_deserialize_container(
                 bytes,
                 len,
                 fixed_sizes,

@@ -244,9 +244,10 @@ static ssz_error_t deserialize_progressive_list_checked(
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    err = ssz_deserialize_progressive_list_fixed(
+    err = ssz_deserialize_list_fixed(
         serialized,
         serialized_len,
+        SSZ_NO_LIMIT,
         elem_size,
         out,
         out_cap,
@@ -376,7 +377,7 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
         goto done;
     }
 
-    if (ssz_serialize_progressive_list_fixed(decoded, decoded_count, elem_size, NULL, 0u,
+    if (ssz_serialize_list_fixed(decoded, decoded_count, SSZ_NO_LIMIT, elem_size, NULL, 0u,
             &reencoded_len) != SSZ_SUCCESS)
     {
         report->valid_failed++;
@@ -392,7 +393,7 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
         goto done;
     }
 
-    if (ssz_serialize_progressive_list_fixed(decoded, decoded_count, elem_size, reencoded,
+    if (ssz_serialize_list_fixed(decoded, decoded_count, SSZ_NO_LIMIT, elem_size, reencoded,
             reencoded_len, &reencoded_len) != SSZ_SUCCESS)
     {
         report->valid_failed++;

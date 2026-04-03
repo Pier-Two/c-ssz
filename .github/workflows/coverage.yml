@@ -31,6 +31,9 @@ jobs:
       - name: Build
         run: cmake --build build/coverage --parallel
 
+      - name: Zero coverage counters
+        run: lcov --zerocounters --directory build/coverage
+
       - name: Test
         run: ctest --test-dir build/coverage --output-on-failure
 
@@ -73,6 +76,9 @@ jobs:
 
       - name: Build
         run: cmake --build build/coverage-32 --parallel
+
+      - name: Zero coverage counters
+        run: lcov --zerocounters --directory build/coverage-32
 
       - name: Test
         run: ctest --test-dir build/coverage-32 --output-on-failure

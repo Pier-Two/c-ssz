@@ -100,20 +100,6 @@ static bool hook_should_fail(size_t *counter, size_t fail_at)
     return (fail_at != 0u) && (*counter == fail_at);
 }
 
-static void *hook_malloc(size_t size)
-{
-    if (hook_should_fail(&g_hooks.malloc_calls, g_hooks.malloc_fail_at))
-    {
-        return NULL;
-    }
-    return malloc(size);
-}
-
-static void hook_free(void *ptr)
-{
-    free(ptr);
-}
-
 static bool hook_u64_to_size(uint64_t value, size_t *out)
 {
     if (hook_should_fail(&g_hooks.u64_to_size_calls, g_hooks.u64_to_size_fail_at))
@@ -219,8 +205,6 @@ static const ssz_chunk_t *hook_default_zero_hashes(void)
     return ssz_hash_default_zero_hashes();
 }
 
-#define malloc hook_malloc
-#define free hook_free
 #define ssz_internal_u64_to_size hook_u64_to_size
 #define ssz_internal_add_overflow_size hook_add_overflow_size
 #define ssz_internal_mul_overflow_size hook_mul_overflow_size
@@ -232,8 +216,6 @@ static const ssz_chunk_t *hook_default_zero_hashes(void)
 #define ssz_hash_2to1_batch_inplace hook_hash_2to1_batch_inplace
 #define ssz_hash_default_zero_hashes hook_default_zero_hashes
 #include "ssz_merkle.c"
-#undef malloc
-#undef free
 #undef ssz_internal_u64_to_size
 #undef ssz_internal_add_overflow_size
 #undef ssz_internal_mul_overflow_size
@@ -283,27 +265,63 @@ static ssz_error_t sequence_reader(const void *ctx, uint64_t index, ssz_chunk_t 
     return SSZ_SUCCESS;
 }
 
+static ssz_internal_leaf_source_t make_sequence_source(const reader_ctx_t *ctx)
+{
+    ssz_internal_leaf_source_t source;
+
+    (void)memset(&source, 0, sizeof(source));
+    source.kind = SSZ_INTERNAL_LEAF_SOURCE_CUSTOM;
+    source.custom_reader = sequence_reader;
+    source.custom_ctx = ctx;
+    return source;
+}
+
+static ssz_internal_leaf_source_t make_chunk_source(const ssz_chunk_t *chunks, uint64_t count)
+{
+    ssz_internal_leaf_source_t source;
+
+    ssz_internal_init_chunk_source(&source, chunks, count);
+    return source;
+}
+
+static ssz_internal_leaf_source_t make_bytes_source(const uint8_t *bytes, size_t byte_len, uint64_t chunk_count)
+{
+    ssz_internal_leaf_source_t source;
+
+    ssz_internal_init_bytes_source(&source, bytes, byte_len, chunk_count);
+    return source;
+}
+
 static bool test_internal_alloc_and_leaf_readers(void)
 {
-    void *ptr = NULL;
     ssz_chunk_t leaf = internal_make_chunk(0xA0u);
     ssz_chunk_t out_leaf;
     const ssz_chunk_t chunks[1] = {leaf};
     const uint8_t bytes[3] = {0x11u, 0x22u, 0x33u};
+    ssz_chunk_t scratch_chunks[2];
+    ssz_chunk_t *scratch_view = NULL;
 
     reset_hooks();
 
-    ptr = ssz_internal_alloc_aligned32(0u);
-    IASSERT_TRUE(ptr != NULL);
-    IASSERT_TRUE((((uintptr_t)ptr) & 31u) == 0u);
-    ssz_internal_free_aligned32(ptr);
-    ssz_internal_free_aligned32(NULL);
-
-    IASSERT_TRUE(ssz_internal_alloc_aligned32(SIZE_MAX) == NULL);
-
-    reset_hooks();
-    g_hooks.malloc_fail_at = 1u;
-    IASSERT_TRUE(ssz_internal_alloc_aligned32(16u) == NULL);
+    IASSERT_TRUE(!ssz_internal_scratch_is_invalid(NULL));
+    IASSERT_TRUE(!ssz_internal_scratch_is_invalid(&(const ssz_merkle_scratch_t){
+        .chunks = NULL,
+        .chunk_count = 0u,
+    }));
+    IASSERT_TRUE(ssz_internal_scratch_is_invalid(&(const ssz_merkle_scratch_t){
+        .chunks = NULL,
+        .chunk_count = 1u,
+    }));
+    IASSERT_ERR(ssz_internal_get_scratch_chunks(NULL, 1u, &scratch_view), SSZ_ERR_BUFFER_TOO_SMALL);
+    IASSERT_ERR(ssz_internal_get_scratch_chunks(
+                    &(const ssz_merkle_scratch_t){
+                        .chunks = scratch_chunks,
+                        .chunk_count = 2u,
+                    },
+                    1u,
+                    &scratch_view),
+                SSZ_SUCCESS);
+    IASSERT_TRUE(scratch_view == scratch_chunks);
 
     IASSERT_ERR(ssz_internal_read_chunk_leaf(NULL, 0u, &out_leaf), SSZ_ERR_INVALID_ARGUMENT);
     IASSERT_ERR(ssz_internal_read_chunk_leaf(&(ssz_internal_chunk_reader_ctx_t){.chunks = chunks, .count = 1u},
@@ -382,7 +400,7 @@ static bool test_internal_alloc_and_leaf_readers(void)
                 SSZ_SUCCESS);
 
     IASSERT_ERR(ssz_internal_byte_len_to_chunk_count(1u, NULL), SSZ_ERR_INVALID_ARGUMENT);
-    IASSERT_ERR(ssz_internal_merkleize_packed_bytes(NULL, 1u, SSZ_NO_LIMIT, NULL, &out_leaf),
+    IASSERT_ERR(ssz_internal_merkleize_packed_bytes(NULL, 1u, SSZ_NO_LIMIT, NULL, NULL, &out_leaf),
                 SSZ_ERR_INVALID_ARGUMENT);
 
     return true;
@@ -393,7 +411,32 @@ static bool test_internal_fast_merkleize_paths(void)
     ssz_chunk_t out_root;
     const ssz_chunk_t *zero_hashes = ssz_hash_default_zero_hashes();
     ssz_chunk_t chunk_leaves[128];
+    ssz_chunk_t scratch_chunks[128];
     uint8_t bytes[128u * SSZ_BYTES_PER_CHUNK];
+    const ssz_merkle_scratch_t full_scratch = {
+        .chunks = scratch_chunks,
+        .chunk_count = 128u,
+    };
+    const ssz_merkle_scratch_t half_scratch = {
+        .chunks = scratch_chunks,
+        .chunk_count = 64u,
+    };
+    const ssz_merkle_scratch_t short_chunk_scratch = {
+        .chunks = scratch_chunks,
+        .chunk_count = 63u,
+    };
+    const ssz_merkle_scratch_t short_full_scratch = {
+        .chunks = scratch_chunks,
+        .chunk_count = 127u,
+    };
+    ssz_internal_leaf_source_t sequence_source = make_sequence_source(NULL);
+    ssz_internal_leaf_source_t chunk_source = make_chunk_source(chunk_leaves, 128u);
+    ssz_internal_leaf_source_t bytes_source = make_bytes_source(bytes, sizeof(bytes), 128u);
+    ssz_internal_leaf_source_t failing_sequence_source = make_sequence_source(&(const reader_ctx_t){
+        .fail_index = 1u,
+        .fail_err = SSZ_ERR_TYPE_MISMATCH,
+        .fail_enabled = true,
+    });
 
     for (size_t i = 0u; i < 128u; i++)
     {
@@ -403,161 +446,154 @@ static bool test_internal_fast_merkleize_paths(void)
 
     reset_hooks();
     g_hooks.u64_to_size_fail_at = 1u;
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(sequence_reader, NULL, 0u, 1u, 1u, NULL, zero_hashes, &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(&sequence_source, 0u, 1u, 1u, NULL, NULL, zero_hashes, &out_root),
                 SSZ_ERR_OVERFLOW);
 
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(sequence_reader, NULL, 0u, 0u, 0u, NULL, zero_hashes, &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(&sequence_source, 0u, 0u, 0u, NULL, NULL, zero_hashes, &out_root),
                 SSZ_ERR_OVERFLOW);
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(sequence_reader, NULL, UINT64_MAX, 1u, 1u, NULL, zero_hashes, &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(&sequence_source, UINT64_MAX, 1u, 1u, NULL, NULL, zero_hashes, &out_root),
                 SSZ_ERR_OVERFLOW);
 
     reset_hooks();
     g_hooks.u64_to_size_fail_at = 3u;
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(sequence_reader, NULL, 0u, 1u, 1u, NULL, zero_hashes, &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(&sequence_source, 0u, 1u, 1u, NULL, NULL, zero_hashes, &out_root),
                 SSZ_ERR_OVERFLOW);
 
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(sequence_reader, NULL, 0u, 1u, 2u, NULL, zero_hashes, &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(&sequence_source, 0u, 1u, 2u, NULL, NULL, zero_hashes, &out_root),
                 SSZ_SUCCESS);
 
     reset_hooks();
     g_hooks.hash_2to1_batch_inplace_fail_at = 1u;
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(sequence_reader, NULL, 0u, 2u, 2u, NULL, zero_hashes, &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(&sequence_source, 0u, 2u, 2u, NULL, NULL, zero_hashes, &out_root),
                 SSZ_ERR_HASH_FAILURE);
 
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(ssz_internal_read_chunk_leaf,
-                                                   &(ssz_internal_chunk_reader_ctx_t){.chunks = chunk_leaves, .count = 128u},
-                                                   0u,
-                                                   128u,
-                                                   128u,
-                                                   NULL,
-                                                   zero_hashes,
-                                                   &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(
+                    &chunk_source,
+                    0u,
+                    128u,
+                    128u,
+                    &half_scratch,
+                    NULL,
+                    zero_hashes,
+                    &out_root),
                 SSZ_SUCCESS);
 
-    reset_hooks();
-    g_hooks.mul_overflow_size_fail_at = 1u;
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(ssz_internal_read_chunk_leaf,
-                                                   &(ssz_internal_chunk_reader_ctx_t){.chunks = chunk_leaves, .count = 128u},
-                                                   0u,
-                                                   128u,
-                                                   128u,
-                                                   NULL,
-                                                   zero_hashes,
-                                                   &out_root),
-                SSZ_ERR_OVERFLOW);
-
-    reset_hooks();
-    g_hooks.malloc_fail_at = 1u;
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(ssz_internal_read_chunk_leaf,
-                                                   &(ssz_internal_chunk_reader_ctx_t){.chunks = chunk_leaves, .count = 128u},
-                                                   0u,
-                                                   128u,
-                                                   128u,
-                                                   NULL,
-                                                   zero_hashes,
-                                                   &out_root),
-                SSZ_ERR_OVERFLOW);
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(
+                    &chunk_source,
+                    0u,
+                    128u,
+                    128u,
+                    &short_chunk_scratch,
+                    NULL,
+                    zero_hashes,
+                    &out_root),
+                SSZ_ERR_BUFFER_TOO_SMALL);
 
     reset_hooks();
     g_hooks.hash_2to1_batch_fail_at = 1u;
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(ssz_internal_read_chunk_leaf,
-                                                   &(ssz_internal_chunk_reader_ctx_t){.chunks = chunk_leaves, .count = 128u},
-                                                   0u,
-                                                   128u,
-                                                   128u,
-                                                   NULL,
-                                                   zero_hashes,
-                                                   &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(
+                    &chunk_source,
+                    0u,
+                    128u,
+                    128u,
+                    &half_scratch,
+                    NULL,
+                    zero_hashes,
+                    &out_root),
                 SSZ_ERR_HASH_FAILURE);
 
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(ssz_internal_read_chunk_leaf,
-                                                   &(ssz_internal_chunk_reader_ctx_t){.chunks = chunk_leaves, .count = 128u},
-                                                   128u,
-                                                   128u,
-                                                   128u,
-                                                   NULL,
-                                                   zero_hashes,
-                                                   &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(
+                    &chunk_source,
+                    128u,
+                    128u,
+                    128u,
+                    &half_scratch,
+                    NULL,
+                    zero_hashes,
+                    &out_root),
                 SSZ_ERR_INVALID_ARGUMENT);
 
     reset_hooks();
-    g_hooks.mul_overflow_size_fail_at = 3u;
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(ssz_internal_read_bytes_leaf,
-                                                   &(ssz_internal_bytes_reader_ctx_t){
-                                                       .bytes = bytes,
-                                                       .byte_len = sizeof(bytes),
-                                                       .chunk_count = 128u,
-                                                   },
-                                                   0u,
-                                                   128u,
-                                                   128u,
-                                                   NULL,
-                                                   zero_hashes,
-                                                   &out_root),
-                SSZ_ERR_OVERFLOW);
+    g_hooks.mul_overflow_size_fail_at = 1u;
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(
+                    &bytes_source,
+                    0u,
+                    128u,
+                    128u,
+                    &half_scratch,
+                    NULL,
+                    zero_hashes,
+                    &out_root),
+                SSZ_ERR_BUFFER_TOO_SMALL);
 
-    reset_hooks();
-    g_hooks.malloc_fail_at = 1u;
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(ssz_internal_read_bytes_leaf,
-                                                   &(ssz_internal_bytes_reader_ctx_t){
-                                                       .bytes = bytes,
-                                                       .byte_len = sizeof(bytes),
-                                                       .chunk_count = 128u,
-                                                   },
-                                                   0u,
-                                                   128u,
-                                                   128u,
-                                                   NULL,
-                                                   zero_hashes,
-                                                   &out_root),
-                SSZ_ERR_OVERFLOW);
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(
+                    &bytes_source,
+                    0u,
+                    128u,
+                    128u,
+                    &short_chunk_scratch,
+                    NULL,
+                    zero_hashes,
+                    &out_root),
+                SSZ_ERR_BUFFER_TOO_SMALL);
 
     reset_hooks();
     g_hooks.hash_2to1_batch_raw_fail_at = 1u;
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(ssz_internal_read_bytes_leaf,
-                                                   &(ssz_internal_bytes_reader_ctx_t){
-                                                       .bytes = bytes,
-                                                       .byte_len = sizeof(bytes),
-                                                       .chunk_count = 128u,
-                                                   },
-                                                   0u,
-                                                   128u,
-                                                   128u,
-                                                   NULL,
-                                                   zero_hashes,
-                                                   &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(
+                    &bytes_source,
+                    0u,
+                    128u,
+                    128u,
+                    &half_scratch,
+                    NULL,
+                    zero_hashes,
+                    &out_root),
                 SSZ_ERR_HASH_FAILURE);
 
-    reset_hooks();
-    g_hooks.mul_overflow_size_fail_at = 1u;
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(sequence_reader, NULL, 0u, 128u, 128u, NULL, zero_hashes, &out_root),
-                SSZ_ERR_OVERFLOW);
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(
+                    &sequence_source,
+                    0u,
+                    128u,
+                    128u,
+                    &short_full_scratch,
+                    NULL,
+                    zero_hashes,
+                    &out_root),
+                SSZ_ERR_BUFFER_TOO_SMALL);
 
-    reset_hooks();
-    g_hooks.malloc_fail_at = 1u;
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(sequence_reader, NULL, 0u, 128u, 128u, NULL, zero_hashes, &out_root),
-                SSZ_ERR_OVERFLOW);
-
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(sequence_reader,
-                                                   &(reader_ctx_t){
-                                                       .fail_index = 1u,
-                                                       .fail_err = SSZ_ERR_TYPE_MISMATCH,
-                                                       .fail_enabled = true,
-                                                   },
-                                                   0u,
-                                                   128u,
-                                                   128u,
-                                                   NULL,
-                                                   zero_hashes,
-                                                   &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(
+                    &failing_sequence_source,
+                    0u,
+                    128u,
+                    128u,
+                    &full_scratch,
+                    NULL,
+                    zero_hashes,
+                    &out_root),
                 SSZ_ERR_TYPE_MISMATCH);
 
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(sequence_reader, NULL, 0u, 127u, 128u, NULL, zero_hashes, &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(
+                    &sequence_source,
+                    0u,
+                    127u,
+                    128u,
+                    &full_scratch,
+                    NULL,
+                    zero_hashes,
+                    &out_root),
                 SSZ_SUCCESS);
 
     reset_hooks();
     g_hooks.hash_2to1_batch_inplace_fail_at = 1u;
-    IASSERT_ERR(ssz_internal_merkleize_reader_fast(sequence_reader, NULL, 0u, 127u, 128u, NULL, zero_hashes, &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader_fast(
+                    &sequence_source,
+                    0u,
+                    127u,
+                    128u,
+                    &full_scratch,
+                    NULL,
+                    zero_hashes,
+                    &out_root),
                 SSZ_ERR_HASH_FAILURE);
 
     return true;
@@ -569,6 +605,17 @@ static bool test_internal_subtree_progressive_and_public_overflows(void)
     const ssz_chunk_t *zero_hashes = ssz_hash_default_zero_hashes();
     const uint8_t one_byte = 0x01u;
     const ssz_chunk_t root = internal_make_chunk(0x55u);
+    ssz_chunk_t scratch_chunks[128];
+    const ssz_merkle_scratch_t scratch = {
+        .chunks = scratch_chunks,
+        .chunk_count = 128u,
+    };
+    ssz_internal_leaf_source_t sequence_source = make_sequence_source(NULL);
+    ssz_internal_leaf_source_t failing_sequence_source = make_sequence_source(&(const reader_ctx_t){
+        .fail_index = 2u,
+        .fail_err = SSZ_ERR_TYPE_MISMATCH,
+        .fail_enabled = true,
+    });
     const ssz_hash_fn_t invalid_hash = {
         .hash = NULL,
         .hash_2to1 = NULL,
@@ -576,76 +623,79 @@ static bool test_internal_subtree_progressive_and_public_overflows(void)
         .ctx = NULL,
     };
 
-    IASSERT_ERR(ssz_internal_merkleize_subtree(sequence_reader,
-                                               NULL,
-                                               UINT64_MAX,
-                                               2u,
-                                               1u,
-                                               1u,
-                                               0u,
-                                               NULL,
-                                               zero_hashes,
-                                               &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_subtree_iter(&sequence_source,
+                                                    UINT64_MAX,
+                                                    2u,
+                                                    1u,
+                                                    1u,
+                                                    0u,
+                                                    &scratch,
+                                                    NULL,
+                                                    zero_hashes,
+                                                    &out_root),
                 SSZ_ERR_OVERFLOW);
-    IASSERT_ERR(ssz_internal_merkleize_subtree(sequence_reader,
-                                               NULL,
-                                               UINT64_MAX,
-                                               3u,
-                                               1u,
-                                               2u,
-                                               1u,
-                                               NULL,
-                                               zero_hashes,
-                                               &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_subtree_iter(&sequence_source,
+                                                    UINT64_MAX,
+                                                    3u,
+                                                    1u,
+                                                    2u,
+                                                    1u,
+                                                    &scratch,
+                                                    NULL,
+                                                    zero_hashes,
+                                                    &out_root),
                 SSZ_ERR_OVERFLOW);
-    IASSERT_ERR(ssz_internal_merkleize_subtree(sequence_reader,
-                                               NULL,
-                                               0u,
-                                               UINT64_MAX,
-                                               UINT64_MAX - 1u,
-                                               4u,
-                                               2u,
-                                               NULL,
-                                               zero_hashes,
-                                               &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_subtree_iter(&sequence_source,
+                                                    0u,
+                                                    UINT64_MAX,
+                                                    UINT64_MAX - 1u,
+                                                    4u,
+                                                    2u,
+                                                    &scratch,
+                                                    NULL,
+                                                    zero_hashes,
+                                                    &out_root),
                 SSZ_ERR_OVERFLOW);
-    IASSERT_ERR(ssz_internal_merkleize_subtree(sequence_reader,
-                                               &(reader_ctx_t){
-                                                   .fail_index = 2u,
-                                                   .fail_err = SSZ_ERR_TYPE_MISMATCH,
-                                                   .fail_enabled = true,
-                                               },
-                                               0u,
-                                               3u,
-                                               0u,
-                                               4u,
-                                               2u,
-                                               NULL,
-                                               zero_hashes,
-                                               &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_subtree_iter(&failing_sequence_source,
+                                                    0u,
+                                                    3u,
+                                                    0u,
+                                                    4u,
+                                                    2u,
+                                                    &scratch,
+                                                    NULL,
+                                                    zero_hashes,
+                                                    &out_root),
                 SSZ_ERR_TYPE_MISMATCH);
 
-    IASSERT_ERR(ssz_internal_merkleize_reader(NULL, NULL, 0u, 0u, 0u, NULL, &out_root), SSZ_ERR_INVALID_ARGUMENT);
-    IASSERT_ERR(ssz_internal_merkleize_reader(sequence_reader, NULL, 0u, 0u, 0u, &invalid_hash, &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader(NULL, 0u, 0u, 0u, NULL, NULL, &out_root), SSZ_ERR_INVALID_ARGUMENT);
+    IASSERT_ERR(ssz_internal_merkleize_reader(&sequence_source, 0u, 0u, 0u, NULL, &invalid_hash, &out_root),
                 SSZ_ERR_INVALID_ARGUMENT);
 
     reset_hooks();
     g_hooks.return_null_zero_hashes = true;
-    IASSERT_ERR(ssz_internal_merkleize_reader(sequence_reader, NULL, 0u, 0u, 0u, NULL, &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_reader(&sequence_source, 0u, 0u, 0u, NULL, NULL, &out_root),
                 SSZ_ERR_HASH_FAILURE);
 
     reset_hooks();
-    IASSERT_ERR(ssz_internal_merkleize_progressive_reader(NULL, NULL, 0u, 0u, 1u, NULL, &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_progressive_reader_iter(NULL, 0u, 0u, 1u, NULL, NULL, &out_root),
                 SSZ_ERR_INVALID_ARGUMENT);
-    IASSERT_ERR(ssz_internal_merkleize_progressive_reader(sequence_reader, NULL, UINT64_MAX, 1u, 2u, NULL, &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_progressive_reader_iter(
+                    &sequence_source,
+                    UINT64_MAX,
+                    1u,
+                    2u,
+                    &scratch,
+                    NULL,
+                    &out_root),
                 SSZ_ERR_OVERFLOW);
-    IASSERT_ERR(ssz_internal_merkleize_progressive_reader(sequence_reader,
-                                                          NULL,
-                                                          0u,
-                                                          1u,
-                                                          (UINT64_MAX / 4u) + 1u,
-                                                          NULL,
-                                                          &out_root),
+    IASSERT_ERR(ssz_internal_merkleize_progressive_reader_iter(&sequence_source,
+                                                               0u,
+                                                               1u,
+                                                               (UINT64_MAX / 4u) + 1u,
+                                                               &scratch,
+                                                               NULL,
+                                                               &out_root),
                 SSZ_ERR_OVERFLOW);
 
     reset_hooks();

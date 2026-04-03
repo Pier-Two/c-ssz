@@ -9,131 +9,138 @@ static ssz_error_t ssz_internal_prepare_output(
     size_t out_cap,
     size_t *out_len)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (out_len == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    *out_len = required;
-    if (out == NULL)
+    else
     {
-        return SSZ_SUCCESS;
-    }
-    if (out_cap < required)
-    {
-        return SSZ_ERR_BUFFER_TOO_SMALL;
-    }
-
-    return SSZ_SUCCESS;
-}
-
-static bool ssz_internal_selector_allowed(
-    uint8_t selector,
-    const uint8_t *allowed_selectors,
-    uint32_t allowed_selector_count)
-{
-    for (uint32_t i = 0u; i < allowed_selector_count; i++)
-    {
-        if (allowed_selectors[i] == selector)
+        *out_len = required;
+        if ((out != NULL) && (out_cap < required))
         {
-            return true;
-        }
-    }
-    return false;
-}
-
-static ssz_error_t ssz_internal_validate_compatible_union_schema(
-    const uint8_t *allowed_selectors,
-    uint32_t allowed_selector_count)
-{
-    if ((allowed_selectors == NULL) || (allowed_selector_count == 0u))
-    {
-        return SSZ_ERR_SCHEMA_INVALID;
-    }
-
-    for (uint32_t i = 0u; i < allowed_selector_count; i++)
-    {
-        if ((allowed_selectors[i] == 0u) || (allowed_selectors[i] > 127u))
-        {
-            return SSZ_ERR_SCHEMA_INVALID;
+            err = SSZ_ERR_BUFFER_TOO_SMALL;
         }
     }
 
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_serialize_uint8(uint8_t value, uint8_t out[1])
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (out == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    out[0] = value;
-    return SSZ_SUCCESS;
+    else
+    {
+        out[0] = value;
+    }
+
+    return err;
 }
 
 ssz_error_t ssz_serialize_uint16(uint16_t value, uint8_t out[2])
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (out == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    ssz_internal_write_u16_le(out, value);
-    return SSZ_SUCCESS;
+    else
+    {
+        ssz_internal_write_u16_le(out, value);
+    }
+
+    return err;
 }
 
 ssz_error_t ssz_serialize_uint32(uint32_t value, uint8_t out[4])
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (out == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    ssz_internal_write_u32_le(out, value);
-    return SSZ_SUCCESS;
+    else
+    {
+        ssz_internal_write_u32_le(out, value);
+    }
+
+    return err;
 }
 
 ssz_error_t ssz_serialize_uint64(uint64_t value, uint8_t out[8])
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (out == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    ssz_internal_write_u64_le(out, value);
-    return SSZ_SUCCESS;
+    else
+    {
+        ssz_internal_write_u64_le(out, value);
+    }
+
+    return err;
 }
 
 ssz_error_t ssz_serialize_uint128(const uint8_t value[16], uint8_t out[16])
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if ((value == NULL) || (out == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    memcpy(out, value, 16u);
-    return SSZ_SUCCESS;
+    else
+    {
+        (void)memcpy(out, value, 16u);
+    }
+
+    return err;
 }
 
 ssz_error_t ssz_serialize_uint256(const uint8_t value[32], uint8_t out[32])
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if ((value == NULL) || (out == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    memcpy(out, value, 32u);
-    return SSZ_SUCCESS;
+    else
+    {
+        (void)memcpy(out, value, 32u);
+    }
+
+    return err;
 }
 
 ssz_error_t ssz_serialize_boolean(uint8_t value, uint8_t out[1])
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (out == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (value > 1u)
+    else if (value > 1u)
     {
-        return SSZ_ERR_ENCODING_INVALID;
+        err = SSZ_ERR_ENCODING_INVALID;
     }
-    out[0] = value;
-    return SSZ_SUCCESS;
+    else
+    {
+        out[0] = value;
+    }
+
+    return err;
 }
 
 ssz_error_t ssz_serialize_bitvector(
@@ -145,40 +152,42 @@ ssz_error_t ssz_serialize_bitvector(
     size_t *out_len)
 {
     size_t byte_count = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if (bit_count == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if (!ssz_internal_bits_to_bytes(bit_count, &byte_count))
+    else if (!ssz_internal_bits_to_bytes(bit_count, &byte_count))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if ((bits_le == NULL) || (bits_le_len < byte_count))
+    else if ((bits_le == NULL) || (bits_le_len < byte_count))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    if ((bit_count % 8u) != 0u)
+    else
     {
-        uint8_t mask = (uint8_t)((1u << (bit_count % 8u)) - 1u);
-        if ((bits_le[byte_count - 1u] & (uint8_t)(~mask)) != 0u)
+        if ((bit_count % 8u) != 0u)
         {
-            return SSZ_ERR_ENCODING_INVALID;
+            uint8_t mask = (uint8_t)((1u << (bit_count % 8u)) - 1u);
+            if ((bits_le[byte_count - 1u] & (uint8_t)(~mask)) != 0u)
+            {
+                err = SSZ_ERR_ENCODING_INVALID;
+            }
+        }
+
+        if (err == SSZ_SUCCESS)
+        {
+            err = ssz_internal_prepare_output(byte_count, out, out_cap, out_len);
+            if ((err == SSZ_SUCCESS) && (out != NULL))
+            {
+                (void)memcpy(out, bits_le, byte_count);
+            }
         }
     }
 
-    ssz_error_t err = ssz_internal_prepare_output(byte_count, out, out_cap, out_len);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    if (out != NULL)
-    {
-        memcpy(out, bits_le, byte_count);
-    }
-
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_serialize_bitlist(
@@ -193,58 +202,62 @@ ssz_error_t ssz_serialize_bitlist(
     size_t data_bytes = 0u;
     size_t delimiter_byte = 0u;
     size_t required = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if ((bit_limit != SSZ_NO_LIMIT) && (bit_len > bit_limit))
     {
-        return SSZ_ERR_LIMIT_EXCEEDED;
+        err = SSZ_ERR_LIMIT_EXCEEDED;
     }
-
-    if (!ssz_internal_bits_to_bytes(bit_len, &data_bytes))
+    else if (!ssz_internal_bits_to_bytes(bit_len, &data_bytes))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if (!ssz_internal_u64_to_size(bit_len / 8u, &delimiter_byte) ||
-        ssz_internal_add_overflow_size(delimiter_byte, 1u, &required))
+    else if (!ssz_internal_u64_to_size(bit_len / 8u, &delimiter_byte) ||
+             ssz_internal_add_overflow_size(delimiter_byte, 1u, &required))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-
-    if (data_bytes != 0u)
+    else
     {
-        if ((bits_le == NULL) || (bits_le_len < data_bytes))
+        if (data_bytes != 0u)
         {
-            return SSZ_ERR_INVALID_ARGUMENT;
-        }
-        if ((bit_len % 8u) != 0u)
-        {
-            uint8_t mask = (uint8_t)((1u << (bit_len % 8u)) - 1u);
-            if ((bits_le[data_bytes - 1u] & (uint8_t)(~mask)) != 0u)
+            if ((bits_le == NULL) || (bits_le_len < data_bytes))
             {
-                return SSZ_ERR_ENCODING_INVALID;
+                err = SSZ_ERR_INVALID_ARGUMENT;
+            }
+            else if ((bit_len % 8u) != 0u)
+            {
+                uint8_t mask = (uint8_t)((1u << (bit_len % 8u)) - 1u);
+                if ((bits_le[data_bytes - 1u] & (uint8_t)(~mask)) != 0u)
+                {
+                    err = SSZ_ERR_ENCODING_INVALID;
+                }
+            }
+            else
+            {
+                /* intentionally empty */
+            }
+        }
+
+        if (err == SSZ_SUCCESS)
+        {
+            err = ssz_internal_prepare_output(required, out, out_cap, out_len);
+            if ((err == SSZ_SUCCESS) && (out != NULL))
+            {
+                uint8_t delimiter_bit = (uint8_t)(1u << (bit_len % 8u));
+
+                (void)memset(out, 0, required);
+                if (data_bytes != 0u)
+                {
+                    (void)memcpy(out, bits_le, data_bytes);
+                }
+
+                out[delimiter_byte] = (uint8_t)(out[delimiter_byte] | delimiter_bit);
             }
         }
     }
 
-    ssz_error_t err = ssz_internal_prepare_output(required, out, out_cap, out_len);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    if (out == NULL)
-    {
-        return SSZ_SUCCESS;
-    }
-
-    memset(out, 0, required);
-    if (data_bytes != 0u)
-    {
-        memcpy(out, bits_le, data_bytes);
-    }
-
-    uint8_t delimiter_bit = (uint8_t)(1u << (bit_len % 8u));
-    out[delimiter_byte] = (uint8_t)(out[delimiter_byte] | delimiter_bit);
-
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_serialize_vector_fixed(
@@ -256,39 +269,38 @@ ssz_error_t ssz_serialize_vector_fixed(
     size_t *out_len)
 {
     size_t required = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if (element_count == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if (element_size == 0u)
+    else if (element_size == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if (!ssz_internal_u64_to_size(element_count, NULL))
+    else if (!ssz_internal_u64_to_size(element_count, NULL))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &required))
+    else if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &required))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if ((required != 0u) && (elements == NULL))
+    else if ((required != 0u) && (elements == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        err = ssz_internal_prepare_output(required, out, out_cap, out_len);
+        if ((err == SSZ_SUCCESS) && (out != NULL) && (required != 0u))
+        {
+            (void)memcpy(out, elements, required);
+        }
     }
 
-    ssz_error_t err = ssz_internal_prepare_output(required, out, out_cap, out_len);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    if ((out != NULL) && (required != 0u))
-    {
-        memcpy(out, elements, required);
-    }
-
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_serialize_vector_variable(
@@ -300,82 +312,85 @@ ssz_error_t ssz_serialize_vector_variable(
 {
     size_t fixed_region = 0u;
     size_t total = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if (element_count == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if ((codec == NULL) || (codec->write == NULL))
+    else if ((codec == NULL) || (codec->write == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (!ssz_internal_u64_to_size(element_count, NULL))
+    else if (!ssz_internal_u64_to_size(element_count, NULL))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if (ssz_internal_mul_overflow_size((size_t)element_count, SSZ_BYTES_PER_LENGTH_OFFSET, &fixed_region))
+    else if (ssz_internal_mul_overflow_size((size_t)element_count, SSZ_BYTES_PER_LENGTH_OFFSET, &fixed_region))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
+    else
+    {
+        total = fixed_region;
+        for (uint64_t i = 0u; (i < element_count) && (err == SSZ_SUCCESS); i++)
+        {
+            size_t encoded_len = 0u;
 
-    total = fixed_region;
-    for (uint64_t i = 0u; i < element_count; i++)
-    {
-        size_t encoded_len = 0u;
-        ssz_error_t err = codec->write(codec->ctx, i, NULL, 0u, &encoded_len);
-        if (err != SSZ_SUCCESS)
-        {
-            return err;
-        }
-        if (ssz_internal_add_overflow_size(total, encoded_len, &total))
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-    }
-    if (total > UINT32_MAX)
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    ssz_error_t err = ssz_internal_prepare_output(total, out, out_cap, out_len);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    if (out == NULL)
-    {
-        return SSZ_SUCCESS;
-    }
-
-    size_t cursor = fixed_region;
-    for (uint64_t i = 0u; i < element_count; i++)
-    {
-        size_t expected_len = 0u;
-        err = codec->write(codec->ctx, i, NULL, 0u, &expected_len);
-        if (err != SSZ_SUCCESS)
-        {
-            return err;
-        }
-
-        ssz_internal_write_u32_le(out + (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET, (uint32_t)cursor);
-
-        size_t written = 0u;
-        err = codec->write(codec->ctx, i, out + cursor, out_cap - cursor, &written);
-        if (err != SSZ_SUCCESS)
-        {
-            return err;
-        }
-        if (written != expected_len)
-        {
-            return SSZ_ERR_TYPE_MISMATCH;
-        }
-        if (ssz_internal_add_overflow_size(cursor, written, &cursor))
-        {
-            return SSZ_ERR_OVERFLOW;
+            err = codec->write(codec->ctx, i, NULL, 0u, &encoded_len);
+            if ((err == SSZ_SUCCESS) && ssz_internal_add_overflow_size(total, encoded_len, &total))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
         }
     }
+    if ((err == SSZ_SUCCESS) && (total > UINT32_MAX))
+    {
+        err = SSZ_ERR_OVERFLOW;
+    }
+    if (err == SSZ_SUCCESS)
+    {
+        err = ssz_internal_prepare_output(total, out, out_cap, out_len);
+    }
+    if ((err == SSZ_SUCCESS) && (out != NULL))
+    {
+        size_t cursor = fixed_region;
 
-    return (cursor == total) ? SSZ_SUCCESS : SSZ_ERR_TYPE_MISMATCH;
+        for (uint64_t i = 0u; (i < element_count) && (err == SSZ_SUCCESS); i++)
+        {
+            if (cursor > UINT32_MAX)
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
+            {
+                size_t expected_len = 0u;
+                size_t written = 0u;
+
+                err = codec->write(codec->ctx, i, NULL, 0u, &expected_len);
+                if (err == SSZ_SUCCESS)
+                {
+                    ssz_internal_write_u32_le(&out[(size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET], (uint32_t)cursor);
+                    err = codec->write(codec->ctx, i, &out[cursor], out_cap - cursor, &written);
+                    if ((err == SSZ_SUCCESS) && (written != expected_len))
+                    {
+                        err = SSZ_ERR_TYPE_MISMATCH;
+                    }
+                    if ((err == SSZ_SUCCESS) && ssz_internal_add_overflow_size(cursor, written, &cursor))
+                    {
+                        err = SSZ_ERR_OVERFLOW;
+                    }
+                }
+            }
+        }
+
+        if ((err == SSZ_SUCCESS) && (cursor != total))
+        {
+            err = SSZ_ERR_TYPE_MISMATCH;
+        }
+    }
+
+    return err;
 }
 
 ssz_error_t ssz_serialize_list_fixed(
@@ -388,39 +403,38 @@ ssz_error_t ssz_serialize_list_fixed(
     size_t *out_len)
 {
     size_t required = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if (element_size == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
+    else if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
     {
-        return SSZ_ERR_LIMIT_EXCEEDED;
+        err = SSZ_ERR_LIMIT_EXCEEDED;
     }
-    if (!ssz_internal_u64_to_size(element_count, NULL))
+    else if (!ssz_internal_u64_to_size(element_count, NULL))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &required))
+    else if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &required))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if ((required != 0u) && (elements == NULL))
+    else if ((required != 0u) && (elements == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        err = ssz_internal_prepare_output(required, out, out_cap, out_len);
+        if ((err == SSZ_SUCCESS) && (out != NULL) && (required != 0u))
+        {
+            (void)memcpy(out, elements, required);
+        }
     }
 
-    ssz_error_t err = ssz_internal_prepare_output(required, out, out_cap, out_len);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    if ((out != NULL) && (required != 0u))
-    {
-        memcpy(out, elements, required);
-    }
-
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_serialize_list_variable(
@@ -433,94 +447,99 @@ ssz_error_t ssz_serialize_list_variable(
 {
     size_t fixed_region = 0u;
     size_t total = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
     {
-        return SSZ_ERR_LIMIT_EXCEEDED;
+        err = SSZ_ERR_LIMIT_EXCEEDED;
     }
-    if ((codec == NULL) || (codec->write == NULL))
+    else if ((codec == NULL) || (codec->write == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (!ssz_internal_u64_to_size(element_count, NULL))
+    else if (!ssz_internal_u64_to_size(element_count, NULL))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if (ssz_internal_mul_overflow_size((size_t)element_count, SSZ_BYTES_PER_LENGTH_OFFSET, &fixed_region))
+    else if (ssz_internal_mul_overflow_size((size_t)element_count, SSZ_BYTES_PER_LENGTH_OFFSET, &fixed_region))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-
-    if (out != NULL)
+    else if (out != NULL)
     {
         if (out_len == NULL)
         {
-            return SSZ_ERR_INVALID_ARGUMENT;
+            err = SSZ_ERR_INVALID_ARGUMENT;
         }
-        if (out_cap < fixed_region)
+        else if (out_cap < fixed_region)
         {
-            return SSZ_ERR_BUFFER_TOO_SMALL;
+            err = SSZ_ERR_BUFFER_TOO_SMALL;
         }
-
-        size_t cursor = fixed_region;
-        for (uint64_t i = 0u; i < element_count; i++)
+        else
         {
-            if (cursor > UINT32_MAX)
-            {
-                return SSZ_ERR_OVERFLOW;
-            }
-            ssz_internal_write_u32_le(out + (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET, (uint32_t)cursor);
+            size_t cursor = fixed_region;
 
-            if (cursor > out_cap)
+            for (uint64_t i = 0u; (i < element_count) && (err == SSZ_SUCCESS); i++)
             {
-                return SSZ_ERR_BUFFER_TOO_SMALL;
+                if (cursor > UINT32_MAX)
+                {
+                    err = SSZ_ERR_OVERFLOW;
+                }
+                else
+                {
+                    ssz_internal_write_u32_le(&out[(size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET], (uint32_t)cursor);
+
+                    if (cursor > out_cap)
+                    {
+                        err = SSZ_ERR_BUFFER_TOO_SMALL;
+                    }
+                    else
+                    {
+                        size_t written = 0u;
+
+                        err = codec->write(codec->ctx, i, &out[cursor], out_cap - cursor, &written);
+                        if ((err == SSZ_SUCCESS) && ssz_internal_add_overflow_size(cursor, written, &cursor))
+                        {
+                            err = SSZ_ERR_OVERFLOW;
+                        }
+                    }
+                }
             }
 
-            size_t written = 0u;
-            ssz_error_t err = codec->write(codec->ctx, i, out + cursor, out_cap - cursor, &written);
-            if (err != SSZ_SUCCESS)
+            if ((err == SSZ_SUCCESS) && (cursor > UINT32_MAX))
             {
-                return err;
+                err = SSZ_ERR_OVERFLOW;
             }
-            if (ssz_internal_add_overflow_size(cursor, written, &cursor))
+            if (err == SSZ_SUCCESS)
             {
-                return SSZ_ERR_OVERFLOW;
+                *out_len = cursor;
             }
         }
-
-        if (cursor > UINT32_MAX)
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-        *out_len = cursor;
-        return SSZ_SUCCESS;
     }
-
-    total = fixed_region;
-    for (uint64_t i = 0u; i < element_count; i++)
+    else
     {
-        size_t encoded_len = 0u;
-        ssz_error_t err = codec->write(codec->ctx, i, NULL, 0u, &encoded_len);
-        if (err != SSZ_SUCCESS)
+        total = fixed_region;
+        for (uint64_t i = 0u; (i < element_count) && (err == SSZ_SUCCESS); i++)
         {
-            return err;
+            size_t encoded_len = 0u;
+
+            err = codec->write(codec->ctx, i, NULL, 0u, &encoded_len);
+            if ((err == SSZ_SUCCESS) && ssz_internal_add_overflow_size(total, encoded_len, &total))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
         }
-        if (ssz_internal_add_overflow_size(total, encoded_len, &total))
+        if ((err == SSZ_SUCCESS) && (total > UINT32_MAX))
         {
-            return SSZ_ERR_OVERFLOW;
+            err = SSZ_ERR_OVERFLOW;
         }
-    }
-    if (total > UINT32_MAX)
-    {
-        return SSZ_ERR_OVERFLOW;
+        if (err == SSZ_SUCCESS)
+        {
+            err = ssz_internal_prepare_output(total, out, out_cap, out_len);
+        }
     }
 
-    ssz_error_t err = ssz_internal_prepare_output(total, out, out_cap, out_len);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_serialize_container(
@@ -533,136 +552,150 @@ ssz_error_t ssz_serialize_container(
 {
     size_t fixed_region = 0u;
     size_t total = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if ((field_fixed_sizes == NULL) || (field_count == 0u))
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if ((codec == NULL) || (codec->write == NULL))
+    else if ((codec == NULL) || (codec->write == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    for (uint32_t i = 0u; i < field_count; i++)
+    else
     {
-        size_t fixed_size = field_fixed_sizes[i];
-        size_t contribution = (fixed_size == 0u) ? SSZ_BYTES_PER_LENGTH_OFFSET : fixed_size;
-        if (ssz_internal_add_overflow_size(fixed_region, contribution, &fixed_region))
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-    }
-
-    if (out != NULL)
-    {
-        if (out_len == NULL)
-        {
-            return SSZ_ERR_INVALID_ARGUMENT;
-        }
-        if (fixed_region > UINT32_MAX)
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-        if (out_cap < fixed_region)
-        {
-            return SSZ_ERR_BUFFER_TOO_SMALL;
-        }
-
-        size_t fixed_cursor = 0u;
-        size_t variable_cursor = fixed_region;
-
         for (uint32_t i = 0u; i < field_count; i++)
         {
             size_t fixed_size = field_fixed_sizes[i];
-            size_t written = 0u;
-            ssz_error_t err = SSZ_SUCCESS;
+            size_t contribution = (fixed_size == 0u) ? SSZ_BYTES_PER_LENGTH_OFFSET : fixed_size;
 
-            if (fixed_size == 0u)
+            if (ssz_internal_add_overflow_size(fixed_region, contribution, &fixed_region))
             {
-                if (variable_cursor > UINT32_MAX)
-                {
-                    return SSZ_ERR_OVERFLOW;
-                }
-                ssz_internal_write_u32_le(out + fixed_cursor, (uint32_t)variable_cursor);
-                fixed_cursor += SSZ_BYTES_PER_LENGTH_OFFSET;
-
-                if (variable_cursor > out_cap)
-                {
-                    return SSZ_ERR_BUFFER_TOO_SMALL;
-                }
-
-                err = codec->write(codec->ctx, i, out + variable_cursor, out_cap - variable_cursor, &written);
-                if (err != SSZ_SUCCESS)
-                {
-                    return err;
-                }
-                if (ssz_internal_add_overflow_size(variable_cursor, written, &variable_cursor))
-                {
-                    return SSZ_ERR_OVERFLOW;
-                }
-            }
-            else
-            {
-                err = codec->write(codec->ctx, i, out + fixed_cursor, fixed_size, &written);
-                if (err != SSZ_SUCCESS)
-                {
-                    return err;
-                }
-                if (written != fixed_size)
-                {
-                    return SSZ_ERR_TYPE_MISMATCH;
-                }
-                fixed_cursor += fixed_size;
+                err = SSZ_ERR_OVERFLOW;
+                break;
             }
         }
-
-        if (fixed_cursor != fixed_region)
-        {
-            return SSZ_ERR_TYPE_MISMATCH;
-        }
-        if (variable_cursor > UINT32_MAX)
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-
-        *out_len = variable_cursor;
-        return SSZ_SUCCESS;
     }
-
-    total = fixed_region;
-    for (uint32_t i = 0u; i < field_count; i++)
+    if ((err == SSZ_SUCCESS) && (out != NULL))
     {
-        size_t encoded_len = 0u;
-        ssz_error_t err = codec->write(codec->ctx, i, NULL, 0u, &encoded_len);
-        if (err != SSZ_SUCCESS)
+        if (out_len == NULL)
         {
-            return err;
+            err = SSZ_ERR_INVALID_ARGUMENT;
         }
-
-        if (field_fixed_sizes[i] == 0u)
+        else if (fixed_region > UINT32_MAX)
         {
-            if (ssz_internal_add_overflow_size(total, encoded_len, &total))
+            err = SSZ_ERR_OVERFLOW;
+        }
+        else if (out_cap < fixed_region)
+        {
+            err = SSZ_ERR_BUFFER_TOO_SMALL;
+        }
+        else
+        {
+            size_t fixed_cursor = 0u;
+            size_t variable_cursor = fixed_region;
+
+            for (uint32_t i = 0u; (i < field_count) && (err == SSZ_SUCCESS); i++)
             {
-                return SSZ_ERR_OVERFLOW;
+                size_t fixed_size = field_fixed_sizes[i];
+                size_t written = 0u;
+
+                if (fixed_size == 0u)
+                {
+                    if (variable_cursor > UINT32_MAX)
+                    {
+                        err = SSZ_ERR_OVERFLOW;
+                    }
+                    else
+                    {
+                        ssz_internal_write_u32_le(&out[fixed_cursor], (uint32_t)variable_cursor);
+                        fixed_cursor += SSZ_BYTES_PER_LENGTH_OFFSET;
+
+                        if (variable_cursor > out_cap)
+                        {
+                            err = SSZ_ERR_BUFFER_TOO_SMALL;
+                        }
+                        else
+                        {
+                            err = codec->write(codec->ctx, i, &out[variable_cursor], out_cap - variable_cursor, &written);
+                            if ((err == SSZ_SUCCESS) &&
+                                ssz_internal_add_overflow_size(variable_cursor, written, &variable_cursor))
+                            {
+                                err = SSZ_ERR_OVERFLOW;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    err = codec->write(codec->ctx, i, &out[fixed_cursor], fixed_size, &written);
+                    if ((err == SSZ_SUCCESS) && (written != fixed_size))
+                    {
+                        err = SSZ_ERR_TYPE_MISMATCH;
+                    }
+                    else if (err == SSZ_SUCCESS)
+                    {
+                        fixed_cursor += fixed_size;
+                    }
+                    else
+                    {
+                        /* intentionally empty */
+                    }
+                }
+            }
+
+            if ((err == SSZ_SUCCESS) && (fixed_cursor != fixed_region))
+            {
+                err = SSZ_ERR_TYPE_MISMATCH;
+            }
+            if ((err == SSZ_SUCCESS) && (variable_cursor > UINT32_MAX))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            if (err == SSZ_SUCCESS)
+            {
+                *out_len = variable_cursor;
             }
         }
-        else if (encoded_len != field_fixed_sizes[i])
+    }
+    if ((err == SSZ_SUCCESS) && (out == NULL))
+    {
+        total = fixed_region;
+        for (uint32_t i = 0u; (i < field_count) && (err == SSZ_SUCCESS); i++)
         {
-            return SSZ_ERR_TYPE_MISMATCH;
+            size_t encoded_len = 0u;
+
+            err = codec->write(codec->ctx, i, NULL, 0u, &encoded_len);
+            if (err == SSZ_SUCCESS)
+            {
+                if (field_fixed_sizes[i] == 0u)
+                {
+                    if (ssz_internal_add_overflow_size(total, encoded_len, &total))
+                    {
+                        err = SSZ_ERR_OVERFLOW;
+                    }
+                }
+                else if (encoded_len != field_fixed_sizes[i])
+                {
+                    err = SSZ_ERR_TYPE_MISMATCH;
+                }
+                else
+                {
+                    /* intentionally empty */
+                }
+            }
+        }
+        if ((err == SSZ_SUCCESS) && (total > UINT32_MAX))
+        {
+            err = SSZ_ERR_OVERFLOW;
+        }
+        if (err == SSZ_SUCCESS)
+        {
+            err = ssz_internal_prepare_output(total, out, out_cap, out_len);
         }
     }
 
-    if (total > UINT32_MAX)
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    ssz_error_t err = ssz_internal_prepare_output(total, out, out_cap, out_len);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_serialize_union(
@@ -676,69 +709,66 @@ ssz_error_t ssz_serialize_union(
 {
     size_t payload_len = 0u;
     size_t total = 1u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if (option_count == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if (option_count > 256u)
+    else if (option_count > 256u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if (has_none && (option_count < 2u))
+    else if (has_none && (option_count < 2u))
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if ((uint32_t)selector >= option_count)
+    else if ((uint32_t)selector >= option_count)
     {
-        return SSZ_ERR_SELECTOR_INVALID;
+        err = SSZ_ERR_SELECTOR_INVALID;
     }
-
-    if (!(has_none && (selector == 0u)))
+    else if (!(has_none && (selector == 0u)))
     {
         if ((codec == NULL) || (codec->write == NULL))
         {
-            return SSZ_ERR_INVALID_ARGUMENT;
+            err = SSZ_ERR_INVALID_ARGUMENT;
         }
-        ssz_error_t err = codec->write(codec->ctx, selector, NULL, 0u, &payload_len);
-        if (err != SSZ_SUCCESS)
+        else
         {
-            return err;
+            err = codec->write(codec->ctx, selector, NULL, 0u, &payload_len);
+            if (err == SSZ_SUCCESS)
+            {
+                if (ssz_internal_add_overflow_size(total, payload_len, &total))
+                {
+                    err = SSZ_ERR_OVERFLOW;
+                }
+            }
         }
-        if (ssz_internal_add_overflow_size(total, payload_len, &total))
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+    if (err == SSZ_SUCCESS)
+    {
+        err = ssz_internal_prepare_output(total, out, out_cap, out_len);
+    }
+    if ((err == SSZ_SUCCESS) && (out != NULL))
+    {
+        out[0] = selector;
+        if (total != 1u)
         {
-            return SSZ_ERR_OVERFLOW;
+            size_t written = 0u;
+
+            err = codec->write(codec->ctx, selector, &out[1u], out_cap - 1u, &written);
+            if ((err == SSZ_SUCCESS) && (written != payload_len))
+            {
+                err = SSZ_ERR_TYPE_MISMATCH;
+            }
         }
     }
 
-    ssz_error_t err = ssz_internal_prepare_output(total, out, out_cap, out_len);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    if (out == NULL)
-    {
-        return SSZ_SUCCESS;
-    }
-
-    out[0] = selector;
-    if (total == 1u)
-    {
-        return SSZ_SUCCESS;
-    }
-
-    size_t written = 0u;
-    err = codec->write(codec->ctx, selector, out + 1u, out_cap - 1u, &written);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    if (written != payload_len)
-    {
-        return SSZ_ERR_TYPE_MISMATCH;
-    }
-
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_serialize_compatible_union(
@@ -752,55 +782,47 @@ ssz_error_t ssz_serialize_compatible_union(
 {
     size_t payload_len = 0u;
     size_t total = 1u;
+    ssz_error_t err = ssz_internal_validate_compatible_union_schema(allowed_selectors, allowed_selector_count);
 
-    ssz_error_t schema_err =
-        ssz_internal_validate_compatible_union_schema(allowed_selectors, allowed_selector_count);
-    if (schema_err != SSZ_SUCCESS)
-    {
-        return schema_err;
-    }
-
-    if ((selector == 0u) || (selector > 127u) ||
-        !ssz_internal_selector_allowed(selector, allowed_selectors, allowed_selector_count))
-    {
-        return SSZ_ERR_SELECTOR_INVALID;
-    }
-    if ((codec == NULL) || (codec->write == NULL))
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-
-    ssz_error_t err = codec->write(codec->ctx, selector, NULL, 0u, &payload_len);
     if (err != SSZ_SUCCESS)
     {
-        return err;
+        /* schema validation error already captured */
     }
-    if (ssz_internal_add_overflow_size(total, payload_len, &total))
+    else if ((selector == 0u) || (selector > 127u) ||
+             !ssz_internal_selector_allowed(selector, allowed_selectors, allowed_selector_count))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_SELECTOR_INVALID;
+    }
+    else if ((codec == NULL) || (codec->write == NULL))
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        err = codec->write(codec->ctx, selector, NULL, 0u, &payload_len);
+        if (err == SSZ_SUCCESS)
+        {
+            if (ssz_internal_add_overflow_size(total, payload_len, &total))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+        }
+        if (err == SSZ_SUCCESS)
+        {
+            err = ssz_internal_prepare_output(total, out, out_cap, out_len);
+        }
+        if ((err == SSZ_SUCCESS) && (out != NULL))
+        {
+            size_t written = 0u;
+
+            out[0] = selector;
+            err = codec->write(codec->ctx, selector, &out[1u], out_cap - 1u, &written);
+            if ((err == SSZ_SUCCESS) && (written != payload_len))
+            {
+                err = SSZ_ERR_TYPE_MISMATCH;
+            }
+        }
     }
 
-    err = ssz_internal_prepare_output(total, out, out_cap, out_len);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    if (out == NULL)
-    {
-        return SSZ_SUCCESS;
-    }
-
-    out[0] = selector;
-    size_t written = 0u;
-    err = codec->write(codec->ctx, selector, out + 1u, out_cap - 1u, &written);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    if (written != payload_len)
-    {
-        return SSZ_ERR_TYPE_MISMATCH;
-    }
-
-    return SSZ_SUCCESS;
+    return err;
 }

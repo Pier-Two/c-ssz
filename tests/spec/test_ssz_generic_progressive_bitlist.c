@@ -101,7 +101,7 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
         goto done;
     }
 
-    if (ssz_deserialize_progressive_bitlist(serialized, serialized_len, bits, bitfield_cap, &bit_len) !=
+    if (ssz_deserialize_bitlist(serialized, serialized_len, SSZ_NO_LIMIT, bits, bitfield_cap, &bit_len) !=
         SSZ_SUCCESS)
     {
         report->valid_failed++;
@@ -109,7 +109,7 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
         goto done;
     }
 
-    if (ssz_serialize_progressive_bitlist(bits, bitfield_cap, bit_len, NULL, 0u, &reencoded_len) !=
+    if (ssz_serialize_bitlist(bits, bitfield_cap, bit_len, SSZ_NO_LIMIT, NULL, 0u, &reencoded_len) !=
         SSZ_SUCCESS)
     {
         report->valid_failed++;
@@ -125,7 +125,7 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
         goto done;
     }
 
-    if (ssz_serialize_progressive_bitlist(bits, bitfield_cap, bit_len, reencoded, reencoded_len,
+    if (ssz_serialize_bitlist(bits, bitfield_cap, bit_len, SSZ_NO_LIMIT, reencoded, reencoded_len,
             &reencoded_len) != SSZ_SUCCESS)
     {
         report->valid_failed++;
@@ -207,7 +207,7 @@ static void run_invalid_case(spec_report_t *report, const char *suite_dir, const
         goto done;
     }
 
-    err = ssz_deserialize_progressive_bitlist(serialized, serialized_len, bits, bitfield_cap, &bit_len);
+    err = ssz_deserialize_bitlist(serialized, serialized_len, SSZ_NO_LIMIT, bits, bitfield_cap, &bit_len);
     if (err == SSZ_SUCCESS)
     {
         report->invalid_failed++;

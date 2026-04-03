@@ -74,6 +74,9 @@ target_include_directories(ssz
 
 target_link_libraries(ssz PUBLIC ${SSZ_PLATFORM_LIBS} ${SSZ_CRYPTO_LIB})
 
+option(SSZ_BUILD_TESTS "Build c-ssz unit and spec tests" ON)
+
+if(SSZ_BUILD_TESTS)
 enable_testing()
 
 add_executable(test_serialize tests/unit/test_serialize.c)
@@ -97,12 +100,19 @@ target_link_libraries(test_proof PRIVATE ssz)
 add_test(NAME test_proof COMMAND test_proof)
 
 add_executable(test_hash tests/unit/test_hash.c)
+target_include_directories(test_hash PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
 target_link_libraries(test_hash PRIVATE ssz)
 add_test(NAME test_hash COMMAND test_hash)
 
 add_executable(test_types tests/unit/test_types.c)
 target_link_libraries(test_types PRIVATE ssz)
 add_test(NAME test_types COMMAND test_types)
+
+add_executable(test_default tests/unit/test_default.c)
+target_link_libraries(test_default PRIVATE ssz)
+add_test(NAME test_default COMMAND test_default)
 
 # --- Internal tests (#include .c files for static function access) ---
 # These do NOT link against libssz — the tested source file is #included
@@ -146,6 +156,22 @@ target_include_directories(test_merkle_internal PRIVATE
 )
 target_link_libraries(test_merkle_internal PRIVATE ${SSZ_PLATFORM_LIBS} ${SSZ_CRYPTO_LIB})
 add_test(NAME test_merkle_internal COMMAND test_merkle_internal)
+
+# test_types_internal: #includes ssz_types.c — compile everything else
+set(SSZ_SOURCES_NO_TYPES ${SSZ_COMMON_SOURCES})
+list(REMOVE_ITEM SSZ_SOURCES_NO_TYPES src/ssz_types.c)
+
+add_executable(
+  test_types_internal
+  tests/unit/test_types_internal.c
+  ${SSZ_SOURCES_NO_TYPES}
+)
+target_include_directories(test_types_internal PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_link_libraries(test_types_internal PRIVATE ${SSZ_PLATFORM_LIBS} ${SSZ_CRYPTO_LIB})
+add_test(NAME test_types_internal COMMAND test_types_internal)
 
 # test_merkle_cache_internal: #includes ssz_merkle_cache.c — compile everything else
 set(SSZ_SOURCES_NO_MERKLE_CACHE ${SSZ_COMMON_SOURCES})
@@ -259,6 +285,8 @@ if(EXISTS "${SSZ_SPEC_FIXTURES_DIR}")
 else()
   message(STATUS "Spec fixtures not found at ${SSZ_SPEC_FIXTURES_DIR} — skipping spec tests")
 endif()
+
+endif() # SSZ_BUILD_TESTS
 
 find_package(Doxygen QUIET)
 if(DOXYGEN_FOUND)

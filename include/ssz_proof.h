@@ -20,22 +20,31 @@ ssz_error_t ssz_get_generalized_index(
 
 static inline uint64_t ssz_next_pow_of_two(uint64_t i)
 {
-    if (i <= 1u)
+    const uint64_t max_power_of_two = UINT64_MAX - (UINT64_MAX >> 1u);
+    uint64_t value = i;
+    uint64_t result = 0u;
+
+    if (value <= 1u)
     {
-        return 1u;
+        result = 1u;
     }
-    if (i > (UINT64_C(1) << 63u))
+    else if (value > max_power_of_two)
     {
-        return 0u;
+        result = 0u;
     }
-    i--;
-    i |= i >> 1u;
-    i |= i >> 2u;
-    i |= i >> 4u;
-    i |= i >> 8u;
-    i |= i >> 16u;
-    i |= i >> 32u;
-    return i + 1u;
+    else
+    {
+        value--;
+        value |= value >> 1u;
+        value |= value >> 2u;
+        value |= value >> 4u;
+        value |= value >> 8u;
+        value |= value >> 16u;
+        value |= value >> 32u;
+        result = value + 1u;
+    }
+
+    return result;
 }
 
 ssz_error_t ssz_get_branch_indices(
@@ -53,9 +62,11 @@ ssz_error_t ssz_get_path_indices(
 static inline size_t ssz_generalized_index_length(ssz_gindex_t index)
 {
     size_t length = 0u;
-    while (index > 1u)
+    ssz_gindex_t current_index = index;
+
+    while (current_index > 1u)
     {
-        index >>= 1u;
+        current_index >>= 1u;
         length++;
     }
     return length;
@@ -73,11 +84,15 @@ static inline ssz_gindex_t ssz_generalized_index_sibling(ssz_gindex_t index)
 
 static inline ssz_gindex_t ssz_generalized_index_child(ssz_gindex_t index, bool right_side)
 {
-    if (index >= (UINT64_C(1) << 63u))
+    const uint64_t max_power_of_two = UINT64_MAX - (UINT64_MAX >> 1u);
+    ssz_gindex_t child = 0u;
+
+    if (index < max_power_of_two)
     {
-        return 0u;
+        child = (index << 1u) | (right_side ? 1u : 0u);
     }
-    return (index << 1u) | (right_side ? 1u : 0u);
+
+    return child;
 }
 
 static inline ssz_gindex_t ssz_generalized_index_parent(ssz_gindex_t index)

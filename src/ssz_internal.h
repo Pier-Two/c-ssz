@@ -26,87 +26,130 @@ uint64_t ssz_internal_read_u64_le(const uint8_t in[8]);
 
 static inline bool ssz_internal_add_overflow_size(size_t a, size_t b, size_t *out)
 {
+    bool overflow = false;
+
     if (a > (SIZE_MAX - b))
     {
-        return true;
+        overflow = true;
     }
-    if (out != NULL)
+    else if (out != NULL)
     {
         *out = a + b;
     }
-    return false;
+    else
+    {
+        /* intentionally empty */
+    }
+
+    return overflow;
 }
 
 static inline bool ssz_internal_mul_overflow_size(size_t a, size_t b, size_t *out)
 {
+    bool overflow = false;
+
     if ((a != 0u) && (b > (SIZE_MAX / a)))
     {
-        return true;
+        overflow = true;
     }
-    if (out != NULL)
+    else if (out != NULL)
     {
         *out = a * b;
     }
-    return false;
+    else
+    {
+        /* intentionally empty */
+    }
+
+    return overflow;
 }
 
 static inline bool ssz_internal_add_overflow_u64(uint64_t a, uint64_t b, uint64_t *out)
 {
+    bool overflow = false;
+
     if (a > (UINT64_MAX - b))
     {
-        return true;
+        overflow = true;
     }
-    if (out != NULL)
+    else if (out != NULL)
     {
         *out = a + b;
     }
-    return false;
+    else
+    {
+        /* intentionally empty */
+    }
+
+    return overflow;
 }
 
 static inline bool ssz_internal_mul_overflow_u64(uint64_t a, uint64_t b, uint64_t *out)
 {
+    bool overflow = false;
+
     if ((a != 0u) && (b > (UINT64_MAX / a)))
     {
-        return true;
+        overflow = true;
     }
-    if (out != NULL)
+    else if (out != NULL)
     {
         *out = a * b;
     }
-    return false;
+    else
+    {
+        /* intentionally empty */
+    }
+
+    return overflow;
 }
 
 static inline bool ssz_internal_u64_to_size(uint64_t value, size_t *out)
 {
-    if (value > (uint64_t)SIZE_MAX)
+    bool converted = false;
+
+    if (value <= (uint64_t)SIZE_MAX)
     {
-        return false;
+        if (out != NULL)
+        {
+            *out = (size_t)value;
+        }
+        converted = true;
     }
-    if (out != NULL)
-    {
-        *out = (size_t)value;
-    }
-    return true;
+
+    return converted;
 }
 
 static inline bool ssz_internal_bits_to_bytes(uint64_t bit_count, size_t *out_bytes)
 {
     uint64_t bytes_u64 = 0u;
-    if (ssz_internal_add_overflow_u64(bit_count, 7u, &bytes_u64))
+    bool converted = false;
+
+    if (!ssz_internal_add_overflow_u64(bit_count, 7u, &bytes_u64))
     {
-        return false;
+        bytes_u64 /= 8u;
+        converted = ssz_internal_u64_to_size(bytes_u64, out_bytes);
     }
-    bytes_u64 /= 8u;
-    return ssz_internal_u64_to_size(bytes_u64, out_bytes);
+
+    return converted;
 }
 
 static inline size_t ssz_internal_count_bits_u8(uint8_t value)
 {
     size_t count = 0u;
-    while (value != 0u)
+    uint8_t remaining = value;
+
+    while (remaining != 0u)
     {
-        count += (size_t)(value & 1u);
-        value >>= 1u;
+        if ((remaining & 1u) != 0u)
+        {
+            count++;
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+        remaining >>= 1u;
     }
     return count;
 }
@@ -120,11 +163,58 @@ static inline bool ssz_internal_get_bit_le(const uint8_t *bits_le, uint64_t bit_
 
 static inline const ssz_hash_fn_t *ssz_internal_resolve_hash_fn(const ssz_hash_fn_t *hash_fn)
 {
+    const ssz_hash_fn_t *resolved_hash_fn = ssz_hash_default();
+
     if (hash_fn != NULL)
     {
-        return hash_fn;
+        resolved_hash_fn = hash_fn;
     }
-    return ssz_hash_default();
+
+    return resolved_hash_fn;
+}
+
+static inline bool ssz_internal_selector_allowed(
+    uint8_t selector,
+    const uint8_t *allowed_selectors,
+    uint32_t allowed_selector_count)
+{
+    bool allowed = false;
+
+    for (uint32_t i = 0u; i < allowed_selector_count; i++)
+    {
+        if (allowed_selectors[i] == selector)
+        {
+            allowed = true;
+            break;
+        }
+    }
+
+    return allowed;
+}
+
+static inline ssz_error_t ssz_internal_validate_compatible_union_schema(
+    const uint8_t *allowed_selectors,
+    uint32_t allowed_selector_count)
+{
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if ((allowed_selectors == NULL) || (allowed_selector_count == 0u))
+    {
+        err = SSZ_ERR_SCHEMA_INVALID;
+    }
+    else
+    {
+        for (uint32_t i = 0u; i < allowed_selector_count; i++)
+        {
+            if ((allowed_selectors[i] == 0u) || (allowed_selectors[i] > 127u))
+            {
+                err = SSZ_ERR_SCHEMA_INVALID;
+                break;
+            }
+        }
+    }
+
+    return err;
 }
 
 #ifdef __cplusplus

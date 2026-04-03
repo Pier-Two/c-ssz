@@ -30,6 +30,11 @@ static int g_init_state = 0;
 
 static ssz_chunk_t g_tree[MERKLE_TREE_NODE_CAP];
 static ssz_chunk_t g_root;
+static ssz_chunk_t g_bench_merkle_scratch_chunks[SSZ_MERKLE_SCRATCH_MAX_CHUNKS];
+static const ssz_merkle_scratch_t g_bench_merkle_scratch = {
+    .chunks = g_bench_merkle_scratch_chunks,
+    .chunk_count = SSZ_MERKLE_SCRATCH_MAX_CHUNKS,
+};
 
 static ssz_gindex_t g_single_index = 0u;
 static ssz_chunk_t g_single_leaf;
@@ -50,7 +55,6 @@ static ssz_chunk_t g_generated_multi_proof[MERKLE_HELPER_CAP];
 
 static ssz_gindex_t g_scratch_indices[MERKLE_SCRATCH_CAP];
 static ssz_chunk_t g_scratch_nodes[MERKLE_SCRATCH_CAP];
-
 static const uint8_t g_active_fields[2] = {0x0Fu, 0x01u};
 
 static const ssz_gindex_type_t g_gindex_leaf = {
@@ -243,7 +247,8 @@ UBENCH(merkle, merkleize)
     }
 
     ssz_chunk_t root;
-    BENCH_EXPECT_OK(ssz_merkleize(&g_tree[MERKLE_LEAF_COUNT], MERKLE_LEAF_COUNT, SSZ_NO_LIMIT, NULL, &root));
+    BENCH_EXPECT_OK(ssz_merkleize(
+        &g_tree[MERKLE_LEAF_COUNT], MERKLE_LEAF_COUNT, SSZ_NO_LIMIT, &g_bench_merkle_scratch, NULL, &root));
     ubench_do_nothing((void *)&root);
 }
 
@@ -256,7 +261,8 @@ UBENCH(merkle, merkleize_progressive)
     }
 
     ssz_chunk_t root;
-    BENCH_EXPECT_OK(ssz_merkleize_progressive(&g_tree[MERKLE_LEAF_COUNT], MERKLE_LEAF_COUNT, NULL, &root));
+    BENCH_EXPECT_OK(ssz_merkleize_progressive(
+        &g_tree[MERKLE_LEAF_COUNT], MERKLE_LEAF_COUNT, &g_bench_merkle_scratch, NULL, &root));
     ubench_do_nothing((void *)&root);
 }
 

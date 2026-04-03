@@ -1,165 +1,136 @@
+#include "ssz_merkle_cache.h"
+
+#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <assert.h>
 #include <string.h>
 
 #include "ssz_hash.h"
 #include "ssz_internal.h"
 #include "ssz_merkle.h"
-#include "ssz_merkle_cache.h"
 
 typedef struct
 {
     uint64_t *bits;
     size_t *word_idx;
-    size_t word_count;
+    size_t *word_count;
     size_t word_capacity;
 } ssz_merkle_cache_dirty_set_t;
 
-struct ssz_merkle_cache
+static bool ssz_merkle_cache_internal_struct_size_valid(size_t actual, size_t expected)
 {
-    const ssz_hash_fn_t *hash_fn;
-    const ssz_chunk_t *zero_hashes;
-    ssz_chunk_t zero_hashes_buf[64];
-
-    ssz_chunk_t *nodes;
-    size_t level_offsets[64];
-    uint64_t leaf_capacity;
-    uint32_t depth;
-
-    uint64_t leaf_limit;
-    uint64_t leaf_count;
-    uint64_t logical_length;
-    bool mix_in_length;
-
-    uint64_t *leaf_dirty_bits;
-    size_t *leaf_dirty_word_idx;
-    size_t leaf_dirty_word_count;
-    size_t leaf_dirty_word_capacity;
-
-    ssz_merkle_cache_dirty_set_t scratch_dirty[2];
-
-    ssz_chunk_t *scratch_pairs;
-    ssz_chunk_t *scratch_hashes;
-    uint64_t *scratch_parent_indices;
-    size_t scratch_pair_capacity;
-
-    uint64_t *leaf_tokens;
-    uint64_t *leaf_token_valid_bits;
-    size_t leaf_token_capacity;
-    size_t leaf_token_word_capacity;
-    bool token_storage_ready;
-
-    bool data_root_valid;
-    bool final_root_valid;
-    bool needs_resync;
-    ssz_chunk_t cached_data_root;
-    ssz_chunk_t cached_root;
-};
-
-/* Portable 32-byte-aligned allocation for ssz_chunk_t arrays (C99). */
-static void *ssz_merkle_cache_internal_alloc_aligned32(size_t size)
-{
-    if (size == 0u)
-    {
-        size = 1u;
-    }
-
-    {
-        size_t total = 0u;
-        if (ssz_internal_add_overflow_size(size, 32u + sizeof(void *), &total))
-        {
-            return NULL;
-        }
-
-        void *raw = malloc(total);
-        if (raw == NULL)
-        {
-            return NULL;
-        }
-
-        {
-            uintptr_t aligned = ((uintptr_t)raw + sizeof(void *) + 31u) & ~(uintptr_t)31u;
-            ((void **)aligned)[-1] = raw;
-            return (void *)aligned;
-        }
-    }
+    return actual >= expected;
 }
 
-static void ssz_merkle_cache_internal_free_aligned32(void *ptr)
+static bool ssz_merkle_cache_internal_pointer_available(const void *ptr, size_t count)
 {
-    if (ptr != NULL)
+    bool available = true;
+
+    if ((count != 0u) && (ptr == NULL))
     {
-        free(((void **)ptr)[-1]);
+        available = false;
     }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    return available;
+}
+
+static bool ssz_merkle_cache_internal_cache_is_bound(const ssz_merkle_cache_t *cache)
+{
+    bool is_bound = false;
+
+    if ((cache != NULL) &&
+        ssz_merkle_cache_internal_struct_size_valid(cache->struct_size, sizeof(*cache)) &&
+        (cache->nodes != NULL) && (cache->zero_hashes != NULL))
+    {
+        is_bound = true;
+    }
+    else
+    {
+        is_bound = false;
+    }
+
+    return is_bound;
+}
+
+static bool ssz_merkle_cache_internal_storage_has_tokens(const ssz_merkle_cache_storage_t *storage)
+{
+    bool has_tokens = false;
+
+    if (storage != NULL)
+    {
+        has_tokens = (storage->token_values != NULL) || (storage->token_values_count != 0u) ||
+                     (storage->token_valid_bits != NULL) || (storage->token_valid_words != 0u);
+    }
+    else
+    {
+        has_tokens = false;
+    }
+
+    return has_tokens;
+}
+
+static bool ssz_merkle_cache_internal_is_power_of_two_u64(uint64_t value)
+{
+    bool is_power = false;
+
+    if ((value != 0u) && ((value & (value - 1u)) == 0u))
+    {
+        is_power = true;
+    }
+    else
+    {
+        is_power = false;
+    }
+
+    return is_power;
 }
 
 static uint32_t ssz_merkle_cache_internal_log2_u64(uint64_t value)
 {
     uint32_t depth = 0u;
-    while (value > 1u)
+    uint64_t current_value = value;
+
+    while (current_value > 1u)
     {
-        value >>= 1u;
+        current_value >>= 1u;
         depth++;
     }
     return depth;
 }
 
-static size_t ssz_merkle_cache_internal_popcount_u64(uint64_t value)
-{
-    size_t count = 0u;
-    while (value != 0u)
-    {
-        value &= (value - 1u);
-        count++;
-    }
-    return count;
-}
-
 static unsigned ssz_merkle_cache_internal_ctz_u64(uint64_t value)
 {
     unsigned count = 0u;
-    while ((value & 1u) == 0u)
+    uint64_t remaining = value;
+
+    while ((remaining & 1u) == 0u)
     {
-        value >>= 1u;
+        remaining >>= 1u;
         count++;
     }
     return count;
 }
 
-static ssz_error_t ssz_merkle_cache_internal_grow_capacity(
-    size_t current_capacity,
-    size_t required,
-    size_t *out_capacity)
+static void ssz_merkle_cache_internal_sort_size_t_asc(size_t *arr, size_t count)
 {
-    size_t cap = (current_capacity == 0u) ? 8u : current_capacity;
-    while (cap < required)
+    for (size_t i = 1u; i < count; i++)
     {
-        if (cap > (SIZE_MAX / 2u))
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-        cap <<= 1u;
-    }
-    *out_capacity = cap;
-    return SSZ_SUCCESS;
-}
+        size_t key = arr[i];
+        size_t j = i;
 
-static int ssz_merkle_cache_internal_compare_size_t(const void *a, const void *b)
-{
-    const size_t va = *(const size_t *)a;
-    const size_t vb = *(const size_t *)b;
-    if (va < vb)
-    {
-        return -1;
+        while ((j > 0u) && (arr[j - 1u] > key))
+        {
+            arr[j] = arr[j - 1u];
+            j--;
+        }
+
+        arr[j] = key;
     }
-    if (va > vb)
-    {
-        return 1;
-    }
-    return 0;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_leaf_words_for_capacity(
@@ -167,63 +138,126 @@ static ssz_error_t ssz_merkle_cache_internal_leaf_words_for_capacity(
     size_t *out_words)
 {
     uint64_t words_u64 = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (out_words == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (ssz_internal_add_overflow_u64(leaf_capacity, 63u, &words_u64))
+    else if (ssz_internal_add_overflow_u64(leaf_capacity, 63u, &words_u64))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    words_u64 /= 64u;
-    if (!ssz_internal_u64_to_size(words_u64, out_words))
+    else
     {
-        return SSZ_ERR_OVERFLOW;
+        words_u64 /= 64u;
+        if (!ssz_internal_u64_to_size(words_u64, out_words))
+        {
+            err = SSZ_ERR_OVERFLOW;
+        }
+        else
+        {
+            /* intentionally empty */
+        }
     }
-    return SSZ_SUCCESS;
+
+    return err;
 }
 
-static ssz_error_t ssz_merkle_cache_internal_node_count(
-    uint64_t leaf_capacity,
-    size_t *out_node_count)
+static ssz_error_t ssz_merkle_cache_internal_parent_dirty_words_for_capacity(
+    uint64_t mutable_leaf_capacity,
+    size_t *out_words)
 {
-    uint64_t nodes_u64 = 0u;
-    if (out_node_count == NULL)
+    uint64_t words_u64 = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if (out_words == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (ssz_internal_mul_overflow_u64(leaf_capacity, 2u, &nodes_u64) || (nodes_u64 == 0u))
+    else if (mutable_leaf_capacity <= 1u)
     {
-        return SSZ_ERR_OVERFLOW;
+        *out_words = 0u;
     }
-    nodes_u64 -= 1u;
-    if (!ssz_internal_u64_to_size(nodes_u64, out_node_count))
+    else if (ssz_internal_add_overflow_u64(mutable_leaf_capacity, 127u, &words_u64))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    return SSZ_SUCCESS;
+    else
+    {
+        words_u64 /= 128u;
+        if (!ssz_internal_u64_to_size(words_u64, out_words))
+        {
+            err = SSZ_ERR_OVERFLOW;
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+    }
+
+    return err;
+}
+
+static ssz_error_t ssz_merkle_cache_internal_gather_pair_capacity_for_capacity(
+    uint64_t mutable_leaf_capacity,
+    size_t *out_pairs)
+{
+    uint64_t pairs_u64 = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if (out_pairs == NULL)
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (mutable_leaf_capacity <= 1u)
+    {
+        *out_pairs = 0u;
+    }
+    else if (ssz_internal_add_overflow_u64(mutable_leaf_capacity, 3u, &pairs_u64))
+    {
+        err = SSZ_ERR_OVERFLOW;
+    }
+    else
+    {
+        pairs_u64 /= 4u;
+        if (!ssz_internal_u64_to_size(pairs_u64, out_pairs))
+        {
+            err = SSZ_ERR_OVERFLOW;
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+    }
+
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_build_zero_hashes(
     const ssz_hash_fn_t *hash_fn,
     ssz_chunk_t out_zero_hashes[64])
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (out_zero_hashes == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    memset(out_zero_hashes[0].bytes, 0, SSZ_BYTES_PER_CHUNK);
-    for (size_t depth = 1u; depth < 64u; depth++)
+    else
     {
-        ssz_error_t err = ssz_hash_2to1(
-            hash_fn, &out_zero_hashes[depth - 1u], &out_zero_hashes[depth - 1u], &out_zero_hashes[depth]);
-        if (err != SSZ_SUCCESS)
+        (void)memset(out_zero_hashes[0].bytes, 0, SSZ_BYTES_PER_CHUNK);
+        for (size_t depth = 1u; (depth < 64u) && (err == SSZ_SUCCESS); depth++)
         {
-            return err;
+            err = ssz_hash_2to1(
+                hash_fn,
+                &out_zero_hashes[depth - 1u],
+                &out_zero_hashes[depth - 1u],
+                &out_zero_hashes[depth]);
         }
     }
-    return SSZ_SUCCESS;
+
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_compute_level_offsets(
@@ -233,132 +267,80 @@ static ssz_error_t ssz_merkle_cache_internal_compute_level_offsets(
 {
     uint64_t width = leaf_capacity;
     size_t running = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if (out_offsets == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    for (uint32_t level = 0u; level <= depth; level++)
+    else
     {
-        size_t width_sz = 0u;
-        out_offsets[level] = running;
-        if (!ssz_internal_u64_to_size(width, &width_sz))
+        for (uint32_t level = 0u; (level <= depth) && (err == SSZ_SUCCESS); level++)
         {
-            return SSZ_ERR_OVERFLOW;
+            size_t width_sz = 0u;
+
+            out_offsets[level] = running;
+            if (!ssz_internal_u64_to_size(width, &width_sz))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else if (ssz_internal_add_overflow_size(running, width_sz, &running))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
+            {
+                width >>= 1u;
+            }
         }
-        if (ssz_internal_add_overflow_size(running, width_sz, &running))
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-        width >>= 1u;
     }
 
-    return SSZ_SUCCESS;
-}
-
-static ssz_error_t ssz_merkle_cache_internal_allocate_nodes(
-    uint64_t leaf_capacity,
-    uint32_t depth,
-    const size_t level_offsets[64],
-    ssz_chunk_t **out_nodes)
-{
-    size_t node_count = 0u;
-    size_t bytes = 0u;
-    ssz_chunk_t *nodes = NULL;
-
-    if ((level_offsets == NULL) || (out_nodes == NULL))
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-
-    ssz_error_t err = ssz_merkle_cache_internal_node_count(leaf_capacity, &node_count);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    if (ssz_internal_mul_overflow_size(node_count, sizeof(*nodes), &bytes))
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    nodes = (ssz_chunk_t *)ssz_merkle_cache_internal_alloc_aligned32(bytes);
-    if (nodes == NULL)
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    *out_nodes = nodes;
-    (void)depth;
-    return SSZ_SUCCESS;
+    return err;
 }
 
 static void ssz_merkle_cache_internal_fill_zero_tree(ssz_merkle_cache_t *cache)
 {
     uint64_t width = cache->leaf_capacity;
-    for (uint32_t level = 0u; level <= cache->depth; level++)
+    bool stop = false;
+
+    for (uint32_t level = 0u; (level <= cache->depth) && !stop; level++)
     {
         size_t width_sz = 0u;
+
         if (!ssz_internal_u64_to_size(width, &width_sz))
         {
-            return;
+            stop = true;
         }
-
-        ssz_chunk_t *level_nodes = cache->nodes + cache->level_offsets[level];
-        for (size_t i = 0u; i < width_sz; i++)
+        else
         {
-            level_nodes[i] = cache->zero_hashes[level];
+            ssz_chunk_t *level_nodes = &cache->nodes[cache->level_offsets[level]];
+            for (size_t i = 0u; i < width_sz; i++)
+            {
+                level_nodes[i] = cache->zero_hashes[level];
+            }
+            width >>= 1u;
         }
-
-        width >>= 1u;
     }
 }
 
-static ssz_error_t ssz_merkle_cache_internal_dirty_set_init(
+static void ssz_merkle_cache_internal_bind_dirty_set(
     ssz_merkle_cache_dirty_set_t *set,
+    uint64_t *bits,
+    size_t *word_idx,
+    size_t *word_count,
     size_t word_capacity)
 {
-    uint64_t *bits = NULL;
-    size_t *word_idx = NULL;
-
-    if (set == NULL)
+    if (set != NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        set->bits = bits;
+        set->word_idx = word_idx;
+        set->word_count = word_count;
+        set->word_capacity = word_capacity;
     }
-
-    bits = (uint64_t *)calloc(word_capacity, sizeof(*bits));
-    if (bits == NULL)
+    else
     {
-        return SSZ_ERR_OVERFLOW;
+        /* intentionally empty */
     }
-
-    word_idx = (size_t *)malloc(word_capacity * sizeof(*word_idx));
-    if (word_idx == NULL)
-    {
-        free(bits);
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    set->bits = bits;
-    set->word_idx = word_idx;
-    set->word_count = 0u;
-    set->word_capacity = word_capacity;
-    return SSZ_SUCCESS;
-}
-
-static void ssz_merkle_cache_internal_dirty_set_free(ssz_merkle_cache_dirty_set_t *set)
-{
-    if (set == NULL)
-    {
-        return;
-    }
-
-    free(set->bits);
-    free(set->word_idx);
-    set->bits = NULL;
-    set->word_idx = NULL;
-    set->word_count = 0u;
-    set->word_capacity = 0u;
 }
 
 static void ssz_merkle_cache_internal_clear_dirty(
@@ -366,25 +348,30 @@ static void ssz_merkle_cache_internal_clear_dirty(
     size_t *word_idx,
     size_t *word_count)
 {
-    if ((bits == NULL) || (word_idx == NULL) || (word_count == NULL))
+    if ((bits != NULL) && (word_idx != NULL) && (word_count != NULL))
     {
-        return;
+        for (size_t i = 0u; i < *word_count; i++)
+        {
+            bits[word_idx[i]] = 0u;
+        }
+        *word_count = 0u;
     }
-
-    for (size_t i = 0u; i < *word_count; i++)
+    else
     {
-        bits[word_idx[i]] = 0u;
+        /* intentionally empty */
     }
-    *word_count = 0u;
 }
 
 static void ssz_merkle_cache_internal_dirty_set_clear(ssz_merkle_cache_dirty_set_t *set)
 {
-    if (set == NULL)
+    if ((set != NULL) && (set->word_count != NULL))
     {
-        return;
+        ssz_merkle_cache_internal_clear_dirty(set->bits, set->word_idx, set->word_count);
     }
-    ssz_merkle_cache_internal_clear_dirty(set->bits, set->word_idx, &set->word_count);
+    else
+    {
+        /* intentionally empty */
+    }
 }
 
 static ssz_error_t ssz_merkle_cache_internal_dirty_mark_bit(
@@ -397,53 +384,78 @@ static ssz_error_t ssz_merkle_cache_internal_dirty_mark_bit(
     size_t word = 0u;
     uint64_t mask = 0u;
     uint64_t prior = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if ((bits == NULL) || (word_idx == NULL) || (word_count == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    if (!ssz_internal_u64_to_size(bit_index >> 6u, &word))
+    else if (!ssz_internal_u64_to_size(bit_index >> 6u, &word))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if (word >= word_capacity)
+    else if (word >= word_capacity)
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-
-    mask = UINT64_C(1) << (bit_index & 63u);
-    prior = bits[word];
-    if ((prior & mask) != 0u)
+    else
     {
-        return SSZ_SUCCESS;
-    }
-
-    if (prior == 0u)
-    {
-        if (*word_count >= word_capacity)
+        mask = UINT64_C(1) << (bit_index & 63u);
+        prior = bits[word];
+        if ((prior & mask) != 0u)
         {
-            return SSZ_ERR_OVERFLOW;
+            /* already marked */
         }
-        word_idx[*word_count] = word;
-        (*word_count)++;
+        else
+        {
+            if (prior == 0u)
+            {
+                if (*word_count >= word_capacity)
+                {
+                    err = SSZ_ERR_OVERFLOW;
+                }
+                else
+                {
+                    word_idx[*word_count] = word;
+                    (*word_count)++;
+                }
+            }
+
+            if (err == SSZ_SUCCESS)
+            {
+                bits[word] = prior | mask;
+            }
+            else
+            {
+                /* intentionally empty */
+            }
+        }
     }
 
-    bits[word] = prior | mask;
-    return SSZ_SUCCESS;
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_dirty_set_mark(
     ssz_merkle_cache_dirty_set_t *set,
     uint64_t bit_index)
 {
-    if (set == NULL)
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if ((set == NULL) || (set->word_count == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        err = ssz_merkle_cache_internal_dirty_mark_bit(
+            set->bits,
+            set->word_idx,
+            set->word_count,
+            set->word_capacity,
+            bit_index);
     }
 
-    return ssz_merkle_cache_internal_dirty_mark_bit(
-        set->bits, set->word_idx, &set->word_count, set->word_capacity, bit_index);
+    return err;
 }
 
 static void ssz_merkle_cache_internal_invalidate_data_root(ssz_merkle_cache_t *cache)
@@ -457,26 +469,33 @@ static void ssz_merkle_cache_internal_invalidate_final_root(ssz_merkle_cache_t *
     cache->final_root_valid = false;
 }
 
-static bool ssz_merkle_cache_internal_token_valid_get(const ssz_merkle_cache_t *cache, uint64_t index)
+static bool ssz_merkle_cache_internal_token_valid_get(
+    const ssz_merkle_cache_t *cache,
+    uint64_t index)
 {
     size_t word = 0u;
     uint64_t mask = 0u;
+    bool is_valid = false;
 
-    if ((cache == NULL) || !cache->token_storage_ready || (cache->leaf_token_valid_bits == NULL))
+    if ((cache == NULL) || !cache->token_storage_ready || (cache->token_valid_bits == NULL))
     {
-        return false;
+        is_valid = false;
     }
-    if (!ssz_internal_u64_to_size(index >> 6u, &word))
+    else if (!ssz_internal_u64_to_size(index >> 6u, &word))
     {
-        return false;
+        is_valid = false;
     }
-    if (word >= cache->leaf_token_word_capacity)
+    else if (word >= cache->token_word_capacity)
     {
-        return false;
+        is_valid = false;
+    }
+    else
+    {
+        mask = UINT64_C(1) << (index & 63u);
+        is_valid = (cache->token_valid_bits[word] & mask) != 0u;
     }
 
-    mask = UINT64_C(1) << (index & 63u);
-    return (cache->leaf_token_valid_bits[word] & mask) != 0u;
+    return is_valid;
 }
 
 static void ssz_merkle_cache_internal_token_valid_set(
@@ -487,27 +506,29 @@ static void ssz_merkle_cache_internal_token_valid_set(
     size_t word = 0u;
     uint64_t mask = 0u;
 
-    if ((cache == NULL) || !cache->token_storage_ready || (cache->leaf_token_valid_bits == NULL))
+    if ((cache == NULL) || !cache->token_storage_ready || (cache->token_valid_bits == NULL))
     {
-        return;
+        /* intentionally empty */
     }
-    if (!ssz_internal_u64_to_size(index >> 6u, &word))
+    else if (!ssz_internal_u64_to_size(index >> 6u, &word))
     {
-        return;
+        /* intentionally empty */
     }
-    if (word >= cache->leaf_token_word_capacity)
+    else if (word >= cache->token_word_capacity)
     {
-        return;
-    }
-
-    mask = UINT64_C(1) << (index & 63u);
-    if (value)
-    {
-        cache->leaf_token_valid_bits[word] |= mask;
+        /* intentionally empty */
     }
     else
     {
-        cache->leaf_token_valid_bits[word] &= ~mask;
+        mask = UINT64_C(1) << (index & 63u);
+        if (value)
+        {
+            cache->token_valid_bits[word] |= mask;
+        }
+        else
+        {
+            cache->token_valid_bits[word] &= ~mask;
+        }
     }
 }
 
@@ -517,21 +538,25 @@ static void ssz_merkle_cache_internal_token_valid_clear_range(
     uint64_t count)
 {
     uint64_t end = 0u;
+
     if ((cache == NULL) || !cache->token_storage_ready)
     {
-        return;
+        /* intentionally empty */
     }
-    if (count == 0u)
+    else if (count == 0u)
     {
-        return;
+        /* intentionally empty */
     }
-    if (ssz_internal_add_overflow_u64(start, count, &end))
+    else if (ssz_internal_add_overflow_u64(start, count, &end))
     {
-        return;
+        /* intentionally empty */
     }
-    for (uint64_t i = start; i < end; i++)
+    else
     {
-        ssz_merkle_cache_internal_token_valid_set(cache, i, false);
+        for (uint64_t i = start; i < end; i++)
+        {
+            ssz_merkle_cache_internal_token_valid_set(cache, i, false);
+        }
     }
 }
 
@@ -539,15 +564,23 @@ static ssz_error_t ssz_merkle_cache_internal_mark_leaf_dirty(
     ssz_merkle_cache_t *cache,
     uint64_t leaf_index)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (cache == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    return ssz_merkle_cache_internal_dirty_mark_bit(cache->leaf_dirty_bits,
-                                                    cache->leaf_dirty_word_idx,
-                                                    &cache->leaf_dirty_word_count,
-                                                    cache->leaf_dirty_word_capacity,
-                                                    leaf_index);
+    else
+    {
+        err = ssz_merkle_cache_internal_dirty_mark_bit(
+            cache->leaf_dirty_bits,
+            cache->leaf_dirty_word_idx,
+            &cache->leaf_dirty_word_count,
+            cache->leaf_dirty_word_capacity,
+            leaf_index);
+    }
+
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_set_leaf(
@@ -559,38 +592,52 @@ static ssz_error_t ssz_merkle_cache_internal_set_leaf(
     size_t leaf_index_sz = 0u;
     ssz_chunk_t *leaf_slot = NULL;
     bool changed = false;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if ((cache == NULL) || (leaf == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (leaf_index >= cache->leaf_capacity)
+    else if (leaf_index >= cache->mutable_leaf_capacity)
     {
-        return SSZ_ERR_LIMIT_EXCEEDED;
+        err = SSZ_ERR_LIMIT_EXCEEDED;
     }
-    if (!ssz_internal_u64_to_size(leaf_index, &leaf_index_sz))
+    else if (!ssz_internal_u64_to_size(leaf_index, &leaf_index_sz))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-
-    leaf_slot = cache->nodes + cache->level_offsets[0] + leaf_index_sz;
-    changed = (memcmp(leaf_slot->bytes, leaf->bytes, SSZ_BYTES_PER_CHUNK) != 0);
-    if (changed)
+    else
     {
-        *leaf_slot = *leaf;
-    }
-
-    if (changed || force_dirty)
-    {
-        ssz_error_t err = ssz_merkle_cache_internal_mark_leaf_dirty(cache, leaf_index);
-        if (err != SSZ_SUCCESS)
+        leaf_slot = &cache->nodes[cache->level_offsets[0] + leaf_index_sz];
+        changed = (memcmp(leaf_slot->bytes, leaf->bytes, SSZ_BYTES_PER_CHUNK) != 0);
+        if (changed)
         {
-            return err;
+            *leaf_slot = *leaf;
         }
-        ssz_merkle_cache_internal_invalidate_data_root(cache);
+        else
+        {
+            /* intentionally empty */
+        }
     }
 
-    return SSZ_SUCCESS;
+    if ((err == SSZ_SUCCESS) && (changed || force_dirty))
+    {
+        err = ssz_merkle_cache_internal_mark_leaf_dirty(cache, leaf_index);
+        if (err == SSZ_SUCCESS)
+        {
+            ssz_merkle_cache_internal_invalidate_data_root(cache);
+        }
+        else
+        {
+            /* propagate error */
+        }
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_byte_len_to_chunk_count(
@@ -598,22 +645,27 @@ static ssz_error_t ssz_merkle_cache_internal_byte_len_to_chunk_count(
     uint64_t *out_chunk_count)
 {
     size_t rounded = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (out_chunk_count == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (byte_len == 0u)
+    else if (byte_len == 0u)
     {
         *out_chunk_count = 0u;
-        return SSZ_SUCCESS;
     }
-    if (ssz_internal_add_overflow_size(byte_len, SSZ_BYTES_PER_CHUNK - 1u, &rounded))
+    else if (ssz_internal_add_overflow_size(byte_len, SSZ_BYTES_PER_CHUNK - 1u, &rounded))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    rounded /= SSZ_BYTES_PER_CHUNK;
-    *out_chunk_count = (uint64_t)rounded;
-    return SSZ_SUCCESS;
+    else
+    {
+        rounded /= SSZ_BYTES_PER_CHUNK;
+        *out_chunk_count = (uint64_t)rounded;
+    }
+
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_effective_tree_depth(
@@ -622,110 +674,66 @@ static ssz_error_t ssz_merkle_cache_internal_effective_tree_depth(
 {
     uint64_t width = 0u;
     uint64_t tree_size = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if ((cache == NULL) || (out_depth == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    if (cache->leaf_limit == SSZ_NO_LIMIT)
+    else if (cache->leaf_limit == SSZ_NO_LIMIT)
     {
         width = cache->leaf_count;
     }
+    else if (cache->leaf_count > cache->leaf_limit)
+    {
+        err = SSZ_ERR_LIMIT_EXCEEDED;
+    }
     else
     {
-        if (cache->leaf_count > cache->leaf_limit)
-        {
-            return SSZ_ERR_LIMIT_EXCEEDED;
-        }
         width = cache->leaf_limit;
     }
 
-    tree_size = ssz_next_pow_of_two(width);
-    if (tree_size == 0u)
+    if (err == SSZ_SUCCESS)
     {
-        return SSZ_ERR_OVERFLOW;
+        tree_size = ssz_next_pow_of_two(width);
+        if (tree_size == 0u)
+        {
+            err = SSZ_ERR_OVERFLOW;
+        }
+        else
+        {
+            *out_depth = ssz_merkle_cache_internal_log2_u64(tree_size);
+        }
+    }
+    else
+    {
+        /* intentionally empty */
     }
 
-    *out_depth = ssz_merkle_cache_internal_log2_u64(tree_size);
-    return SSZ_SUCCESS;
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_refresh_cached_data_root(ssz_merkle_cache_t *cache)
 {
     uint32_t data_depth = 0u;
     ssz_error_t err = ssz_merkle_cache_internal_effective_tree_depth(cache, &data_depth);
-    if (err != SSZ_SUCCESS)
-    {
-        return err;
-    }
-    if (data_depth > cache->depth)
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-    cache->cached_data_root = cache->nodes[cache->level_offsets[data_depth]];
-    cache->data_root_valid = true;
-    cache->final_root_valid = false;
-    return SSZ_SUCCESS;
-}
 
-static ssz_error_t ssz_merkle_cache_internal_ensure_gather_capacity(
-    ssz_merkle_cache_t *cache,
-    size_t pair_capacity)
-{
-    ssz_chunk_t *new_pairs = NULL;
-    ssz_chunk_t *new_hashes = NULL;
-    uint64_t *new_parent_indices = NULL;
-    size_t pairs_bytes = 0u;
-    size_t hashes_bytes = 0u;
-    size_t indices_bytes = 0u;
-
-    if (cache == NULL)
+    if ((err == SSZ_SUCCESS) && (data_depth > cache->depth))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if (pair_capacity <= cache->scratch_pair_capacity)
+    else if (err == SSZ_SUCCESS)
     {
-        return SSZ_SUCCESS;
+        cache->cached_data_root = cache->nodes[cache->level_offsets[data_depth]];
+        cache->data_root_valid = true;
+        cache->final_root_valid = false;
+    }
+    else
+    {
+        /* intentionally empty */
     }
 
-    if (ssz_internal_mul_overflow_size(pair_capacity, sizeof(*new_parent_indices), &indices_bytes) ||
-        ssz_internal_mul_overflow_size(pair_capacity, sizeof(*new_hashes), &hashes_bytes) ||
-        ssz_internal_mul_overflow_size(pair_capacity, sizeof(*new_pairs) * 2u, &pairs_bytes))
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    new_pairs = (ssz_chunk_t *)ssz_merkle_cache_internal_alloc_aligned32(pairs_bytes);
-    if (new_pairs == NULL)
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    new_hashes = (ssz_chunk_t *)ssz_merkle_cache_internal_alloc_aligned32(hashes_bytes);
-    if (new_hashes == NULL)
-    {
-        ssz_merkle_cache_internal_free_aligned32(new_pairs);
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    new_parent_indices = (uint64_t *)malloc(indices_bytes);
-    if (new_parent_indices == NULL)
-    {
-        ssz_merkle_cache_internal_free_aligned32(new_pairs);
-        ssz_merkle_cache_internal_free_aligned32(new_hashes);
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    ssz_merkle_cache_internal_free_aligned32(cache->scratch_pairs);
-    ssz_merkle_cache_internal_free_aligned32(cache->scratch_hashes);
-    free(cache->scratch_parent_indices);
-
-    cache->scratch_pairs = new_pairs;
-    cache->scratch_hashes = new_hashes;
-    cache->scratch_parent_indices = new_parent_indices;
-    cache->scratch_pair_capacity = pair_capacity;
-    return SSZ_SUCCESS;
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_flush_contiguous_run(
@@ -738,41 +746,45 @@ static ssz_error_t ssz_merkle_cache_internal_flush_contiguous_run(
 {
     size_t run_start_sz = 0u;
     size_t run_len_sz = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if ((cache == NULL) || (child_level_nodes == NULL) || (parent_level_nodes == NULL) ||
         (io_gather_count == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (run_len == 0u)
+    else if (run_len == 0u)
     {
-        return SSZ_SUCCESS;
+        err = SSZ_SUCCESS;
     }
-
-    if (!ssz_internal_u64_to_size(run_start, &run_start_sz) ||
+    else if (
+        !ssz_internal_u64_to_size(run_start, &run_start_sz) ||
         !ssz_internal_u64_to_size(run_len, &run_len_sz))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-
-    if (run_len >= 2u)
+    else if (run_len >= 2u)
     {
-        return ssz_hash_2to1_batch(cache->hash_fn,
-                                   child_level_nodes + (run_start_sz * 2u),
-                                   run_len_sz,
-                                   parent_level_nodes + run_start_sz);
+        err = ssz_hash_2to1_batch(
+            cache->hash_fn,
+            &child_level_nodes[run_start_sz * 2u],
+            run_len_sz,
+            &parent_level_nodes[run_start_sz]);
     }
-
-    if (*io_gather_count >= cache->scratch_pair_capacity)
+    else if (*io_gather_count >= cache->gather_pair_capacity)
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
+    }
+    else
+    {
+        cache->gather_parent_indices[*io_gather_count] = run_start_sz;
+        cache->gather_pairs[*io_gather_count * 2u] = child_level_nodes[run_start_sz * 2u];
+        cache->gather_pairs[((*io_gather_count) * 2u) + 1u] =
+            child_level_nodes[(run_start_sz * 2u) + 1u];
+        (*io_gather_count)++;
     }
 
-    cache->scratch_parent_indices[*io_gather_count] = run_start;
-    cache->scratch_pairs[*io_gather_count * 2u] = child_level_nodes[run_start_sz * 2u];
-    cache->scratch_pairs[*io_gather_count * 2u + 1u] = child_level_nodes[run_start_sz * 2u + 1u];
-    (*io_gather_count)++;
-    return SSZ_SUCCESS;
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_hash_dirty_parents_exact(
@@ -781,7 +793,6 @@ static ssz_error_t ssz_merkle_cache_internal_hash_dirty_parents_exact(
     ssz_merkle_cache_dirty_set_t *dirty_parents,
     uint64_t parent_width)
 {
-    size_t dirty_count = 0u;
     size_t gather_count = 0u;
     bool run_active = false;
     uint64_t run_start = 0u;
@@ -789,125 +800,152 @@ static ssz_error_t ssz_merkle_cache_internal_hash_dirty_parents_exact(
     uint64_t run_len = 0u;
     ssz_chunk_t *parent_level_nodes = NULL;
     const ssz_chunk_t *child_level_nodes = NULL;
+    ssz_error_t err = SSZ_SUCCESS;
 
-    if ((cache == NULL) || (dirty_parents == NULL))
+    if ((cache == NULL) || (dirty_parents == NULL) || (dirty_parents->word_count == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (dirty_parents->word_count == 0u)
+    else if (*dirty_parents->word_count == 0u)
     {
-        return SSZ_SUCCESS;
+        err = SSZ_SUCCESS;
     }
-
-    qsort(dirty_parents->word_idx,
-          dirty_parents->word_count,
-          sizeof(dirty_parents->word_idx[0]),
-          ssz_merkle_cache_internal_compare_size_t);
-
-    for (size_t wi = 0u; wi < dirty_parents->word_count; wi++)
+    else
     {
-        size_t word = dirty_parents->word_idx[wi];
-        if (word >= dirty_parents->word_capacity)
+        ssz_merkle_cache_internal_sort_size_t_asc(
+            dirty_parents->word_idx,
+            *dirty_parents->word_count);
+
+        child_level_nodes = &cache->nodes[cache->level_offsets[level]];
+        parent_level_nodes = &cache->nodes[cache->level_offsets[level + 1u]];
+
+        for (size_t wi = 0u; (wi < *dirty_parents->word_count) && (err == SSZ_SUCCESS); wi++)
         {
-            return SSZ_ERR_OVERFLOW;
-        }
-        dirty_count += ssz_merkle_cache_internal_popcount_u64(dirty_parents->bits[word]);
-    }
+            size_t word_index = dirty_parents->word_idx[wi];
+            uint64_t word_bits = 0u;
+            uint64_t base = 0u;
 
-    if (dirty_count == 0u)
-    {
-        return SSZ_SUCCESS;
-    }
-
-    {
-        ssz_error_t cap_err = ssz_merkle_cache_internal_ensure_gather_capacity(cache, dirty_count);
-        if (cap_err != SSZ_SUCCESS)
-        {
-            return cap_err;
-        }
-    }
-
-    child_level_nodes = cache->nodes + cache->level_offsets[level];
-    parent_level_nodes = cache->nodes + cache->level_offsets[level + 1u];
-
-    for (size_t wi = 0u; wi < dirty_parents->word_count; wi++)
-    {
-        size_t word_index = dirty_parents->word_idx[wi];
-        uint64_t word_bits = dirty_parents->bits[word_index];
-        uint64_t base = 0u;
-
-        if (!ssz_internal_u64_to_size((uint64_t)word_index << 6u, NULL))
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-        base = (uint64_t)word_index << 6u;
-
-        while (word_bits != 0u)
-        {
-            unsigned bit = ssz_merkle_cache_internal_ctz_u64(word_bits);
-            uint64_t parent_index = base + (uint64_t)bit;
-            if (parent_index < parent_width)
+            if (word_index >= dirty_parents->word_capacity)
             {
-                if (!run_active)
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
+            {
+                word_bits = dirty_parents->bits[word_index];
+                base = ((uint64_t)word_index) << 6u;
+
+                while ((word_bits != 0u) && (err == SSZ_SUCCESS))
                 {
-                    run_active = true;
-                    run_start = parent_index;
-                    run_prev = parent_index;
-                    run_len = 1u;
+                    unsigned bit = ssz_merkle_cache_internal_ctz_u64(word_bits);
+                    uint64_t parent_index = base + (uint64_t)bit;
+
+                    if (parent_index < parent_width)
+                    {
+                        if (!run_active)
+                        {
+                            run_active = true;
+                            run_start = parent_index;
+                            run_prev = parent_index;
+                            run_len = 1u;
+                        }
+                        else if (parent_index == (run_prev + 1u))
+                        {
+                            run_prev = parent_index;
+                            run_len++;
+                        }
+                        else
+                        {
+                            err = ssz_merkle_cache_internal_flush_contiguous_run(
+                                cache,
+                                child_level_nodes,
+                                parent_level_nodes,
+                                run_start,
+                                run_len,
+                                &gather_count);
+                            if (err == SSZ_SUCCESS)
+                            {
+                                run_start = parent_index;
+                                run_prev = parent_index;
+                                run_len = 1u;
+                            }
+                            else
+                            {
+                                /* intentionally empty */
+                            }
+                        }
+                    }
+                    else
+                    {
+                        /* intentionally empty */
+                    }
+
+                    word_bits &= (word_bits - 1u);
                 }
-                else if (parent_index == run_prev + 1u)
+            }
+        }
+
+        if (run_active && (err == SSZ_SUCCESS))
+        {
+            err = ssz_merkle_cache_internal_flush_contiguous_run(
+                cache,
+                child_level_nodes,
+                parent_level_nodes,
+                run_start,
+                run_len,
+                &gather_count);
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+
+        if ((err == SSZ_SUCCESS) && (gather_count != 0u))
+        {
+            if (cache->use_gather_inplace)
+            {
+                err =
+                    ssz_hash_2to1_batch_inplace(cache->hash_fn, cache->gather_pairs, gather_count);
+                if (err == SSZ_SUCCESS)
                 {
-                    run_prev = parent_index;
-                    run_len++;
+                    for (size_t i = 0u; i < gather_count; i++)
+                    {
+                        parent_level_nodes[cache->gather_parent_indices[i]] =
+                            cache->gather_pairs[i];
+                    }
                 }
                 else
                 {
-                    ssz_error_t flush_err = ssz_merkle_cache_internal_flush_contiguous_run(
-                        cache, child_level_nodes, parent_level_nodes, run_start, run_len, &gather_count);
-                    if (flush_err != SSZ_SUCCESS)
-                    {
-                        return flush_err;
-                    }
-                    run_start = parent_index;
-                    run_prev = parent_index;
-                    run_len = 1u;
+                    /* intentionally empty */
                 }
             }
-            word_bits &= (word_bits - 1u);
-        }
-    }
-
-    if (run_active)
-    {
-        ssz_error_t flush_err = ssz_merkle_cache_internal_flush_contiguous_run(
-            cache, child_level_nodes, parent_level_nodes, run_start, run_len, &gather_count);
-        if (flush_err != SSZ_SUCCESS)
-        {
-            return flush_err;
-        }
-    }
-
-    if (gather_count != 0u)
-    {
-        ssz_error_t err = ssz_hash_2to1_batch(
-            cache->hash_fn, cache->scratch_pairs, gather_count, cache->scratch_hashes);
-        if (err != SSZ_SUCCESS)
-        {
-            return err;
-        }
-
-        for (size_t i = 0u; i < gather_count; i++)
-        {
-            size_t parent_index = 0u;
-            if (!ssz_internal_u64_to_size(cache->scratch_parent_indices[i], &parent_index))
+            else
             {
-                return SSZ_ERR_OVERFLOW;
+                err = ssz_hash_2to1_batch(
+                    cache->hash_fn,
+                    cache->gather_pairs,
+                    gather_count,
+                    cache->gather_hashes);
+                if (err == SSZ_SUCCESS)
+                {
+                    for (size_t i = 0u; i < gather_count; i++)
+                    {
+                        parent_level_nodes[cache->gather_parent_indices[i]] =
+                            cache->gather_hashes[i];
+                    }
+                }
+                else
+                {
+                    /* intentionally empty */
+                }
             }
-            parent_level_nodes[parent_index] = cache->scratch_hashes[i];
+        }
+        else
+        {
+            /* intentionally empty */
         }
     }
 
-    return SSZ_SUCCESS;
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_build_parent_dirty_set(
@@ -918,840 +956,1228 @@ static ssz_error_t ssz_merkle_cache_internal_build_parent_dirty_set(
     uint64_t child_width,
     ssz_merkle_cache_dirty_set_t *out_parent_set)
 {
-    if ((child_word_idx == NULL) || (child_bits == NULL) || (out_parent_set == NULL))
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if ((child_word_idx == NULL) || (child_bits == NULL) || (out_parent_set == NULL) ||
+        (out_parent_set->word_count == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (child_word_count == 0u)
+    else if (child_word_count == 0u)
     {
-        return SSZ_SUCCESS;
+        err = SSZ_SUCCESS;
     }
-
-    qsort(child_word_idx,
-          child_word_count,
-          sizeof(child_word_idx[0]),
-          ssz_merkle_cache_internal_compare_size_t);
-
-    for (size_t wi = 0u; wi < child_word_count; wi++)
+    else
     {
-        size_t word_index = child_word_idx[wi];
-        uint64_t word_bits = 0u;
-        uint64_t base = 0u;
+        ssz_merkle_cache_internal_sort_size_t_asc(child_word_idx, child_word_count);
 
-        if (word_index >= child_word_capacity)
+        for (size_t wi = 0u; (wi < child_word_count) && (err == SSZ_SUCCESS); wi++)
         {
-            return SSZ_ERR_OVERFLOW;
-        }
-        word_bits = child_bits[word_index];
-        base = (uint64_t)word_index << 6u;
+            size_t word_index = child_word_idx[wi];
+            uint64_t word_bits = 0u;
+            uint64_t base = 0u;
 
-        while (word_bits != 0u)
-        {
-            unsigned bit = ssz_merkle_cache_internal_ctz_u64(word_bits);
-            uint64_t child_index = base + (uint64_t)bit;
-            if (child_index < child_width)
+            if (word_index >= child_word_capacity)
             {
-                ssz_error_t mark_err =
-                    ssz_merkle_cache_internal_dirty_set_mark(out_parent_set, child_index >> 1u);
-                if (mark_err != SSZ_SUCCESS)
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
+            {
+                word_bits = child_bits[word_index];
+                base = ((uint64_t)word_index) << 6u;
+
+                while ((word_bits != 0u) && (err == SSZ_SUCCESS))
                 {
-                    return mark_err;
+                    unsigned bit = ssz_merkle_cache_internal_ctz_u64(word_bits);
+                    uint64_t child_index = base + (uint64_t)bit;
+
+                    if (child_index < child_width)
+                    {
+                        err = ssz_merkle_cache_internal_dirty_set_mark(
+                            out_parent_set,
+                            child_index >> 1u);
+                    }
+                    else
+                    {
+                        /* intentionally empty */
+                    }
+
+                    word_bits &= (word_bits - 1u);
                 }
             }
-            word_bits &= (word_bits - 1u);
         }
     }
 
-    return SSZ_SUCCESS;
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_recompute_data_root(ssz_merkle_cache_t *cache)
 {
     uint64_t current_width = 0u;
     bool current_is_leaf = true;
-    uint64_t *current_bits = NULL;
-    size_t *current_word_idx = NULL;
-    size_t current_word_count = 0u;
-    size_t current_word_capacity = 0u;
+    ssz_merkle_cache_dirty_set_t leaf_set;
+    ssz_merkle_cache_dirty_set_t parent_sets[2];
     ssz_merkle_cache_dirty_set_t *current_scratch = NULL;
+    ssz_merkle_cache_dirty_set_t *current_set = NULL;
+    ssz_error_t err = SSZ_SUCCESS;
+
+    (void)memset(&leaf_set, 0, sizeof(leaf_set));
+    (void)memset(parent_sets, 0, sizeof(parent_sets));
 
     if (cache == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    if (cache->leaf_dirty_word_count == 0u)
+    else if (cache->leaf_dirty_word_count == 0u)
     {
-        return SSZ_SUCCESS;
+        err = SSZ_SUCCESS;
     }
-
-    if (cache->depth == 0u)
+    else if (cache->depth == 0u)
     {
         ssz_merkle_cache_internal_clear_dirty(
-            cache->leaf_dirty_bits, cache->leaf_dirty_word_idx, &cache->leaf_dirty_word_count);
-        return SSZ_SUCCESS;
+            cache->leaf_dirty_bits,
+            cache->leaf_dirty_word_idx,
+            &cache->leaf_dirty_word_count);
     }
-
-    current_bits = cache->leaf_dirty_bits;
-    current_word_idx = cache->leaf_dirty_word_idx;
-    current_word_count = cache->leaf_dirty_word_count;
-    current_word_capacity = cache->leaf_dirty_word_capacity;
-    current_width = cache->leaf_capacity;
-
-    for (uint32_t level = 0u; level < cache->depth; level++)
+    else
     {
-        uint64_t parent_width = current_width >> 1u;
-        ssz_merkle_cache_dirty_set_t *next_set = &cache->scratch_dirty[level & 1u];
+        ssz_merkle_cache_internal_bind_dirty_set(
+            &leaf_set,
+            cache->leaf_dirty_bits,
+            cache->leaf_dirty_word_idx,
+            &cache->leaf_dirty_word_count,
+            cache->leaf_dirty_word_capacity);
+        ssz_merkle_cache_internal_bind_dirty_set(
+            &parent_sets[0],
+            cache->parent_dirty_bits[0],
+            cache->parent_dirty_word_idx[0],
+            &cache->parent_dirty_word_count[0],
+            cache->parent_dirty_word_capacity);
+        ssz_merkle_cache_internal_bind_dirty_set(
+            &parent_sets[1],
+            cache->parent_dirty_bits[1],
+            cache->parent_dirty_word_idx[1],
+            &cache->parent_dirty_word_count[1],
+            cache->parent_dirty_word_capacity);
 
-        ssz_merkle_cache_internal_dirty_set_clear(next_set);
+        current_set = &leaf_set;
+        current_width = cache->leaf_capacity;
 
-        if (current_word_count != 0u)
+        for (uint32_t level = 0u; (level < cache->depth) && (err == SSZ_SUCCESS); level++)
         {
-            ssz_error_t build_err = ssz_merkle_cache_internal_build_parent_dirty_set(current_word_idx,
-                                                                                      current_word_count,
-                                                                                      current_bits,
-                                                                                      current_word_capacity,
-                                                                                      current_width,
-                                                                                      next_set);
-            if (build_err != SSZ_SUCCESS)
+            uint64_t parent_width = current_width >> 1u;
+            ssz_merkle_cache_dirty_set_t *next_set = &parent_sets[level & 1u];
+
+            ssz_merkle_cache_internal_dirty_set_clear(next_set);
+
+            if (*current_set->word_count != 0u)
             {
-                return build_err;
+                err = ssz_merkle_cache_internal_build_parent_dirty_set(
+                    current_set->word_idx,
+                    *current_set->word_count,
+                    current_set->bits,
+                    current_set->word_capacity,
+                    current_width,
+                    next_set);
+            }
+            else
+            {
+                /* intentionally empty */
+            }
+
+            if ((err == SSZ_SUCCESS) && (*next_set->word_count != 0u))
+            {
+                err = ssz_merkle_cache_internal_hash_dirty_parents_exact(
+                    cache,
+                    level,
+                    next_set,
+                    parent_width);
+            }
+            else
+            {
+                /* intentionally empty */
+            }
+
+            if (err == SSZ_SUCCESS)
+            {
+                if (current_is_leaf)
+                {
+                    ssz_merkle_cache_internal_dirty_set_clear(&leaf_set);
+                }
+                else if (current_scratch != NULL)
+                {
+                    ssz_merkle_cache_internal_dirty_set_clear(current_scratch);
+                }
+                else
+                {
+                    /* intentionally empty */
+                }
+
+                current_is_leaf = false;
+                current_scratch = next_set;
+                current_set = next_set;
+                current_width = parent_width;
+            }
+            else
+            {
+                /* intentionally empty */
             }
         }
 
-        if (next_set->word_count != 0u)
-        {
-            ssz_error_t hash_err = ssz_merkle_cache_internal_hash_dirty_parents_exact(
-                cache, level, next_set, parent_width);
-            if (hash_err != SSZ_SUCCESS)
-            {
-                return hash_err;
-            }
-        }
-
-        if (current_is_leaf)
-        {
-            ssz_merkle_cache_internal_clear_dirty(
-                cache->leaf_dirty_bits, cache->leaf_dirty_word_idx, &cache->leaf_dirty_word_count);
-        }
-        else if (current_scratch != NULL)
+        if (current_scratch != NULL)
         {
             ssz_merkle_cache_internal_dirty_set_clear(current_scratch);
         }
-
-        current_is_leaf = false;
-        current_scratch = next_set;
-        current_bits = next_set->bits;
-        current_word_idx = next_set->word_idx;
-        current_word_count = next_set->word_count;
-        current_word_capacity = next_set->word_capacity;
-        current_width = parent_width;
+        else
+        {
+            /* intentionally empty */
+        }
     }
 
-    if (current_scratch != NULL)
-    {
-        ssz_merkle_cache_internal_dirty_set_clear(current_scratch);
-    }
-
-    return SSZ_SUCCESS;
+    return err;
 }
 
-static ssz_error_t ssz_merkle_cache_internal_ensure_token_storage(ssz_merkle_cache_t *cache)
+static ssz_error_t ssz_merkle_cache_internal_validate_config(
+    const ssz_merkle_cache_config_t *config,
+    const ssz_hash_fn_t **out_resolved_hash_fn)
 {
-    uint64_t *new_tokens = NULL;
-    uint64_t *new_valid_bits = NULL;
-    size_t requested_token_capacity = 0u;
-    size_t requested_word_capacity = 0u;
-    size_t copy_tokens = 0u;
-    size_t copy_words = 0u;
+    const ssz_hash_fn_t *resolved_hash_fn = NULL;
+    ssz_error_t err = SSZ_SUCCESS;
 
-    if (cache == NULL)
+    if ((config == NULL) || (out_resolved_hash_fn == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (!ssz_internal_u64_to_size(cache->leaf_capacity, &requested_token_capacity))
+    else if (!ssz_merkle_cache_internal_struct_size_valid(config->struct_size, sizeof(*config)))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    requested_word_capacity = cache->leaf_dirty_word_capacity;
-    if (cache->token_storage_ready &&
-        (cache->leaf_token_capacity == requested_token_capacity) &&
-        (cache->leaf_token_word_capacity == requested_word_capacity))
+    else if (
+        (config->leaf_limit != SSZ_NO_LIMIT) && (config->initial_leaf_count > config->leaf_limit))
     {
-        return SSZ_SUCCESS;
+        err = SSZ_ERR_LIMIT_EXCEEDED;
     }
-
-    new_tokens = (uint64_t *)calloc(requested_token_capacity, sizeof(*new_tokens));
-    if (new_tokens == NULL)
+    else
     {
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    new_valid_bits = (uint64_t *)calloc(requested_word_capacity, sizeof(*new_valid_bits));
-    if (new_valid_bits == NULL)
-    {
-        free(new_tokens);
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    if (cache->token_storage_ready)
-    {
-        copy_tokens = cache->leaf_token_capacity;
-        copy_words = cache->leaf_token_word_capacity;
-        if (copy_tokens > requested_token_capacity)
+        resolved_hash_fn = ssz_internal_resolve_hash_fn(config->hash_fn);
+        if ((resolved_hash_fn == NULL) || (resolved_hash_fn->hash == NULL))
         {
-            copy_tokens = requested_token_capacity;
+            err = SSZ_ERR_INVALID_ARGUMENT;
         }
-        if (copy_words > requested_word_capacity)
+        else if (config->leaf_limit == SSZ_NO_LIMIT)
         {
-            copy_words = requested_word_capacity;
-        }
-        if ((copy_tokens != 0u) && (cache->leaf_tokens != NULL))
-        {
-            memcpy(new_tokens, cache->leaf_tokens, copy_tokens * sizeof(*new_tokens));
-        }
-        if ((copy_words != 0u) && (cache->leaf_token_valid_bits != NULL))
-        {
-            memcpy(new_valid_bits, cache->leaf_token_valid_bits, copy_words * sizeof(*new_valid_bits));
-        }
-    }
-
-    free(cache->leaf_tokens);
-    free(cache->leaf_token_valid_bits);
-    cache->leaf_tokens = new_tokens;
-    cache->leaf_token_valid_bits = new_valid_bits;
-    cache->leaf_token_capacity = requested_token_capacity;
-    cache->leaf_token_word_capacity = requested_word_capacity;
-    cache->token_storage_ready = true;
-    return SSZ_SUCCESS;
-}
-
-static ssz_error_t ssz_merkle_cache_internal_resize_token_storage(
-    const ssz_merkle_cache_t *old_cache,
-    uint64_t new_capacity,
-    size_t new_word_capacity,
-    uint64_t **out_tokens,
-    uint64_t **out_valid_bits,
-    size_t *out_token_capacity,
-    size_t *out_token_word_capacity)
-{
-    size_t new_token_capacity = 0u;
-    size_t token_bytes = 0u;
-    size_t valid_bytes = 0u;
-    uint64_t *new_tokens = NULL;
-    uint64_t *new_valid_bits = NULL;
-
-    if ((old_cache == NULL) || (out_tokens == NULL) || (out_valid_bits == NULL) ||
-        (out_token_capacity == NULL) || (out_token_word_capacity == NULL))
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-
-    if (!old_cache->token_storage_ready)
-    {
-        *out_tokens = NULL;
-        *out_valid_bits = NULL;
-        *out_token_capacity = 0u;
-        *out_token_word_capacity = 0u;
-        return SSZ_SUCCESS;
-    }
-
-    if (!ssz_internal_u64_to_size(new_capacity, &new_token_capacity))
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-    if (ssz_internal_mul_overflow_size(new_token_capacity, sizeof(*new_tokens), &token_bytes) ||
-        ssz_internal_mul_overflow_size(new_word_capacity, sizeof(*new_valid_bits), &valid_bytes))
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    new_tokens = (uint64_t *)calloc(new_token_capacity, sizeof(*new_tokens));
-    if (new_tokens == NULL)
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    new_valid_bits = (uint64_t *)calloc(new_word_capacity, sizeof(*new_valid_bits));
-    if (new_valid_bits == NULL)
-    {
-        free(new_tokens);
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    {
-        size_t copy_tokens = old_cache->leaf_token_capacity;
-        size_t copy_words = old_cache->leaf_token_word_capacity;
-        if (copy_tokens > new_token_capacity)
-        {
-            copy_tokens = new_token_capacity;
-        }
-        if (copy_words > new_word_capacity)
-        {
-            copy_words = new_word_capacity;
-        }
-        if ((copy_tokens != 0u) && (old_cache->leaf_tokens != NULL))
-        {
-            memcpy(new_tokens, old_cache->leaf_tokens, copy_tokens * sizeof(*new_tokens));
-        }
-        if ((copy_words != 0u) && (old_cache->leaf_token_valid_bits != NULL))
-        {
-            memcpy(new_valid_bits, old_cache->leaf_token_valid_bits, copy_words * sizeof(*new_valid_bits));
-        }
-    }
-
-    *out_tokens = new_tokens;
-    *out_valid_bits = new_valid_bits;
-    *out_token_capacity = new_token_capacity;
-    *out_token_word_capacity = new_word_capacity;
-    return SSZ_SUCCESS;
-}
-
-static ssz_error_t ssz_merkle_cache_internal_grow(ssz_merkle_cache_t *cache, uint64_t new_capacity)
-{
-    ssz_chunk_t *new_nodes = NULL;
-    size_t new_offsets[64] = {0u};
-    uint32_t new_depth = 0u;
-    size_t new_word_capacity = 0u;
-    uint64_t *new_leaf_dirty_bits = NULL;
-    size_t *new_leaf_dirty_word_idx = NULL;
-    uint64_t *new_scratch0_bits = NULL;
-    size_t *new_scratch0_idx = NULL;
-    uint64_t *new_scratch1_bits = NULL;
-    size_t *new_scratch1_idx = NULL;
-    uint64_t *new_tokens = NULL;
-    uint64_t *new_token_valid_bits = NULL;
-    size_t new_token_capacity = 0u;
-    size_t new_token_word_capacity = 0u;
-
-    if (cache == NULL)
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-    if (new_capacity <= cache->leaf_capacity)
-    {
-        return SSZ_SUCCESS;
-    }
-
-    new_depth = ssz_merkle_cache_internal_log2_u64(new_capacity);
-    assert(new_depth < 64u);
-
-    {
-        ssz_error_t off_err =
-            ssz_merkle_cache_internal_compute_level_offsets(new_capacity, new_depth, new_offsets);
-        if (off_err != SSZ_SUCCESS)
-        {
-            return off_err;
-        }
-    }
-
-    {
-        ssz_error_t alloc_err = ssz_merkle_cache_internal_allocate_nodes(
-            new_capacity, new_depth, new_offsets, &new_nodes);
-        if (alloc_err != SSZ_SUCCESS)
-        {
-            return alloc_err;
-        }
-    }
-
-    {
-        uint64_t width = new_capacity;
-        for (uint32_t level = 0u; level <= new_depth; level++)
-        {
-            size_t width_sz = 0u;
-            if (!ssz_internal_u64_to_size(width, &width_sz))
+            if (!ssz_merkle_cache_internal_is_power_of_two_u64(config->reserved_leaf_capacity))
             {
-                ssz_merkle_cache_internal_free_aligned32(new_nodes);
-                return SSZ_ERR_OVERFLOW;
+                err = SSZ_ERR_INVALID_ARGUMENT;
             }
-            ssz_chunk_t *new_level_nodes = new_nodes + new_offsets[level];
-            for (size_t i = 0u; i < width_sz; i++)
+            else if (config->initial_leaf_count > config->reserved_leaf_capacity)
             {
-                new_level_nodes[i] = cache->zero_hashes[level];
+                err = SSZ_ERR_LIMIT_EXCEEDED;
             }
-
-            if (level <= cache->depth)
+            else
             {
-                uint64_t old_width = cache->leaf_capacity >> level;
-                size_t old_width_sz = 0u;
-                if (!ssz_internal_u64_to_size(old_width, &old_width_sz))
+                *out_resolved_hash_fn = resolved_hash_fn;
+            }
+        }
+        else
+        {
+            *out_resolved_hash_fn = resolved_hash_fn;
+        }
+    }
+
+    return err;
+}
+
+static ssz_error_t ssz_merkle_cache_internal_compute_requirements(
+    const ssz_merkle_cache_config_t *config,
+    ssz_merkle_cache_requirements_t *out_requirements,
+    const ssz_hash_fn_t **out_resolved_hash_fn)
+{
+    ssz_merkle_cache_requirements_t requirements;
+    const ssz_hash_fn_t *resolved_hash_fn = NULL;
+    uint64_t mutable_capacity = 0u;
+    uint64_t physical_capacity = 0u;
+    uint64_t nodes_u64 = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
+
+    (void)memset(&requirements, 0, sizeof(requirements));
+    requirements.struct_size = sizeof(requirements);
+
+    if (out_requirements == NULL)
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        err = ssz_merkle_cache_internal_validate_config(config, &resolved_hash_fn);
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        if (config->leaf_limit == SSZ_NO_LIMIT)
+        {
+            mutable_capacity = config->reserved_leaf_capacity;
+            physical_capacity = config->reserved_leaf_capacity;
+        }
+        else
+        {
+            mutable_capacity = config->leaf_limit;
+            physical_capacity = ssz_next_pow_of_two(config->leaf_limit);
+            if (physical_capacity == 0u)
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
+            {
+                /* intentionally empty */
+            }
+        }
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        requirements.physical_leaf_capacity = physical_capacity;
+        requirements.mutable_leaf_capacity = mutable_capacity;
+        requirements.depth = ssz_merkle_cache_internal_log2_u64(physical_capacity);
+
+        if (ssz_internal_mul_overflow_u64(physical_capacity, 2u, &nodes_u64) || (nodes_u64 == 0u))
+        {
+            err = SSZ_ERR_OVERFLOW;
+        }
+        else
+        {
+            nodes_u64 -= 1u;
+            if (!ssz_internal_u64_to_size(nodes_u64, &requirements.nodes_count))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
+            {
+                err = ssz_merkle_cache_internal_leaf_words_for_capacity(
+                    mutable_capacity,
+                    &requirements.leaf_dirty_words);
+            }
+        }
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        err = ssz_merkle_cache_internal_parent_dirty_words_for_capacity(
+            mutable_capacity,
+            &requirements.parent_dirty_words);
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        err = ssz_merkle_cache_internal_gather_pair_capacity_for_capacity(
+            mutable_capacity,
+            &requirements.gather_pair_capacity);
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        if (ssz_internal_mul_overflow_size(
+                requirements.gather_pair_capacity,
+                2u,
+                &requirements.gather_pairs_count))
+        {
+            err = SSZ_ERR_OVERFLOW;
+        }
+        else
+        {
+            requirements.gather_parent_indices_count = requirements.gather_pair_capacity;
+            requirements.gather_hashes_count =
+                (resolved_hash_fn == ssz_hash_default()) ? 0u : requirements.gather_pair_capacity;
+
+            if (!ssz_internal_u64_to_size(mutable_capacity, &requirements.token_values_count) ||
+                !ssz_internal_u64_to_size(mutable_capacity, &requirements.root_batch_roots_count))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
+            {
+                requirements.token_valid_words = requirements.leaf_dirty_words;
+            }
+        }
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        *out_requirements = requirements;
+        if (out_resolved_hash_fn != NULL)
+        {
+            *out_resolved_hash_fn = resolved_hash_fn;
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    return err;
+}
+
+static ssz_error_t ssz_merkle_cache_internal_validate_storage(
+    const ssz_merkle_cache_requirements_t *requirements,
+    const ssz_merkle_cache_storage_t *storage,
+    bool *out_token_storage_ready)
+{
+    bool token_storage_ready = false;
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if ((requirements == NULL) || (storage == NULL) || (out_token_storage_ready == NULL))
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (!ssz_merkle_cache_internal_struct_size_valid(storage->struct_size, sizeof(*storage)))
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if ((storage->nodes == NULL) || (storage->nodes_count < requirements->nodes_count))
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+    else if (
+        !ssz_merkle_cache_internal_pointer_available(
+            storage->leaf_dirty_bits,
+            requirements->leaf_dirty_words) ||
+        (storage->leaf_dirty_words < requirements->leaf_dirty_words) ||
+        !ssz_merkle_cache_internal_pointer_available(
+            storage->leaf_dirty_word_idx,
+            requirements->leaf_dirty_words) ||
+        (storage->leaf_dirty_word_idx_count < requirements->leaf_dirty_words))
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+    else if (
+        (requirements->parent_dirty_words != 0u) &&
+        (!ssz_merkle_cache_internal_pointer_available(
+             storage->parent_dirty_bits[0],
+             requirements->parent_dirty_words) ||
+         !ssz_merkle_cache_internal_pointer_available(
+             storage->parent_dirty_bits[1],
+             requirements->parent_dirty_words) ||
+         (storage->parent_dirty_words < requirements->parent_dirty_words) ||
+         !ssz_merkle_cache_internal_pointer_available(
+             storage->parent_dirty_word_idx[0],
+             requirements->parent_dirty_words) ||
+         !ssz_merkle_cache_internal_pointer_available(
+             storage->parent_dirty_word_idx[1],
+             requirements->parent_dirty_words) ||
+         (storage->parent_dirty_word_idx_count < requirements->parent_dirty_words)))
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+    else if (
+        (requirements->gather_pairs_count != 0u) &&
+        (!ssz_merkle_cache_internal_pointer_available(
+             storage->gather_pairs,
+             requirements->gather_pairs_count) ||
+         (storage->gather_pairs_count < requirements->gather_pairs_count) ||
+         !ssz_merkle_cache_internal_pointer_available(
+             storage->gather_parent_indices,
+             requirements->gather_parent_indices_count) ||
+         (storage->gather_parent_indices_count < requirements->gather_parent_indices_count)))
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+    else if (
+        (requirements->gather_hashes_count != 0u) &&
+        (!ssz_merkle_cache_internal_pointer_available(
+             storage->gather_hashes,
+             requirements->gather_hashes_count) ||
+         (storage->gather_hashes_count < requirements->gather_hashes_count)))
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+    else
+    {
+        token_storage_ready = ssz_merkle_cache_internal_storage_has_tokens(storage);
+        if (token_storage_ready &&
+            ((storage->token_values_count < requirements->token_values_count) ||
+             (storage->token_valid_words < requirements->token_valid_words) ||
+             !ssz_merkle_cache_internal_pointer_available(
+                 storage->token_values,
+                 requirements->token_values_count) ||
+             !ssz_merkle_cache_internal_pointer_available(
+                 storage->token_valid_bits,
+                 requirements->token_valid_words)))
+        {
+            err = SSZ_ERR_BUFFER_TOO_SMALL;
+        }
+        else
+        {
+            *out_token_storage_ready = token_storage_ready;
+        }
+    }
+
+    return err;
+}
+
+static void ssz_merkle_cache_internal_clear_u64_array(uint64_t *values, size_t count)
+{
+    if ((values != NULL) && (count != 0u))
+    {
+        (void)memset(values, 0, count * sizeof(*values));
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+}
+
+static void ssz_merkle_cache_internal_clear_bound_working_state(ssz_merkle_cache_t *cache)
+{
+    if (cache != NULL)
+    {
+        ssz_merkle_cache_internal_clear_u64_array(
+            cache->leaf_dirty_bits,
+            cache->leaf_dirty_word_capacity);
+        cache->leaf_dirty_word_count = 0u;
+
+        ssz_merkle_cache_internal_clear_u64_array(
+            cache->parent_dirty_bits[0],
+            cache->parent_dirty_word_capacity);
+        ssz_merkle_cache_internal_clear_u64_array(
+            cache->parent_dirty_bits[1],
+            cache->parent_dirty_word_capacity);
+        cache->parent_dirty_word_count[0] = 0u;
+        cache->parent_dirty_word_count[1] = 0u;
+
+        if (cache->token_storage_ready)
+        {
+            ssz_merkle_cache_internal_clear_u64_array(cache->token_values, cache->token_capacity);
+            ssz_merkle_cache_internal_clear_u64_array(
+                cache->token_valid_bits,
+                cache->token_word_capacity);
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+
+        (void)memset(&cache->cached_data_root, 0, sizeof(cache->cached_data_root));
+        (void)memset(&cache->cached_root, 0, sizeof(cache->cached_root));
+        cache->data_root_valid = false;
+        cache->final_root_valid = false;
+        cache->needs_resync = false;
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+}
+
+static ssz_error_t ssz_merkle_cache_internal_prepare_bound_cache(
+    const ssz_merkle_cache_config_t *config,
+    const ssz_merkle_cache_requirements_t *requirements,
+    const ssz_merkle_cache_storage_t *storage,
+    const ssz_hash_fn_t *resolved_hash_fn,
+    bool token_storage_ready,
+    ssz_merkle_cache_t *out_cache)
+{
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if ((config == NULL) || (requirements == NULL) || (storage == NULL) ||
+        (resolved_hash_fn == NULL) || (out_cache == NULL))
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        (void)memset(out_cache, 0, sizeof(*out_cache));
+
+        out_cache->struct_size = sizeof(*out_cache);
+        out_cache->hash_fn = resolved_hash_fn;
+        out_cache->leaf_limit = config->leaf_limit;
+        out_cache->leaf_capacity = requirements->physical_leaf_capacity;
+        out_cache->mutable_leaf_capacity = requirements->mutable_leaf_capacity;
+        out_cache->depth = requirements->depth;
+        out_cache->leaf_count = config->initial_leaf_count;
+        out_cache->logical_length = config->logical_length;
+        out_cache->mix_in_length = config->mix_in_length;
+
+        out_cache->nodes = storage->nodes;
+        out_cache->leaf_dirty_bits = storage->leaf_dirty_bits;
+        out_cache->leaf_dirty_word_idx = storage->leaf_dirty_word_idx;
+        out_cache->leaf_dirty_word_capacity = requirements->leaf_dirty_words;
+
+        out_cache->parent_dirty_bits[0] = storage->parent_dirty_bits[0];
+        out_cache->parent_dirty_bits[1] = storage->parent_dirty_bits[1];
+        out_cache->parent_dirty_word_idx[0] = storage->parent_dirty_word_idx[0];
+        out_cache->parent_dirty_word_idx[1] = storage->parent_dirty_word_idx[1];
+        out_cache->parent_dirty_word_capacity = requirements->parent_dirty_words;
+
+        out_cache->gather_pairs = storage->gather_pairs;
+        out_cache->gather_hashes = storage->gather_hashes;
+        out_cache->gather_parent_indices = storage->gather_parent_indices;
+        out_cache->gather_pair_capacity = requirements->gather_pair_capacity;
+        out_cache->use_gather_inplace = (resolved_hash_fn == ssz_hash_default());
+
+        if (token_storage_ready)
+        {
+            out_cache->token_values = storage->token_values;
+            out_cache->token_valid_bits = storage->token_valid_bits;
+            out_cache->token_capacity = requirements->token_values_count;
+            out_cache->token_word_capacity = requirements->token_valid_words;
+            out_cache->token_storage_ready = true;
+        }
+        else
+        {
+            out_cache->token_values = NULL;
+            out_cache->token_valid_bits = NULL;
+            out_cache->token_capacity = 0u;
+            out_cache->token_word_capacity = 0u;
+            out_cache->token_storage_ready = false;
+        }
+
+        err = ssz_merkle_cache_internal_compute_level_offsets(
+            out_cache->leaf_capacity,
+            out_cache->depth,
+            out_cache->level_offsets);
+        if (err == SSZ_SUCCESS)
+        {
+            if (resolved_hash_fn == ssz_hash_default())
+            {
+                out_cache->zero_hashes = ssz_hash_default_zero_hashes();
+            }
+            else
+            {
+                err = ssz_merkle_cache_internal_build_zero_hashes(
+                    resolved_hash_fn,
+                    out_cache->zero_hashes_buf);
+                if (err == SSZ_SUCCESS)
                 {
-                    ssz_merkle_cache_internal_free_aligned32(new_nodes);
-                    return SSZ_ERR_OVERFLOW;
+                    out_cache->zero_hashes = out_cache->zero_hashes_buf;
                 }
-                memcpy(new_level_nodes,
-                       cache->nodes + cache->level_offsets[level],
-                       old_width_sz * sizeof(*new_level_nodes));
+                else
+                {
+                    /* intentionally empty */
+                }
+            }
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+
+        if (err == SSZ_SUCCESS)
+        {
+            ssz_merkle_cache_internal_clear_bound_working_state(out_cache);
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+    }
+
+    return err;
+}
+
+static ssz_error_t ssz_merkle_cache_internal_initialize_bound_cache(ssz_merkle_cache_t *cache)
+{
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if (cache == NULL)
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        ssz_merkle_cache_internal_fill_zero_tree(cache);
+        err = ssz_merkle_cache_internal_refresh_cached_data_root(cache);
+        if (err == SSZ_SUCCESS)
+        {
+            if (cache->mix_in_length)
+            {
+                err = ssz_mix_in_length_u64(
+                    &cache->cached_data_root,
+                    cache->logical_length,
+                    cache->hash_fn,
+                    &cache->cached_root);
+                if (err == SSZ_SUCCESS)
+                {
+                    cache->final_root_valid = true;
+                }
+                else
+                {
+                    /* intentionally empty */
+                }
+            }
+            else
+            {
+                cache->cached_root = cache->cached_data_root;
+                cache->final_root_valid = true;
+            }
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+
+        if (err == SSZ_SUCCESS)
+        {
+            cache->data_root_valid = true;
+            cache->needs_resync = false;
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+    }
+
+    return err;
+}
+
+static ssz_error_t ssz_merkle_cache_internal_migrate_nodes(
+    const ssz_merkle_cache_t *src,
+    ssz_merkle_cache_t *dst)
+{
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if ((src == NULL) || (dst == NULL))
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        for (uint32_t level = 0u; (level <= dst->depth) && (err == SSZ_SUCCESS); level++)
+        {
+            uint64_t dst_width = dst->leaf_capacity >> level;
+            uint64_t src_width = 0u;
+            size_t dst_width_sz = 0u;
+            size_t src_width_sz = 0u;
+            ssz_chunk_t *dst_level_nodes = NULL;
+
+            if (level <= src->depth)
+            {
+                src_width = src->leaf_capacity >> level;
+            }
+            else
+            {
+                src_width = 0u;
             }
 
-            width >>= 1u;
+            if (!ssz_internal_u64_to_size(dst_width, &dst_width_sz) ||
+                !ssz_internal_u64_to_size(src_width, &src_width_sz))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
+            {
+                dst_level_nodes = &dst->nodes[dst->level_offsets[level]];
+
+                if (src_width_sz != 0u)
+                {
+                    (void)memcpy(
+                        dst_level_nodes,
+                        &src->nodes[src->level_offsets[level]],
+                        src_width_sz * sizeof(*dst_level_nodes));
+                }
+                else
+                {
+                    /* intentionally empty */
+                }
+
+                for (size_t i = src_width_sz; i < dst_width_sz; i++)
+                {
+                    dst_level_nodes[i] = dst->zero_hashes[level];
+                }
+            }
         }
     }
 
-    {
-        ssz_error_t words_err =
-            ssz_merkle_cache_internal_leaf_words_for_capacity(new_capacity, &new_word_capacity);
-        if (words_err != SSZ_SUCCESS)
-        {
-            ssz_merkle_cache_internal_free_aligned32(new_nodes);
-            return words_err;
-        }
-    }
-
-    new_leaf_dirty_bits = (uint64_t *)calloc(new_word_capacity, sizeof(*new_leaf_dirty_bits));
-    if (new_leaf_dirty_bits == NULL)
-    {
-        ssz_merkle_cache_internal_free_aligned32(new_nodes);
-        return SSZ_ERR_OVERFLOW;
-    }
-    new_leaf_dirty_word_idx = (size_t *)malloc(new_word_capacity * sizeof(*new_leaf_dirty_word_idx));
-    if (new_leaf_dirty_word_idx == NULL)
-    {
-        ssz_merkle_cache_internal_free_aligned32(new_nodes);
-        free(new_leaf_dirty_bits);
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    memcpy(new_leaf_dirty_bits,
-           cache->leaf_dirty_bits,
-           cache->leaf_dirty_word_capacity * sizeof(*new_leaf_dirty_bits));
-    memcpy(new_leaf_dirty_word_idx,
-           cache->leaf_dirty_word_idx,
-           cache->leaf_dirty_word_count * sizeof(*new_leaf_dirty_word_idx));
-
-    new_scratch0_bits = (uint64_t *)calloc(new_word_capacity, sizeof(*new_scratch0_bits));
-    new_scratch0_idx = (size_t *)malloc(new_word_capacity * sizeof(*new_scratch0_idx));
-    new_scratch1_bits = (uint64_t *)calloc(new_word_capacity, sizeof(*new_scratch1_bits));
-    new_scratch1_idx = (size_t *)malloc(new_word_capacity * sizeof(*new_scratch1_idx));
-    if ((new_scratch0_bits == NULL) || (new_scratch0_idx == NULL) || (new_scratch1_bits == NULL) ||
-        (new_scratch1_idx == NULL))
-    {
-        ssz_merkle_cache_internal_free_aligned32(new_nodes);
-        free(new_leaf_dirty_bits);
-        free(new_leaf_dirty_word_idx);
-        free(new_scratch0_bits);
-        free(new_scratch0_idx);
-        free(new_scratch1_bits);
-        free(new_scratch1_idx);
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    {
-        ssz_error_t tok_err = ssz_merkle_cache_internal_resize_token_storage(cache,
-                                                                              new_capacity,
-                                                                              new_word_capacity,
-                                                                              &new_tokens,
-                                                                              &new_token_valid_bits,
-                                                                              &new_token_capacity,
-                                                                              &new_token_word_capacity);
-        if (tok_err != SSZ_SUCCESS)
-        {
-            ssz_merkle_cache_internal_free_aligned32(new_nodes);
-            free(new_leaf_dirty_bits);
-            free(new_leaf_dirty_word_idx);
-            free(new_scratch0_bits);
-            free(new_scratch0_idx);
-            free(new_scratch1_bits);
-            free(new_scratch1_idx);
-            return tok_err;
-        }
-    }
-
-    ssz_merkle_cache_internal_free_aligned32(cache->nodes);
-    cache->nodes = new_nodes;
-    memcpy(cache->level_offsets, new_offsets, sizeof(new_offsets));
-    cache->leaf_capacity = new_capacity;
-    cache->depth = new_depth;
-
-    free(cache->leaf_dirty_bits);
-    free(cache->leaf_dirty_word_idx);
-    cache->leaf_dirty_bits = new_leaf_dirty_bits;
-    cache->leaf_dirty_word_idx = new_leaf_dirty_word_idx;
-    cache->leaf_dirty_word_capacity = new_word_capacity;
-
-    ssz_merkle_cache_internal_dirty_set_free(&cache->scratch_dirty[0]);
-    ssz_merkle_cache_internal_dirty_set_free(&cache->scratch_dirty[1]);
-    cache->scratch_dirty[0].bits = new_scratch0_bits;
-    cache->scratch_dirty[0].word_idx = new_scratch0_idx;
-    cache->scratch_dirty[0].word_count = 0u;
-    cache->scratch_dirty[0].word_capacity = new_word_capacity;
-    cache->scratch_dirty[1].bits = new_scratch1_bits;
-    cache->scratch_dirty[1].word_idx = new_scratch1_idx;
-    cache->scratch_dirty[1].word_count = 0u;
-    cache->scratch_dirty[1].word_capacity = new_word_capacity;
-
-    if (cache->token_storage_ready)
-    {
-        free(cache->leaf_tokens);
-        free(cache->leaf_token_valid_bits);
-        cache->leaf_tokens = new_tokens;
-        cache->leaf_token_valid_bits = new_token_valid_bits;
-        cache->leaf_token_capacity = new_token_capacity;
-        cache->leaf_token_word_capacity = new_token_word_capacity;
-    }
-
-    ssz_merkle_cache_internal_invalidate_data_root(cache);
-    return SSZ_SUCCESS;
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_ensure_capacity_for_count(
     ssz_merkle_cache_t *cache,
     uint64_t required_count)
 {
-    uint64_t target_capacity = 0u;
-    uint64_t old_capacity = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if (cache == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (required_count <= cache->leaf_capacity)
+    else if (required_count > cache->mutable_leaf_capacity)
     {
-        return SSZ_SUCCESS;
+        err = SSZ_ERR_LIMIT_EXCEEDED;
+    }
+    else
+    {
+        err = SSZ_SUCCESS;
     }
 
-    if ((cache->leaf_limit != SSZ_NO_LIMIT) && (required_count > cache->leaf_limit))
-    {
-        return SSZ_ERR_LIMIT_EXCEEDED;
-    }
-
-    old_capacity = cache->leaf_capacity;
-    target_capacity = cache->leaf_capacity;
-    while (target_capacity < required_count)
-    {
-        if (target_capacity > (UINT64_MAX / 2u))
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-        target_capacity <<= 1u;
-    }
-
-    {
-        ssz_error_t grow_err = ssz_merkle_cache_internal_grow(cache, target_capacity);
-        if (grow_err != SSZ_SUCCESS)
-        {
-            return grow_err;
-        }
-    }
-
-    /* A capacity step introduces a new right side and top chain, even if new
-       leaves are still zero. Force one right-side path dirty so the root chain
-       is refreshed without rebuilding the preserved left subtree. */
-    {
-        ssz_error_t mark_err = ssz_merkle_cache_internal_set_leaf(
-            cache, old_capacity, &cache->zero_hashes[0], true);
-        if (mark_err != SSZ_SUCCESS)
-        {
-            return mark_err;
-        }
-    }
-
-    return SSZ_SUCCESS;
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_compute_data_root_if_needed(ssz_merkle_cache_t *cache)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if (cache == NULL)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (cache->data_root_valid)
+    else if (!cache->data_root_valid)
     {
-        return SSZ_SUCCESS;
-    }
-
-    {
-        ssz_error_t err = ssz_merkle_cache_internal_recompute_data_root(cache);
-        if (err != SSZ_SUCCESS)
+        err = ssz_merkle_cache_internal_recompute_data_root(cache);
+        if (err == SSZ_SUCCESS)
         {
-            return err;
+            err = ssz_merkle_cache_internal_refresh_cached_data_root(cache);
+        }
+        else
+        {
+            /* intentionally empty */
         }
     }
+    else
+    {
+        err = SSZ_SUCCESS;
+    }
 
-    return ssz_merkle_cache_internal_refresh_cached_data_root(cache);
+    return err;
 }
 
 static bool ssz_merkle_cache_internal_limit_matches(
     const ssz_merkle_cache_t *cache,
     uint64_t expected_limit)
 {
+    bool matches = false;
+
     if (cache == NULL)
     {
-        return false;
+        matches = false;
     }
-    if (cache->leaf_limit == expected_limit)
+    else if (cache->leaf_limit == expected_limit)
     {
-        return true;
+        matches = true;
     }
-    return false;
+    else
+    {
+        matches = false;
+    }
+
+    return matches;
 }
 
-ssz_error_t ssz_merkle_cache_create(
+static ssz_error_t ssz_merkle_cache_internal_validate_sync_opts(
+    const ssz_merkle_cache_t *cache,
+    uint64_t element_count,
+    const ssz_merkle_cache_sync_composite_opts_t *opts)
+{
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if (cache == NULL)
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (opts == NULL)
+    {
+        err = SSZ_SUCCESS;
+    }
+    else if (!ssz_merkle_cache_internal_struct_size_valid(opts->struct_size, sizeof(*opts)))
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if ((opts->token != NULL) && !cache->token_storage_ready)
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (opts->root_batch != NULL)
+    {
+        if (opts->workspace == NULL)
+        {
+            err = SSZ_ERR_INVALID_ARGUMENT;
+        }
+        else if (!ssz_merkle_cache_internal_struct_size_valid(
+                     opts->workspace->struct_size,
+                     sizeof(*opts->workspace)))
+        {
+            err = SSZ_ERR_INVALID_ARGUMENT;
+        }
+        else if (
+            (opts->workspace->root_batch_roots_count < (size_t)element_count) ||
+            !ssz_merkle_cache_internal_pointer_available(
+                opts->workspace->root_batch_roots,
+                (size_t)element_count))
+        {
+            err = SSZ_ERR_BUFFER_TOO_SMALL;
+        }
+        else
+        {
+            err = SSZ_SUCCESS;
+        }
+    }
+    else
+    {
+        err = SSZ_SUCCESS;
+    }
+
+    return err;
+}
+
+ssz_error_t ssz_merkle_cache_requirements(
     const ssz_merkle_cache_config_t *config,
-    ssz_merkle_cache_t **out_cache)
+    ssz_merkle_cache_requirements_t *out_requirements)
 {
-    ssz_merkle_cache_t *cache = NULL;
-    uint64_t initial_capacity = 0u;
-    size_t leaf_words = 0u;
-    const ssz_hash_fn_t *resolved_hash_fn = NULL;
-
-    if ((config == NULL) || (out_cache == NULL))
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-    if ((config->leaf_limit != SSZ_NO_LIMIT) && (config->initial_leaf_count > config->leaf_limit))
-    {
-        return SSZ_ERR_LIMIT_EXCEEDED;
-    }
-
-    resolved_hash_fn = ssz_internal_resolve_hash_fn(config->hash_fn);
-    if ((resolved_hash_fn == NULL) || (resolved_hash_fn->hash == NULL))
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-
-    if (config->leaf_limit == SSZ_NO_LIMIT)
-    {
-        initial_capacity = ssz_next_pow_of_two(config->initial_leaf_count);
-    }
-    else
-    {
-        initial_capacity = ssz_next_pow_of_two(config->leaf_limit);
-    }
-    if (initial_capacity == 0u)
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    cache = (ssz_merkle_cache_t *)calloc(1u, sizeof(*cache));
-    if (cache == NULL)
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    cache->hash_fn = resolved_hash_fn;
-    cache->leaf_limit = config->leaf_limit;
-    cache->leaf_count = config->initial_leaf_count;
-    cache->logical_length = config->logical_length;
-    cache->mix_in_length = config->mix_in_length;
-    cache->leaf_capacity = initial_capacity;
-    cache->depth = ssz_merkle_cache_internal_log2_u64(initial_capacity);
-    assert(cache->depth < 64u);
-
-    if (resolved_hash_fn == ssz_hash_default())
-    {
-        cache->zero_hashes = ssz_hash_default_zero_hashes();
-    }
-    else
-    {
-        ssz_error_t zerr =
-            ssz_merkle_cache_internal_build_zero_hashes(resolved_hash_fn, cache->zero_hashes_buf);
-        if (zerr != SSZ_SUCCESS)
-        {
-            ssz_merkle_cache_destroy(cache);
-            return zerr;
-        }
-        cache->zero_hashes = cache->zero_hashes_buf;
-    }
-
-    {
-        ssz_error_t off_err = ssz_merkle_cache_internal_compute_level_offsets(
-            cache->leaf_capacity, cache->depth, cache->level_offsets);
-        if (off_err != SSZ_SUCCESS)
-        {
-            ssz_merkle_cache_destroy(cache);
-            return off_err;
-        }
-    }
-
-    {
-        ssz_error_t node_err = ssz_merkle_cache_internal_allocate_nodes(
-            cache->leaf_capacity, cache->depth, cache->level_offsets, &cache->nodes);
-        if (node_err != SSZ_SUCCESS)
-        {
-            ssz_merkle_cache_destroy(cache);
-            return node_err;
-        }
-    }
-
-    {
-        ssz_error_t words_err =
-            ssz_merkle_cache_internal_leaf_words_for_capacity(cache->leaf_capacity, &leaf_words);
-        if (words_err != SSZ_SUCCESS)
-        {
-            ssz_merkle_cache_destroy(cache);
-            return words_err;
-        }
-    }
-    cache->leaf_dirty_word_capacity = leaf_words;
-
-    cache->leaf_dirty_bits = (uint64_t *)calloc(leaf_words, sizeof(*cache->leaf_dirty_bits));
-    cache->leaf_dirty_word_idx = (size_t *)malloc(leaf_words * sizeof(*cache->leaf_dirty_word_idx));
-    if ((cache->leaf_dirty_bits == NULL) || (cache->leaf_dirty_word_idx == NULL))
-    {
-        ssz_merkle_cache_destroy(cache);
-        return SSZ_ERR_OVERFLOW;
-    }
-
-    {
-        ssz_error_t d0_err =
-            ssz_merkle_cache_internal_dirty_set_init(&cache->scratch_dirty[0], leaf_words);
-        ssz_error_t d1_err =
-            ssz_merkle_cache_internal_dirty_set_init(&cache->scratch_dirty[1], leaf_words);
-        if ((d0_err != SSZ_SUCCESS) || (d1_err != SSZ_SUCCESS))
-        {
-            ssz_merkle_cache_destroy(cache);
-            return (d0_err != SSZ_SUCCESS) ? d0_err : d1_err;
-        }
-    }
-
-    ssz_merkle_cache_internal_fill_zero_tree(cache);
-    cache->data_root_valid = false;
-    cache->final_root_valid = false;
-    cache->needs_resync = false;
-
-    {
-        ssz_error_t root_err = ssz_merkle_cache_internal_refresh_cached_data_root(cache);
-        assert(root_err == SSZ_SUCCESS);
-        (void)root_err;
-    }
-
-    if (cache->mix_in_length)
-    {
-        ssz_error_t mix_err =
-            ssz_mix_in_length_u64(
-                &cache->cached_data_root, cache->logical_length, cache->hash_fn, &cache->cached_root);
-        if (mix_err != SSZ_SUCCESS)
-        {
-            ssz_merkle_cache_destroy(cache);
-            return mix_err;
-        }
-        cache->final_root_valid = true;
-    }
-    else
-    {
-        cache->cached_root = cache->cached_data_root;
-        cache->final_root_valid = true;
-    }
-
-    *out_cache = cache;
-    return SSZ_SUCCESS;
+    return ssz_merkle_cache_internal_compute_requirements(config, out_requirements, NULL);
 }
 
-void ssz_merkle_cache_destroy(ssz_merkle_cache_t *cache)
+ssz_error_t ssz_merkle_cache_bind(
+    const ssz_merkle_cache_config_t *config,
+    const ssz_merkle_cache_storage_t *storage,
+    ssz_merkle_cache_t *out_cache)
 {
-    if (cache == NULL)
+    ssz_merkle_cache_requirements_t requirements;
+    const ssz_hash_fn_t *resolved_hash_fn = NULL;
+    bool token_storage_ready = false;
+    ssz_error_t err = SSZ_SUCCESS;
+
+    (void)memset(&requirements, 0, sizeof(requirements));
+
+    if (out_cache == NULL)
     {
-        return;
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        err = ssz_merkle_cache_internal_compute_requirements(
+            config,
+            &requirements,
+            &resolved_hash_fn);
     }
 
-    ssz_merkle_cache_internal_free_aligned32(cache->nodes);
-    cache->nodes = NULL;
+    if (err == SSZ_SUCCESS)
+    {
+        err = ssz_merkle_cache_internal_validate_storage(
+            &requirements,
+            storage,
+            &token_storage_ready);
+    }
+    else
+    {
+        /* intentionally empty */
+    }
 
-    free(cache->leaf_dirty_bits);
-    free(cache->leaf_dirty_word_idx);
-    cache->leaf_dirty_bits = NULL;
-    cache->leaf_dirty_word_idx = NULL;
+    if (err == SSZ_SUCCESS)
+    {
+        err = ssz_merkle_cache_internal_prepare_bound_cache(
+            config,
+            &requirements,
+            storage,
+            resolved_hash_fn,
+            token_storage_ready,
+            out_cache);
+    }
+    else
+    {
+        /* intentionally empty */
+    }
 
-    ssz_merkle_cache_internal_dirty_set_free(&cache->scratch_dirty[0]);
-    ssz_merkle_cache_internal_dirty_set_free(&cache->scratch_dirty[1]);
+    if (err == SSZ_SUCCESS)
+    {
+        err = ssz_merkle_cache_internal_initialize_bound_cache(out_cache);
+    }
+    else
+    {
+        /* intentionally empty */
+    }
 
-    ssz_merkle_cache_internal_free_aligned32(cache->scratch_pairs);
-    ssz_merkle_cache_internal_free_aligned32(cache->scratch_hashes);
-    free(cache->scratch_parent_indices);
+    return err;
+}
 
-    free(cache->leaf_tokens);
-    free(cache->leaf_token_valid_bits);
+ssz_error_t ssz_merkle_cache_migrate_into(
+    const ssz_merkle_cache_t *src,
+    const ssz_merkle_cache_config_t *dst_config,
+    const ssz_merkle_cache_storage_t *dst_storage,
+    ssz_merkle_cache_t *out_cache)
+{
+    ssz_merkle_cache_config_t bind_config;
+    ssz_merkle_cache_requirements_t requirements;
+    const ssz_hash_fn_t *resolved_hash_fn = NULL;
+    bool token_storage_ready = false;
+    ssz_error_t err = SSZ_SUCCESS;
 
-    free(cache);
+    (void)memset(&bind_config, 0, sizeof(bind_config));
+    (void)memset(&requirements, 0, sizeof(requirements));
+
+    if (!ssz_merkle_cache_internal_cache_is_bound(src) || (dst_config == NULL) ||
+        (dst_storage == NULL) || (out_cache == NULL))
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (ssz_internal_resolve_hash_fn(dst_config->hash_fn) != src->hash_fn)
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (dst_config->mix_in_length != src->mix_in_length)
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (dst_config->leaf_limit != src->leaf_limit)
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (
+        (src->leaf_limit == SSZ_NO_LIMIT) &&
+        (dst_config->reserved_leaf_capacity < src->leaf_capacity))
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+    else
+    {
+        bind_config = *dst_config;
+        bind_config.initial_leaf_count = src->leaf_count;
+        bind_config.logical_length = src->logical_length;
+
+        err = ssz_merkle_cache_internal_compute_requirements(
+            &bind_config,
+            &requirements,
+            &resolved_hash_fn);
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        err = ssz_merkle_cache_internal_validate_storage(
+            &requirements,
+            dst_storage,
+            &token_storage_ready);
+        if ((err == SSZ_SUCCESS) && src->token_storage_ready && !token_storage_ready)
+        {
+            err = SSZ_ERR_BUFFER_TOO_SMALL;
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        err = ssz_merkle_cache_internal_prepare_bound_cache(
+            &bind_config,
+            &requirements,
+            dst_storage,
+            resolved_hash_fn,
+            token_storage_ready,
+            out_cache);
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        err = ssz_merkle_cache_internal_migrate_nodes(src, out_cache);
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    if ((err == SSZ_SUCCESS) && (src->leaf_dirty_word_capacity != 0u))
+    {
+        (void)memcpy(
+            out_cache->leaf_dirty_bits,
+            src->leaf_dirty_bits,
+            src->leaf_dirty_word_capacity * sizeof(*out_cache->leaf_dirty_bits));
+        if (src->leaf_dirty_word_count != 0u)
+        {
+            (void)memcpy(
+                out_cache->leaf_dirty_word_idx,
+                src->leaf_dirty_word_idx,
+                src->leaf_dirty_word_count * sizeof(*out_cache->leaf_dirty_word_idx));
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+        out_cache->leaf_dirty_word_count = src->leaf_dirty_word_count;
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    if ((err == SSZ_SUCCESS) && src->token_storage_ready && out_cache->token_storage_ready)
+    {
+        if (src->token_capacity != 0u)
+        {
+            (void)memcpy(
+                out_cache->token_values,
+                src->token_values,
+                src->token_capacity * sizeof(*out_cache->token_values));
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+
+        if (src->token_word_capacity != 0u)
+        {
+            (void)memcpy(
+                out_cache->token_valid_bits,
+                src->token_valid_bits,
+                src->token_word_capacity * sizeof(*out_cache->token_valid_bits));
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        out_cache->cached_data_root = src->cached_data_root;
+        out_cache->cached_root = src->cached_root;
+        out_cache->data_root_valid = src->data_root_valid;
+        out_cache->final_root_valid = src->final_root_valid;
+        out_cache->needs_resync = src->needs_resync;
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    return err;
 }
 
 ssz_error_t ssz_merkle_cache_reset(ssz_merkle_cache_t *cache)
 {
-    if (cache == NULL)
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if (!ssz_merkle_cache_internal_cache_is_bound(cache))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        ssz_merkle_cache_internal_fill_zero_tree(cache);
+        ssz_merkle_cache_internal_clear_bound_working_state(cache);
+
+        cache->leaf_count = 0u;
+        cache->logical_length = 0u;
+
+        err = ssz_merkle_cache_internal_refresh_cached_data_root(cache);
     }
 
-    ssz_merkle_cache_internal_fill_zero_tree(cache);
-
-    ssz_merkle_cache_internal_clear_dirty(
-        cache->leaf_dirty_bits, cache->leaf_dirty_word_idx, &cache->leaf_dirty_word_count);
-    ssz_merkle_cache_internal_dirty_set_clear(&cache->scratch_dirty[0]);
-    ssz_merkle_cache_internal_dirty_set_clear(&cache->scratch_dirty[1]);
-
-    if (cache->token_storage_ready)
-    {
-        memset(cache->leaf_tokens, 0, cache->leaf_token_capacity * sizeof(*cache->leaf_tokens));
-        memset(cache->leaf_token_valid_bits,
-               0,
-               cache->leaf_token_word_capacity * sizeof(*cache->leaf_token_valid_bits));
-    }
-
-    cache->leaf_count = 0u;
-    cache->logical_length = 0u;
-    cache->needs_resync = false;
-    cache->data_root_valid = false;
-    cache->final_root_valid = false;
-
-    return ssz_merkle_cache_internal_refresh_cached_data_root(cache);
+    return err;
 }
 
 ssz_error_t ssz_merkle_cache_data_root(ssz_merkle_cache_t *cache, ssz_chunk_t *out_root)
 {
-    if ((cache == NULL) || (out_root == NULL))
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
+    ssz_error_t err = SSZ_SUCCESS;
 
+    if (!ssz_merkle_cache_internal_cache_is_bound(cache) || (out_root == NULL))
     {
-        ssz_error_t err = ssz_merkle_cache_internal_compute_data_root_if_needed(cache);
-        if (err != SSZ_SUCCESS)
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        err = ssz_merkle_cache_internal_compute_data_root_if_needed(cache);
+        if (err == SSZ_SUCCESS)
         {
-            return err;
+            *out_root = cache->cached_data_root;
+        }
+        else
+        {
+            /* intentionally empty */
         }
     }
 
-    *out_root = cache->cached_data_root;
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_merkle_cache_root(ssz_merkle_cache_t *cache, ssz_chunk_t *out_root)
 {
-    if ((cache == NULL) || (out_root == NULL))
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
+    ssz_error_t err = SSZ_SUCCESS;
 
+    if (!ssz_merkle_cache_internal_cache_is_bound(cache) || (out_root == NULL))
     {
-        ssz_error_t err = ssz_merkle_cache_internal_compute_data_root_if_needed(cache);
-        if (err != SSZ_SUCCESS)
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        err = ssz_merkle_cache_internal_compute_data_root_if_needed(cache);
+        if (err == SSZ_SUCCESS)
         {
-            return err;
+            if (!cache->mix_in_length)
+            {
+                cache->cached_root = cache->cached_data_root;
+                cache->final_root_valid = true;
+            }
+            else if (!cache->final_root_valid)
+            {
+                err = ssz_mix_in_length_u64(
+                    &cache->cached_data_root,
+                    cache->logical_length,
+                    cache->hash_fn,
+                    &cache->cached_root);
+                if (err == SSZ_SUCCESS)
+                {
+                    cache->final_root_valid = true;
+                }
+                else
+                {
+                    /* intentionally empty */
+                }
+            }
+            else
+            {
+                /* intentionally empty */
+            }
+
+            if (err == SSZ_SUCCESS)
+            {
+                *out_root = cache->cached_root;
+            }
+            else
+            {
+                /* intentionally empty */
+            }
+        }
+        else
+        {
+            /* intentionally empty */
         }
     }
 
-    if (!cache->mix_in_length)
-    {
-        cache->cached_root = cache->cached_data_root;
-        cache->final_root_valid = true;
-        *out_root = cache->cached_root;
-        return SSZ_SUCCESS;
-    }
-
-    if (!cache->final_root_valid)
-    {
-        ssz_error_t err = ssz_mix_in_length_u64(
-            &cache->cached_data_root, cache->logical_length, cache->hash_fn, &cache->cached_root);
-        if (err != SSZ_SUCCESS)
-        {
-            return err;
-        }
-        cache->final_root_valid = true;
-    }
-
-    *out_root = cache->cached_root;
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_merkle_cache_update_root_range(
@@ -1761,52 +2187,67 @@ ssz_error_t ssz_merkle_cache_update_root_range(
     uint64_t root_count)
 {
     uint64_t end_index = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
-    if (cache == NULL)
+    if (!ssz_merkle_cache_internal_cache_is_bound(cache))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if ((root_count != 0u) && (roots == NULL))
+    else if ((root_count != 0u) && (roots == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (ssz_internal_add_overflow_u64(start_index, root_count, &end_index))
+    {
+        err = SSZ_ERR_OVERFLOW;
+    }
+    else
+    {
+        err = ssz_merkle_cache_internal_ensure_capacity_for_count(cache, end_index);
     }
 
-    if (ssz_internal_add_overflow_u64(start_index, root_count, &end_index))
+    if (err == SSZ_SUCCESS)
     {
-        return SSZ_ERR_OVERFLOW;
-    }
-    if ((cache->leaf_limit != SSZ_NO_LIMIT) && (end_index > cache->leaf_limit))
-    {
-        return SSZ_ERR_LIMIT_EXCEEDED;
-    }
-
-    {
-        ssz_error_t cap_err = ssz_merkle_cache_internal_ensure_capacity_for_count(cache, end_index);
-        if (cap_err != SSZ_SUCCESS)
+        for (uint64_t i = 0u; (i < root_count) && (err == SSZ_SUCCESS); i++)
         {
-            return cap_err;
+            uint64_t index = start_index + i;
+
+            err = ssz_merkle_cache_internal_set_leaf(cache, index, &roots[i], false);
+            if (err == SSZ_SUCCESS)
+            {
+                ssz_merkle_cache_internal_token_valid_set(cache, index, false);
+            }
+            else
+            {
+                /* intentionally empty */
+            }
         }
     }
-
-    for (uint64_t i = 0u; i < root_count; i++)
+    else
     {
-        uint64_t index = start_index + i;
-        ssz_error_t set_err = ssz_merkle_cache_internal_set_leaf(cache, index, &roots[i], false);
-        if (set_err != SSZ_SUCCESS)
+        /* intentionally empty */
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        if (end_index > cache->leaf_count)
         {
-            return set_err;
+            cache->leaf_count = end_index;
+            ssz_merkle_cache_internal_invalidate_data_root(cache);
         }
-        ssz_merkle_cache_internal_token_valid_set(cache, index, false);
-    }
+        else
+        {
+            /* intentionally empty */
+        }
 
-    if (end_index > cache->leaf_count)
+        cache->needs_resync = false;
+    }
+    else
     {
-        cache->leaf_count = end_index;
-        ssz_merkle_cache_internal_invalidate_data_root(cache);
+        /* intentionally empty */
     }
 
-    cache->needs_resync = false;
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_merkle_cache_zero_range(
@@ -1815,72 +2256,92 @@ ssz_error_t ssz_merkle_cache_zero_range(
     uint64_t zero_count)
 {
     uint64_t end_index = 0u;
-    uint64_t max_index = 0u;
-    const ssz_chunk_t zero_leaf = {
-        .bytes = {0u},
-    };
     uint64_t old_leaf_count = 0u;
+    ssz_chunk_t zero_leaf;
+    ssz_error_t err = SSZ_SUCCESS;
 
-    if (cache == NULL)
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-    if (zero_count == 0u)
-    {
-        return SSZ_SUCCESS;
-    }
-    if (ssz_internal_add_overflow_u64(start_index, zero_count, &end_index))
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-    if ((cache->leaf_limit != SSZ_NO_LIMIT) && (end_index > cache->leaf_limit))
-    {
-        return SSZ_ERR_LIMIT_EXCEEDED;
-    }
+    (void)memset(&zero_leaf, 0, sizeof(zero_leaf));
 
-    old_leaf_count = cache->leaf_count;
-    max_index = end_index;
-    if (max_index > cache->leaf_capacity)
+    if (!ssz_merkle_cache_internal_cache_is_bound(cache))
     {
-        max_index = cache->leaf_capacity;
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (zero_count == 0u)
+    {
+        err = SSZ_SUCCESS;
+    }
+    else if (ssz_internal_add_overflow_u64(start_index, zero_count, &end_index))
+    {
+        err = SSZ_ERR_OVERFLOW;
+    }
+    else
+    {
+        err = ssz_merkle_cache_internal_ensure_capacity_for_count(cache, end_index);
     }
 
-    for (uint64_t i = start_index; i < max_index; i++)
+    if (err == SSZ_SUCCESS)
     {
-        ssz_error_t set_err = ssz_merkle_cache_internal_set_leaf(cache, i, &zero_leaf, false);
-        if (set_err != SSZ_SUCCESS)
+        old_leaf_count = cache->leaf_count;
+        for (uint64_t i = start_index; (i < end_index) && (err == SSZ_SUCCESS); i++)
         {
-            return set_err;
+            err = ssz_merkle_cache_internal_set_leaf(cache, i, &zero_leaf, false);
         }
     }
-
-    ssz_merkle_cache_internal_token_valid_clear_range(cache, start_index, max_index - start_index);
-
-    if ((start_index < old_leaf_count) && (end_index >= old_leaf_count))
+    else
     {
-        cache->leaf_count = start_index;
-        ssz_merkle_cache_internal_invalidate_data_root(cache);
+        /* intentionally empty */
     }
 
-    cache->needs_resync = false;
-    return SSZ_SUCCESS;
+    if (err == SSZ_SUCCESS)
+    {
+        ssz_merkle_cache_internal_token_valid_clear_range(
+            cache,
+            start_index,
+            end_index - start_index);
+
+        if ((start_index < old_leaf_count) && (end_index >= old_leaf_count))
+        {
+            cache->leaf_count = start_index;
+            ssz_merkle_cache_internal_invalidate_data_root(cache);
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+
+        cache->needs_resync = false;
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    return err;
 }
 
-ssz_error_t ssz_merkle_cache_set_logical_length(
-    ssz_merkle_cache_t *cache,
-    uint64_t logical_length)
+ssz_error_t ssz_merkle_cache_set_logical_length(ssz_merkle_cache_t *cache, uint64_t logical_length)
 {
-    if (cache == NULL)
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if (!ssz_merkle_cache_internal_cache_is_bound(cache))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (cache->logical_length != logical_length)
+    else
     {
-        cache->logical_length = logical_length;
-        ssz_merkle_cache_internal_invalidate_final_root(cache);
+        if (cache->logical_length != logical_length)
+        {
+            cache->logical_length = logical_length;
+            ssz_merkle_cache_internal_invalidate_final_root(cache);
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+        cache->needs_resync = false;
     }
-    cache->needs_resync = false;
-    return SSZ_SUCCESS;
+
+    return err;
 }
 
 ssz_error_t ssz_merkle_cache_sync_packed_bytes(
@@ -1891,95 +2352,110 @@ ssz_error_t ssz_merkle_cache_sync_packed_bytes(
 {
     uint64_t chunk_count = 0u;
     uint64_t old_leaf_count = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
-    if (cache == NULL)
+    if (!ssz_merkle_cache_internal_cache_is_bound(cache))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if ((bytes_len != 0u) && (bytes == NULL))
+    else if ((bytes_len != 0u) && (bytes == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        err = ssz_merkle_cache_internal_byte_len_to_chunk_count(bytes_len, &chunk_count);
     }
 
+    if (err == SSZ_SUCCESS)
     {
-        ssz_error_t cc_err =
-            ssz_merkle_cache_internal_byte_len_to_chunk_count(bytes_len, &chunk_count);
-        if (cc_err != SSZ_SUCCESS)
+        err = ssz_merkle_cache_internal_ensure_capacity_for_count(cache, chunk_count);
+    }
+    else
+    {
+        /* intentionally empty */
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        old_leaf_count = cache->leaf_count;
+        for (uint64_t chunk_index = 0u; (chunk_index < chunk_count) && (err == SSZ_SUCCESS);
+             chunk_index++)
         {
-            return cc_err;
-        }
-    }
+            ssz_chunk_t leaf;
+            size_t chunk_offset = 0u;
+            size_t copy_len = SSZ_BYTES_PER_CHUNK;
 
-    if ((cache->leaf_limit != SSZ_NO_LIMIT) && (chunk_count > cache->leaf_limit))
-    {
-        return SSZ_ERR_LIMIT_EXCEEDED;
-    }
-
-    {
-        ssz_error_t cap_err = ssz_merkle_cache_internal_ensure_capacity_for_count(cache, chunk_count);
-        if (cap_err != SSZ_SUCCESS)
-        {
-            return cap_err;
-        }
-    }
-
-    old_leaf_count = cache->leaf_count;
-    for (uint64_t chunk_index = 0u; chunk_index < chunk_count; chunk_index++)
-    {
-        ssz_chunk_t leaf;
-        size_t chunk_offset = 0u;
-        size_t copy_len = SSZ_BYTES_PER_CHUNK;
-
-        memset(leaf.bytes, 0, sizeof(leaf.bytes));
-        if (!ssz_internal_u64_to_size(chunk_index, &chunk_offset) ||
-            ssz_internal_mul_overflow_size(chunk_offset, SSZ_BYTES_PER_CHUNK, &chunk_offset))
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-
-        if (chunk_offset < bytes_len)
-        {
-            size_t remaining = bytes_len - chunk_offset;
-            if (remaining < copy_len)
+            (void)memset(leaf.bytes, 0, sizeof(leaf.bytes));
+            if (!ssz_internal_u64_to_size(chunk_index, &chunk_offset) ||
+                ssz_internal_mul_overflow_size(chunk_offset, SSZ_BYTES_PER_CHUNK, &chunk_offset))
             {
-                copy_len = remaining;
+                err = SSZ_ERR_OVERFLOW;
             }
-            memcpy(leaf.bytes, bytes + chunk_offset, copy_len);
-        }
-
-        {
-            ssz_error_t set_err = ssz_merkle_cache_internal_set_leaf(cache, chunk_index, &leaf, false);
-            if (set_err != SSZ_SUCCESS)
+            else
             {
-                return set_err;
+                if (chunk_offset < bytes_len)
+                {
+                    size_t remaining = bytes_len - chunk_offset;
+                    if (remaining < copy_len)
+                    {
+                        copy_len = remaining;
+                    }
+                    else
+                    {
+                        /* intentionally empty */
+                    }
+                    (void)memcpy(leaf.bytes, &bytes[chunk_offset], copy_len);
+                }
+                else
+                {
+                    /* intentionally empty */
+                }
+
+                err = ssz_merkle_cache_internal_set_leaf(cache, chunk_index, &leaf, false);
+                if (err == SSZ_SUCCESS)
+                {
+                    ssz_merkle_cache_internal_token_valid_set(cache, chunk_index, false);
+                }
+                else
+                {
+                    /* intentionally empty */
+                }
             }
         }
-        ssz_merkle_cache_internal_token_valid_set(cache, chunk_index, false);
+    }
+    else
+    {
+        /* intentionally empty */
     }
 
-    if (chunk_count < old_leaf_count)
+    if ((err == SSZ_SUCCESS) && (chunk_count < old_leaf_count))
     {
-        ssz_error_t zero_err =
-            ssz_merkle_cache_zero_range(cache, chunk_count, old_leaf_count - chunk_count);
-        if (zero_err != SSZ_SUCCESS)
-        {
-            return zero_err;
-        }
+        err = ssz_merkle_cache_zero_range(cache, chunk_count, old_leaf_count - chunk_count);
     }
-    else if (chunk_count > old_leaf_count)
+    else if ((err == SSZ_SUCCESS) && (chunk_count > old_leaf_count))
     {
         cache->leaf_count = chunk_count;
         ssz_merkle_cache_internal_invalidate_data_root(cache);
     }
+    else
+    {
+        /* intentionally empty */
+    }
 
+    if (err == SSZ_SUCCESS)
     {
         ssz_error_t len_err = ssz_merkle_cache_set_logical_length(cache, logical_length);
         assert(len_err == SSZ_SUCCESS);
         (void)len_err;
+        cache->needs_resync = false;
+    }
+    else
+    {
+        /* intentionally empty */
     }
 
-    cache->needs_resync = false;
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_merkle_cache_sync_packed_vector_fixed(
@@ -1989,41 +2465,47 @@ ssz_error_t ssz_merkle_cache_sync_packed_vector_fixed(
     size_t element_size)
 {
     size_t total_bytes = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
-    if (cache == NULL)
+    if (!ssz_merkle_cache_internal_cache_is_bound(cache))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (element_count == 0u)
+    else if (element_count == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if (element_size == 0u)
+    else if (element_size == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if (!ssz_internal_u64_to_size(element_count, NULL))
+    else if (!ssz_internal_u64_to_size(element_count, NULL))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &total_bytes))
+    else if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &total_bytes))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if ((elements == NULL) && (total_bytes != 0u))
+    else if ((elements == NULL) && (total_bytes != 0u))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (!ssz_merkle_cache_internal_limit_matches(cache, SSZ_NO_LIMIT))
+    else if (!ssz_merkle_cache_internal_limit_matches(cache, SSZ_NO_LIMIT))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (cache->mix_in_length)
+    else if (cache->mix_in_length)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        err =
+            ssz_merkle_cache_sync_packed_bytes(cache, elements, total_bytes, cache->logical_length);
     }
 
-    return ssz_merkle_cache_sync_packed_bytes(cache, elements, total_bytes, cache->logical_length);
+    return err;
 }
 
 ssz_error_t ssz_merkle_cache_sync_packed_list_fixed(
@@ -2035,53 +2517,75 @@ ssz_error_t ssz_merkle_cache_sync_packed_list_fixed(
 {
     size_t total_bytes = 0u;
     uint64_t chunk_limit = SSZ_NO_LIMIT;
+    ssz_error_t err = SSZ_SUCCESS;
 
-    if (cache == NULL)
+    if (!ssz_merkle_cache_internal_cache_is_bound(cache))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (element_size == 0u)
+    else if (element_size == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
+    else if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
     {
-        return SSZ_ERR_LIMIT_EXCEEDED;
+        err = SSZ_ERR_LIMIT_EXCEEDED;
     }
-    if (!ssz_internal_u64_to_size(element_count, NULL))
+    else if (!ssz_internal_u64_to_size(element_count, NULL))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &total_bytes))
+    else if (ssz_internal_mul_overflow_size((size_t)element_count, element_size, &total_bytes))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if ((elements == NULL) && (total_bytes != 0u))
+    else if ((elements == NULL) && (total_bytes != 0u))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
-    if (element_limit != SSZ_NO_LIMIT)
+    else
     {
-        uint64_t limit_bytes = 0u;
-        if (ssz_internal_mul_overflow_u64(element_limit, (uint64_t)element_size, &limit_bytes) ||
-            ssz_internal_add_overflow_u64(limit_bytes, SSZ_BYTES_PER_CHUNK - 1u, &chunk_limit))
+        if (element_limit != SSZ_NO_LIMIT)
         {
-            return SSZ_ERR_OVERFLOW;
+            uint64_t limit_bytes = 0u;
+
+            if (ssz_internal_mul_overflow_u64(
+                    element_limit,
+                    (uint64_t)element_size,
+                    &limit_bytes) ||
+                ssz_internal_add_overflow_u64(limit_bytes, SSZ_BYTES_PER_CHUNK - 1u, &chunk_limit))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
+            {
+                chunk_limit /= SSZ_BYTES_PER_CHUNK;
+            }
         }
-        chunk_limit /= SSZ_BYTES_PER_CHUNK;
+        else
+        {
+            /* intentionally empty */
+        }
+
+        if ((err == SSZ_SUCCESS) && !ssz_merkle_cache_internal_limit_matches(cache, chunk_limit))
+        {
+            err = SSZ_ERR_INVALID_ARGUMENT;
+        }
+        else if ((err == SSZ_SUCCESS) && !cache->mix_in_length)
+        {
+            err = SSZ_ERR_INVALID_ARGUMENT;
+        }
+        else if (err == SSZ_SUCCESS)
+        {
+            err = ssz_merkle_cache_sync_packed_bytes(cache, elements, total_bytes, element_count);
+        }
+        else
+        {
+            /* intentionally empty */
+        }
     }
 
-    if (!ssz_merkle_cache_internal_limit_matches(cache, chunk_limit))
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-    if (!cache->mix_in_length)
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-
-    return ssz_merkle_cache_sync_packed_bytes(cache, elements, total_bytes, element_count);
+    return err;
 }
 
 ssz_error_t ssz_merkle_cache_sync_bitvector(
@@ -2092,47 +2596,74 @@ ssz_error_t ssz_merkle_cache_sync_bitvector(
 {
     size_t bitfield_bytes = 0u;
     uint64_t chunk_limit = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
-    if (cache == NULL)
+    if (!ssz_merkle_cache_internal_cache_is_bound(cache))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (bit_count == 0u)
+    else if (bit_count == 0u)
     {
-        return SSZ_ERR_SCHEMA_INVALID;
+        err = SSZ_ERR_SCHEMA_INVALID;
     }
-    if (!ssz_internal_bits_to_bytes(bit_count, &bitfield_bytes))
+    else if (!ssz_internal_bits_to_bytes(bit_count, &bitfield_bytes))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if ((bits_le == NULL) || (bits_le_len < bitfield_bytes))
+    else if ((bits_le == NULL) || (bits_le_len < bitfield_bytes))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if ((bit_count % 8u) != 0u)
+    else
     {
-        uint8_t mask = (uint8_t)((1u << (bit_count % 8u)) - 1u);
-        if ((bits_le[bitfield_bytes - 1u] & (uint8_t)(~mask)) != 0u)
+        if ((bit_count % 8u) != 0u)
         {
-            return SSZ_ERR_ENCODING_INVALID;
+            uint8_t mask = (uint8_t)((1u << (bit_count % 8u)) - 1u);
+            if ((bits_le[bitfield_bytes - 1u] & (uint8_t)(~mask)) != 0u)
+            {
+                err = SSZ_ERR_ENCODING_INVALID;
+            }
+            else
+            {
+                /* intentionally empty */
+            }
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+
+        if ((err == SSZ_SUCCESS) && ssz_internal_add_overflow_u64(bit_count, 255u, &chunk_limit))
+        {
+            err = SSZ_ERR_OVERFLOW;
+        }
+        else if (err == SSZ_SUCCESS)
+        {
+            chunk_limit /= 256u;
+            if (!ssz_merkle_cache_internal_limit_matches(cache, chunk_limit))
+            {
+                err = SSZ_ERR_INVALID_ARGUMENT;
+            }
+            else if (cache->mix_in_length)
+            {
+                err = SSZ_ERR_INVALID_ARGUMENT;
+            }
+            else
+            {
+                err = ssz_merkle_cache_sync_packed_bytes(
+                    cache,
+                    bits_le,
+                    bitfield_bytes,
+                    cache->logical_length);
+            }
+        }
+        else
+        {
+            /* intentionally empty */
         }
     }
-    if (ssz_internal_add_overflow_u64(bit_count, 255u, &chunk_limit))
-    {
-        return SSZ_ERR_OVERFLOW;
-    }
-    chunk_limit /= 256u;
 
-    if (!ssz_merkle_cache_internal_limit_matches(cache, chunk_limit))
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-    if (cache->mix_in_length)
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-
-    return ssz_merkle_cache_sync_packed_bytes(cache, bits_le, bitfield_bytes, cache->logical_length);
+    return err;
 }
 
 ssz_error_t ssz_merkle_cache_sync_bitlist(
@@ -2144,51 +2675,78 @@ ssz_error_t ssz_merkle_cache_sync_bitlist(
 {
     size_t bitfield_bytes = 0u;
     uint64_t chunk_limit = SSZ_NO_LIMIT;
+    ssz_error_t err = SSZ_SUCCESS;
 
-    if (cache == NULL)
+    if (!ssz_merkle_cache_internal_cache_is_bound(cache))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if ((bit_limit != SSZ_NO_LIMIT) && (bit_len > bit_limit))
+    else if ((bit_limit != SSZ_NO_LIMIT) && (bit_len > bit_limit))
     {
-        return SSZ_ERR_LIMIT_EXCEEDED;
+        err = SSZ_ERR_LIMIT_EXCEEDED;
     }
-    if (!ssz_internal_bits_to_bytes(bit_len, &bitfield_bytes))
+    else if (!ssz_internal_bits_to_bytes(bit_len, &bitfield_bytes))
     {
-        return SSZ_ERR_OVERFLOW;
+        err = SSZ_ERR_OVERFLOW;
     }
-    if ((bitfield_bytes != 0u) && ((bits_le == NULL) || (bits_le_len < bitfield_bytes)))
+    else if ((bitfield_bytes != 0u) && ((bits_le == NULL) || (bits_le_len < bitfield_bytes)))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if ((bit_len % 8u) != 0u)
+    else
     {
-        uint8_t mask = (uint8_t)((1u << (bit_len % 8u)) - 1u);
-        if ((bits_le[bitfield_bytes - 1u] & (uint8_t)(~mask)) != 0u)
+        if ((bit_len % 8u) != 0u)
         {
-            return SSZ_ERR_ENCODING_INVALID;
+            uint8_t mask = (uint8_t)((1u << (bit_len % 8u)) - 1u);
+            if ((bits_le[bitfield_bytes - 1u] & (uint8_t)(~mask)) != 0u)
+            {
+                err = SSZ_ERR_ENCODING_INVALID;
+            }
+            else
+            {
+                /* intentionally empty */
+            }
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+
+        if ((err == SSZ_SUCCESS) && (bit_limit != SSZ_NO_LIMIT))
+        {
+            if (ssz_internal_add_overflow_u64(bit_limit, 255u, &chunk_limit))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
+            {
+                chunk_limit /= 256u;
+            }
+        }
+        else
+        {
+            /* intentionally empty */
+        }
+
+        if ((err == SSZ_SUCCESS) && !ssz_merkle_cache_internal_limit_matches(cache, chunk_limit))
+        {
+            err = SSZ_ERR_INVALID_ARGUMENT;
+        }
+        else if ((err == SSZ_SUCCESS) && !cache->mix_in_length)
+        {
+            err = SSZ_ERR_INVALID_ARGUMENT;
+        }
+        else if (err == SSZ_SUCCESS)
+        {
+            err = ssz_merkle_cache_sync_packed_bytes(cache, bits_le, bitfield_bytes, bit_len);
+        }
+        else
+        {
+            /* intentionally empty */
         }
     }
 
-    if (bit_limit != SSZ_NO_LIMIT)
-    {
-        if (ssz_internal_add_overflow_u64(bit_limit, 255u, &chunk_limit))
-        {
-            return SSZ_ERR_OVERFLOW;
-        }
-        chunk_limit /= 256u;
-    }
-
-    if (!ssz_merkle_cache_internal_limit_matches(cache, chunk_limit))
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-    if (!cache->mix_in_length)
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-
-    return ssz_merkle_cache_sync_packed_bytes(cache, bits_le, bitfield_bytes, bit_len);
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_sync_composite_run(
@@ -2197,108 +2755,88 @@ static ssz_error_t ssz_merkle_cache_internal_sync_composite_run(
     const ssz_merkle_cache_sync_composite_opts_t *opts,
     uint64_t run_start,
     uint64_t run_len,
-    const uint64_t *run_tokens)
+    bool commit_tokens)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if ((cache == NULL) || (codec == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (run_len == 0u)
+    else if (run_len == 0u)
     {
-        return SSZ_SUCCESS;
+        err = SSZ_SUCCESS;
     }
-
-    if ((opts != NULL) && (opts->root_batch != NULL))
+    else if (commit_tokens && !cache->token_storage_ready)
     {
-        size_t run_len_sz = 0u;
-        ssz_chunk_t *tmp_roots = NULL;
-        size_t tmp_bytes = 0u;
-        if (!ssz_internal_u64_to_size(run_len, &run_len_sz))
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if ((opts != NULL) && (opts->root_batch != NULL))
+    {
+        if ((opts->workspace == NULL) || !ssz_merkle_cache_internal_struct_size_valid(
+                                             opts->workspace->struct_size,
+                                             sizeof(*opts->workspace)))
         {
-            return SSZ_ERR_OVERFLOW;
+            err = SSZ_ERR_INVALID_ARGUMENT;
         }
-        if (ssz_internal_mul_overflow_size(run_len_sz, sizeof(*tmp_roots), &tmp_bytes))
+        else if (
+            (opts->workspace->root_batch_roots_count < (size_t)run_len) ||
+            !ssz_merkle_cache_internal_pointer_available(
+                opts->workspace->root_batch_roots,
+                (size_t)run_len))
         {
-            return SSZ_ERR_OVERFLOW;
+            err = SSZ_ERR_BUFFER_TOO_SMALL;
         }
-        tmp_roots = (ssz_chunk_t *)ssz_merkle_cache_internal_alloc_aligned32(tmp_bytes);
-        if (tmp_roots == NULL)
+        else
         {
-            return SSZ_ERR_OVERFLOW;
-        }
+            ssz_chunk_t *roots = opts->workspace->root_batch_roots;
 
-        {
-            ssz_error_t err = opts->root_batch(opts->ctx, run_start, run_len, tmp_roots);
-            if (err != SSZ_SUCCESS)
+            err = opts->root_batch(opts->ctx, run_start, run_len, roots);
+            for (uint64_t i = 0u; (i < run_len) && (err == SSZ_SUCCESS); i++)
             {
-                ssz_merkle_cache_internal_free_aligned32(tmp_roots);
-                return err;
+                uint64_t index = run_start + i;
+
+                err = ssz_merkle_cache_internal_set_leaf(cache, index, &roots[i], false);
+                if ((err == SSZ_SUCCESS) && commit_tokens)
+                {
+                    ssz_merkle_cache_internal_token_valid_set(cache, index, true);
+                }
+                else
+                {
+                    /* intentionally empty */
+                }
             }
         }
-
-        for (uint64_t i = 0u; i < run_len; i++)
+    }
+    else
+    {
+        for (uint64_t i = 0u; (i < run_len) && (err == SSZ_SUCCESS); i++)
         {
             uint64_t index = run_start + i;
-            ssz_error_t set_err = ssz_merkle_cache_internal_set_leaf(cache, index, &tmp_roots[i], false);
-            if (set_err != SSZ_SUCCESS)
+            ssz_chunk_t root;
+
+            err = codec->root(codec->ctx, index, &root);
+            if (err == SSZ_SUCCESS)
             {
-                ssz_merkle_cache_internal_free_aligned32(tmp_roots);
-                return set_err;
+                err = ssz_merkle_cache_internal_set_leaf(cache, index, &root, false);
             }
-            if (cache->token_storage_ready)
+            else
             {
-                size_t token_index = 0u;
-                if (!ssz_internal_u64_to_size(index, &token_index) ||
-                    (token_index >= cache->leaf_token_capacity))
-                {
-                    ssz_merkle_cache_internal_free_aligned32(tmp_roots);
-                    return SSZ_ERR_OVERFLOW;
-                }
-                if (run_tokens != NULL)
-                {
-                    cache->leaf_tokens[token_index] = run_tokens[i];
-                }
+                /* intentionally empty */
+            }
+
+            if ((err == SSZ_SUCCESS) && commit_tokens)
+            {
                 ssz_merkle_cache_internal_token_valid_set(cache, index, true);
             }
-        }
-
-        ssz_merkle_cache_internal_free_aligned32(tmp_roots);
-        return SSZ_SUCCESS;
-    }
-
-    for (uint64_t i = 0u; i < run_len; i++)
-    {
-        uint64_t index = run_start + i;
-        ssz_chunk_t root;
-        ssz_error_t err = codec->root(codec->ctx, index, &root);
-        if (err != SSZ_SUCCESS)
-        {
-            return err;
-        }
-        {
-            ssz_error_t set_err = ssz_merkle_cache_internal_set_leaf(cache, index, &root, false);
-            if (set_err != SSZ_SUCCESS)
+            else
             {
-                return set_err;
+                /* intentionally empty */
             }
-        }
-        if (cache->token_storage_ready)
-        {
-            size_t token_index = 0u;
-            if (!ssz_internal_u64_to_size(index, &token_index) ||
-                (token_index >= cache->leaf_token_capacity))
-            {
-                return SSZ_ERR_OVERFLOW;
-            }
-            if (run_tokens != NULL)
-            {
-                cache->leaf_tokens[token_index] = run_tokens[i];
-            }
-            ssz_merkle_cache_internal_token_valid_set(cache, index, true);
         }
     }
 
-    return SSZ_SUCCESS;
+    return err;
 }
 
 static ssz_error_t ssz_merkle_cache_internal_sync_composite_fallback(
@@ -2307,60 +2845,77 @@ static ssz_error_t ssz_merkle_cache_internal_sync_composite_fallback(
     const ssz_member_codec_t *codec,
     const ssz_merkle_cache_sync_composite_opts_t *opts)
 {
-    uint64_t old_leaf_count = cache->leaf_count;
+    uint64_t old_leaf_count = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
 
     if ((cache == NULL) || (codec == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-
-    if ((opts != NULL) && (opts->root_batch != NULL) && (element_count != 0u))
-    {
-        ssz_error_t run_err = ssz_merkle_cache_internal_sync_composite_run(
-            cache, codec, opts, 0u, element_count, cache->leaf_tokens);
-        if (run_err != SSZ_SUCCESS)
-        {
-            return run_err;
-        }
-        ssz_merkle_cache_internal_token_valid_clear_range(cache, 0u, element_count);
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
     else
     {
-        for (uint64_t i = 0u; i < element_count; i++)
+        old_leaf_count = cache->leaf_count;
+        if ((opts != NULL) && (opts->root_batch != NULL) && (element_count != 0u))
         {
-            ssz_chunk_t root;
-            ssz_error_t err = codec->root(codec->ctx, i, &root);
-            if (err != SSZ_SUCCESS)
+            err = ssz_merkle_cache_internal_sync_composite_run(
+                cache,
+                codec,
+                opts,
+                0u,
+                element_count,
+                false);
+            if (err == SSZ_SUCCESS)
             {
-                return err;
+                ssz_merkle_cache_internal_token_valid_clear_range(cache, 0u, element_count);
             }
+            else
             {
-                ssz_error_t set_err = ssz_merkle_cache_internal_set_leaf(cache, i, &root, false);
-                if (set_err != SSZ_SUCCESS)
+                /* intentionally empty */
+            }
+        }
+        else
+        {
+            for (uint64_t i = 0u; (i < element_count) && (err == SSZ_SUCCESS); i++)
+            {
+                ssz_chunk_t root;
+
+                err = codec->root(codec->ctx, i, &root);
+                if (err == SSZ_SUCCESS)
                 {
-                    return set_err;
+                    err = ssz_merkle_cache_internal_set_leaf(cache, i, &root, false);
+                }
+                else
+                {
+                    /* intentionally empty */
+                }
+
+                if (err == SSZ_SUCCESS)
+                {
+                    ssz_merkle_cache_internal_token_valid_set(cache, i, false);
+                }
+                else
+                {
+                    /* intentionally empty */
                 }
             }
-            ssz_merkle_cache_internal_token_valid_set(cache, i, false);
         }
-    }
 
-    if (element_count < old_leaf_count)
-    {
-        ssz_error_t zero_err =
-            ssz_merkle_cache_zero_range(cache, element_count, old_leaf_count - element_count);
-        if (zero_err != SSZ_SUCCESS)
+        if ((err == SSZ_SUCCESS) && (element_count < old_leaf_count))
         {
-            return zero_err;
+            err = ssz_merkle_cache_zero_range(cache, element_count, old_leaf_count - element_count);
+        }
+        else if ((err == SSZ_SUCCESS) && (element_count > old_leaf_count))
+        {
+            cache->leaf_count = element_count;
+            ssz_merkle_cache_internal_invalidate_data_root(cache);
+        }
+        else
+        {
+            /* intentionally empty */
         }
     }
-    else if (element_count > old_leaf_count)
-    {
-        cache->leaf_count = element_count;
-        ssz_merkle_cache_internal_invalidate_data_root(cache);
-    }
 
-    return SSZ_SUCCESS;
+    return err;
 }
 
 ssz_error_t ssz_merkle_cache_sync_composite(
@@ -2373,182 +2928,242 @@ ssz_error_t ssz_merkle_cache_sync_composite(
     uint64_t old_leaf_count = 0u;
     uint64_t run_start = 0u;
     uint64_t run_len = 0u;
-    uint64_t *run_tokens = NULL;
-    size_t run_tokens_cap = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
+    bool mark_needs_resync = false;
 
-    if ((cache == NULL) || (codec == NULL) || (codec->root == NULL))
+    if (!ssz_merkle_cache_internal_cache_is_bound(cache) || (codec == NULL) ||
+        (codec->root == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
+    else if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
     {
-        return SSZ_ERR_LIMIT_EXCEEDED;
+        err = SSZ_ERR_LIMIT_EXCEEDED;
     }
-    if (!ssz_merkle_cache_internal_limit_matches(cache, element_limit))
+    else if (!ssz_merkle_cache_internal_limit_matches(cache, element_limit))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-
+    else
     {
-        ssz_error_t cap_err = ssz_merkle_cache_internal_ensure_capacity_for_count(cache, element_count);
-        if (cap_err != SSZ_SUCCESS)
-        {
-            return cap_err;
-        }
+        err = ssz_merkle_cache_internal_validate_sync_opts(cache, element_count, opts);
     }
 
-    old_leaf_count = cache->leaf_count;
-
-    if ((opts == NULL) || (opts->token == NULL))
+    if (err == SSZ_SUCCESS)
     {
-        ssz_error_t fallback_err =
-            ssz_merkle_cache_internal_sync_composite_fallback(cache, element_count, codec, opts);
-        if (fallback_err != SSZ_SUCCESS)
-        {
-            cache->needs_resync = true;
-            return fallback_err;
-        }
-
-        {
-            ssz_error_t len_err = ssz_merkle_cache_set_logical_length(cache, element_count);
-            assert(len_err == SSZ_SUCCESS);
-            (void)len_err;
-        }
-
-        cache->needs_resync = false;
-        return SSZ_SUCCESS;
+        err = ssz_merkle_cache_internal_ensure_capacity_for_count(cache, element_count);
+    }
+    else
+    {
+        /* intentionally empty */
     }
 
+    if (err == SSZ_SUCCESS)
     {
-        ssz_error_t tok_store_err = ssz_merkle_cache_internal_ensure_token_storage(cache);
-        if (tok_store_err != SSZ_SUCCESS)
-        {
-            return tok_store_err;
-        }
-    }
+        old_leaf_count = cache->leaf_count;
 
-    for (uint64_t i = 0u; i < element_count; i++)
-    {
-        uint64_t token = 0u;
-        bool unchanged = false;
-        ssz_error_t token_err = opts->token(opts->ctx, i, &token);
-        if (token_err != SSZ_SUCCESS)
+        if ((opts == NULL) || (opts->token == NULL))
         {
-            cache->needs_resync = true;
-            free(run_tokens);
-            return token_err;
-        }
-
-        if (i < old_leaf_count)
-        {
-            size_t i_sz = 0u;
-            if (!ssz_internal_u64_to_size(i, &i_sz))
+            err = ssz_merkle_cache_internal_sync_composite_fallback(
+                cache,
+                element_count,
+                codec,
+                opts);
+            if (err != SSZ_SUCCESS)
             {
-                cache->needs_resync = true;
-                free(run_tokens);
-                return SSZ_ERR_OVERFLOW;
+                mark_needs_resync = true;
             }
-            unchanged = ssz_merkle_cache_internal_token_valid_get(cache, i) &&
-                        (cache->leaf_tokens[i_sz] == token);
-        }
-
-        if (unchanged)
-        {
-            if (run_len != 0u)
+            else
             {
-                ssz_error_t run_err = ssz_merkle_cache_internal_sync_composite_run(
-                    cache, codec, opts, run_start, run_len, run_tokens);
-                if (run_err != SSZ_SUCCESS)
+                ssz_error_t len_err = ssz_merkle_cache_set_logical_length(cache, element_count);
+                assert(len_err == SSZ_SUCCESS);
+                (void)len_err;
+                cache->needs_resync = false;
+            }
+        }
+        else
+        {
+            for (uint64_t i = 0u; (i < element_count) && (err == SSZ_SUCCESS); i++)
+            {
+                uint64_t token = 0u;
+                bool unchanged = false;
+
+                err = opts->token(opts->ctx, i, &token);
+                if (err != SSZ_SUCCESS)
                 {
-                    cache->needs_resync = true;
-                    free(run_tokens);
-                    return run_err;
+                    mark_needs_resync = true;
                 }
-                run_len = 0u;
-            }
-            continue;
-        }
-
-        if (run_len == 0u)
-        {
-            run_start = i;
-            run_len = 1u;
-        }
-        else if (i == run_start + run_len)
-        {
-            run_len++;
-        }
-
-        if (run_len > run_tokens_cap)
-        {
-            size_t new_cap = 0u;
-            {
-                ssz_error_t cap_err =
-                    ssz_merkle_cache_internal_grow_capacity(run_tokens_cap, (size_t)run_len, &new_cap);
-                assert(cap_err == SSZ_SUCCESS);
-                (void)cap_err;
-            }
-            {
-                uint64_t *new_tokens = (uint64_t *)realloc(run_tokens, new_cap * sizeof(*new_tokens));
-                if (new_tokens == NULL)
+                else
                 {
-                    cache->needs_resync = true;
-                    free(run_tokens);
-                    return SSZ_ERR_OVERFLOW;
+                    if (i < old_leaf_count)
+                    {
+                        size_t token_index = 0u;
+
+                        if (!ssz_internal_u64_to_size(i, &token_index) ||
+                            (token_index >= cache->token_capacity))
+                        {
+                            err = SSZ_ERR_OVERFLOW;
+                            mark_needs_resync = true;
+                        }
+                        else
+                        {
+                            unchanged = ssz_merkle_cache_internal_token_valid_get(cache, i) &&
+                                        (cache->token_values[token_index] == token);
+                        }
+                    }
+                    else
+                    {
+                        unchanged = false;
+                    }
+
+                    if ((err == SSZ_SUCCESS) && unchanged)
+                    {
+                        if (run_len != 0u)
+                        {
+                            err = ssz_merkle_cache_internal_sync_composite_run(
+                                cache,
+                                codec,
+                                opts,
+                                run_start,
+                                run_len,
+                                true);
+                            if (err != SSZ_SUCCESS)
+                            {
+                                mark_needs_resync = true;
+                            }
+                            else
+                            {
+                                run_len = 0u;
+                            }
+                        }
+                        else
+                        {
+                            /* intentionally empty */
+                        }
+                    }
+                    else if (err == SSZ_SUCCESS)
+                    {
+                        size_t token_index = 0u;
+
+                        if (!ssz_internal_u64_to_size(i, &token_index) ||
+                            (token_index >= cache->token_capacity))
+                        {
+                            err = SSZ_ERR_OVERFLOW;
+                            mark_needs_resync = true;
+                        }
+                        else
+                        {
+                            cache->token_values[token_index] = token;
+                            ssz_merkle_cache_internal_token_valid_set(cache, i, false);
+
+                            if (run_len == 0u)
+                            {
+                                run_start = i;
+                                run_len = 1u;
+                            }
+                            else
+                            {
+                                run_len++;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        /* intentionally empty */
+                    }
                 }
-                run_tokens = new_tokens;
-                run_tokens_cap = new_cap;
+            }
+
+            if ((err == SSZ_SUCCESS) && (run_len != 0u))
+            {
+                err = ssz_merkle_cache_internal_sync_composite_run(
+                    cache,
+                    codec,
+                    opts,
+                    run_start,
+                    run_len,
+                    true);
+                if (err != SSZ_SUCCESS)
+                {
+                    mark_needs_resync = true;
+                }
+                else
+                {
+                    /* intentionally empty */
+                }
+            }
+            else
+            {
+                /* intentionally empty */
+            }
+
+            if ((err == SSZ_SUCCESS) && (element_count < old_leaf_count))
+            {
+                err = ssz_merkle_cache_zero_range(
+                    cache,
+                    element_count,
+                    old_leaf_count - element_count);
+                if (err != SSZ_SUCCESS)
+                {
+                    mark_needs_resync = true;
+                }
+                else
+                {
+                    /* intentionally empty */
+                }
+            }
+            else if ((err == SSZ_SUCCESS) && (element_count > old_leaf_count))
+            {
+                cache->leaf_count = element_count;
+                ssz_merkle_cache_internal_invalidate_data_root(cache);
+            }
+            else
+            {
+                /* intentionally empty */
+            }
+
+            if (err == SSZ_SUCCESS)
+            {
+                ssz_error_t len_err = ssz_merkle_cache_set_logical_length(cache, element_count);
+                assert(len_err == SSZ_SUCCESS);
+                (void)len_err;
+                cache->needs_resync = false;
+            }
+            else
+            {
+                /* intentionally empty */
             }
         }
-
-        run_tokens[run_len - 1u] = token;
     }
-
-    if (run_len != 0u)
+    else
     {
-        ssz_error_t run_err =
-            ssz_merkle_cache_internal_sync_composite_run(cache, codec, opts, run_start, run_len, run_tokens);
-        if (run_err != SSZ_SUCCESS)
-        {
-            cache->needs_resync = true;
-            free(run_tokens);
-            return run_err;
-        }
+        /* intentionally empty */
     }
 
-    free(run_tokens);
-
-    if (element_count < old_leaf_count)
+    if ((err != SSZ_SUCCESS) && mark_needs_resync)
     {
-        ssz_error_t zero_err =
-            ssz_merkle_cache_zero_range(cache, element_count, old_leaf_count - element_count);
-        if (zero_err != SSZ_SUCCESS)
-        {
-            cache->needs_resync = true;
-            return zero_err;
-        }
+        cache->needs_resync = true;
     }
-    else if (element_count > old_leaf_count)
+    else
     {
-        cache->leaf_count = element_count;
-        ssz_merkle_cache_internal_invalidate_data_root(cache);
+        /* intentionally empty */
     }
 
-    {
-        ssz_error_t len_err = ssz_merkle_cache_set_logical_length(cache, element_count);
-        assert(len_err == SSZ_SUCCESS);
-        (void)len_err;
-    }
-
-    cache->needs_resync = false;
-    return SSZ_SUCCESS;
+    return err;
 }
 
 bool ssz_merkle_cache_needs_resync(const ssz_merkle_cache_t *cache)
 {
-    if (cache == NULL)
+    bool needs_resync = false;
+
+    if (cache != NULL)
     {
-        return false;
+        needs_resync = cache->needs_resync;
     }
-    return cache->needs_resync;
+    else
+    {
+        needs_resync = false;
+    }
+
+    return needs_resync;
 }
