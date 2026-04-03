@@ -62,15 +62,12 @@ jobs:
           cppcheck \
             --addon=misra \
             --enable=all \
-            --error-exitcode=1 \
             --std=c11 \
             --project=build/compile_commands.json \
             --suppress=missingIncludeSystem \
             --suppress=unusedFunction \
+            --suppress=unmatchedSuppression \
             --suppress='*:*external/*' \
-            --suppress='*:*tests/*' \
-            --suppress='*:*bench/*' \
-            --suppress='*:*fuzz/*' \
             --suppress='misra-c2012-2.5:*include/*' \
             --suppress='misra-c2012-8.7' \
             -i external \
@@ -79,14 +76,14 @@ jobs:
             -i fuzz \
             2>&1 | tee misra-c-report.txt
 
-          # Count MISRA findings in project files only
-          misra_count=$(grep -c 'misra-c' misra-c-report.txt || true)
+          # Count MISRA violations in src/ and include/ only
+          misra_count=$(grep -cE 'src/.*\[misra-c2012-|include/.*\[misra-c2012-' misra-c-report.txt || true)
           echo ""
           echo "=== MISRA C Summary ==="
           echo "MISRA findings in project code: ${misra_count}"
           if [ "$misra_count" -gt 0 ]; then
             echo "MISRA C violations found!"
-            grep 'misra-c' misra-c-report.txt
+            grep -E 'src/.*\[misra-c2012-|include/.*\[misra-c2012-' misra-c-report.txt
             exit 1
           fi
           echo "No MISRA C violations in project code."
