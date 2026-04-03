@@ -34,17 +34,11 @@ static const ssz_merkle_scratch_t g_fuzz_merkle_scratch = {
 #define ssz_hash_tree_root_list_roots(roots, count, lim, hfn, out) \
     ssz_hash_tree_root_list_roots((roots), (count), (lim), &g_fuzz_merkle_scratch, (hfn), (out))
 
-#define ssz_hash_tree_root_union(sel, hn, codec, hfn, out) \
-    ssz_hash_tree_root_union((sel), (hn), (codec), &g_fuzz_merkle_scratch, (hfn), (out))
-
 #define ssz_merkleize(chunks, count, lim, hfn, out) \
     ssz_merkleize((chunks), (count), (lim), &g_fuzz_merkle_scratch, (hfn), (out))
 
 #define ssz_merkleize_progressive(chunks, count, hfn, out) \
     ssz_merkleize_progressive((chunks), (count), &g_fuzz_merkle_scratch, (hfn), (out))
-
-#define ssz_mix_in_active_fields(root, af, aflen, hfn, out) \
-    ssz_mix_in_active_fields((root), (af), (aflen), &g_fuzz_merkle_scratch, (hfn), (out))
 
 #define ssz_hash_tree_root_progressive_container(fc, af, aflen, codec, hfn, out) \
     ssz_hash_tree_root_progressive_container((fc), (af), (aflen), (codec), &g_fuzz_merkle_scratch, (hfn), (out))

@@ -173,12 +173,24 @@ static void *alloc_aligned32_zeroed(size_t count, size_t element_size)
 
     if (total != 0u)
     {
-        /* Round up to multiple of 32 for aligned_alloc requirement */
+        /* Round up to multiple of 32 for alignment requirement */
         total = (total + 31u) & ~(size_t)31u;
 #if defined(_MSC_VER)
         ptr = _aligned_malloc(total, 32u);
+#elif defined(_POSIX_C_SOURCE) || defined(__APPLE__) || defined(__linux__)
+        if (posix_memalign(&ptr, 32u, total) != 0)
+        {
+            ptr = NULL;
+        }
 #else
-        ptr = aligned_alloc(32u, total);
+        ptr = malloc(total + 32u + sizeof(void *));
+        if (ptr != NULL)
+        {
+            uintptr_t raw = (uintptr_t)ptr;
+            uintptr_t aligned = (raw + sizeof(void *) + 31u) & ~(uintptr_t)31u;
+            ((void **)aligned)[-1] = ptr;
+            ptr = (void *)aligned;
+        }
 #endif
         if (ptr != NULL)
         {
