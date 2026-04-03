@@ -3,6 +3,67 @@
 
 #include "ssz.h"
 
+static ssz_chunk_t g_fuzz_merkle_scratch_chunks[SSZ_MERKLE_SCRATCH_MAX_CHUNKS];
+static const ssz_merkle_scratch_t g_fuzz_merkle_scratch = {
+    .chunks = g_fuzz_merkle_scratch_chunks,
+    .chunk_count = SSZ_MERKLE_SCRATCH_MAX_CHUNKS,
+};
+
+/* Macro wrappers to inject scratch parameter into hash_tree_root functions */
+#define ssz_hash_tree_root_bitvector(bits, len, count, hfn, out) \
+    ssz_hash_tree_root_bitvector((bits), (len), (count), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_bitlist(bits, len, blen, blim, hfn, out) \
+    ssz_hash_tree_root_bitlist((bits), (len), (blen), (blim), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_vector_fixed(elems, count, esz, hfn, out) \
+    ssz_hash_tree_root_vector_fixed((elems), (count), (esz), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_vector_composite(count, codec, hfn, out) \
+    ssz_hash_tree_root_vector_composite((count), (codec), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_vector_roots(roots, count, hfn, out) \
+    ssz_hash_tree_root_vector_roots((roots), (count), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_list_fixed(elems, count, lim, esz, hfn, out) \
+    ssz_hash_tree_root_list_fixed((elems), (count), (lim), (esz), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_list_composite(count, lim, codec, hfn, out) \
+    ssz_hash_tree_root_list_composite((count), (lim), (codec), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_list_roots(roots, count, lim, hfn, out) \
+    ssz_hash_tree_root_list_roots((roots), (count), (lim), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_union(sel, hn, codec, hfn, out) \
+    ssz_hash_tree_root_union((sel), (hn), (codec), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_merkleize(chunks, count, lim, hfn, out) \
+    ssz_merkleize((chunks), (count), (lim), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_merkleize_progressive(chunks, count, hfn, out) \
+    ssz_merkleize_progressive((chunks), (count), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_mix_in_active_fields(root, af, aflen, hfn, out) \
+    ssz_mix_in_active_fields((root), (af), (aflen), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_progressive_container(fc, af, aflen, codec, hfn, out) \
+    ssz_hash_tree_root_progressive_container((fc), (af), (aflen), (codec), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_progressive_list_fixed(elems, count, esz, hfn, out) \
+    ssz_hash_tree_root_progressive_list_fixed((elems), (count), (esz), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_progressive_list_composite(count, codec, hfn, out) \
+    ssz_hash_tree_root_progressive_list_composite((count), (codec), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_progressive_bitlist(bits, len, blen, hfn, out) \
+    ssz_hash_tree_root_progressive_bitlist((bits), (len), (blen), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_progressive_container_roots(roots, count, af, aflen, hfn, out) \
+    ssz_hash_tree_root_progressive_container_roots((roots), (count), (af), (aflen), &g_fuzz_merkle_scratch, (hfn), (out))
+
+#define ssz_hash_tree_root_progressive_list_roots(roots, count, hfn, out) \
+    ssz_hash_tree_root_progressive_list_roots((roots), (count), &g_fuzz_merkle_scratch, (hfn), (out))
+
 typedef struct
 {
     const uint8_t *ptr;

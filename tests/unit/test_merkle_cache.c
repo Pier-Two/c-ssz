@@ -166,23 +166,55 @@ static void *alloc_zeroed(size_t count, size_t element_size)
     return ptr;
 }
 
+static void *alloc_aligned32_zeroed(size_t count, size_t element_size)
+{
+    void *ptr = NULL;
+    size_t total = count * element_size;
+
+    if (total != 0u)
+    {
+        /* Round up to multiple of 32 for aligned_alloc requirement */
+        total = (total + 31u) & ~(size_t)31u;
+#if defined(_MSC_VER)
+        ptr = _aligned_malloc(total, 32u);
+#else
+        ptr = aligned_alloc(32u, total);
+#endif
+        if (ptr != NULL)
+        {
+            (void)memset(ptr, 0, total);
+        }
+    }
+
+    return ptr;
+}
+
+static void free_aligned32(void *ptr)
+{
+#if defined(_MSC_VER)
+    _aligned_free(ptr);
+#else
+    free(ptr);
+#endif
+}
+
 static void cache_fixture_cleanup(cache_fixture_t *fixture)
 {
     if (fixture != NULL)
     {
-        free(fixture->nodes);
+        free_aligned32(fixture->nodes);
         free(fixture->leaf_dirty_bits);
         free(fixture->leaf_dirty_word_idx);
         free(fixture->parent_dirty_bits[0]);
         free(fixture->parent_dirty_bits[1]);
         free(fixture->parent_dirty_word_idx[0]);
         free(fixture->parent_dirty_word_idx[1]);
-        free(fixture->gather_pairs);
-        free(fixture->gather_hashes);
+        free_aligned32(fixture->gather_pairs);
+        free_aligned32(fixture->gather_hashes);
         free(fixture->gather_parent_indices);
         free(fixture->token_values);
         free(fixture->token_valid_bits);
-        free(fixture->root_batch_roots);
+        free_aligned32(fixture->root_batch_roots);
         (void)memset(fixture, 0, sizeof(*fixture));
     }
     else
@@ -250,7 +282,7 @@ static ssz_error_t cache_fixture_init(
 
     if (err == SSZ_SUCCESS)
     {
-        fixture->nodes = alloc_zeroed(fixture->requirements.nodes_count, sizeof(*fixture->nodes));
+        fixture->nodes = alloc_aligned32_zeroed(fixture->requirements.nodes_count, sizeof(*fixture->nodes));
         fixture->leaf_dirty_bits =
             alloc_zeroed(fixture->requirements.leaf_dirty_words, sizeof(*fixture->leaf_dirty_bits));
         fixture->leaf_dirty_word_idx = alloc_zeroed(
@@ -269,14 +301,14 @@ static ssz_error_t cache_fixture_init(
             fixture->requirements.parent_dirty_words,
             sizeof(*fixture->parent_dirty_word_idx[1]));
         fixture->gather_pairs =
-            alloc_zeroed(fixture->requirements.gather_pairs_count, sizeof(*fixture->gather_pairs));
-        fixture->gather_hashes = alloc_zeroed(
+            alloc_aligned32_zeroed(fixture->requirements.gather_pairs_count, sizeof(*fixture->gather_pairs));
+        fixture->gather_hashes = alloc_aligned32_zeroed(
             fixture->requirements.gather_hashes_count,
             sizeof(*fixture->gather_hashes));
         fixture->gather_parent_indices = alloc_zeroed(
             fixture->requirements.gather_parent_indices_count,
             sizeof(*fixture->gather_parent_indices));
-        fixture->root_batch_roots = alloc_zeroed(
+        fixture->root_batch_roots = alloc_aligned32_zeroed(
             fixture->requirements.root_batch_roots_count,
             sizeof(*fixture->root_batch_roots));
 
