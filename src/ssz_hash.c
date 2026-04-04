@@ -5,6 +5,12 @@
 
 #include <openssl/sha.h>
 
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <pthread.h>
+#endif
+
 #if defined(__has_feature)
 #if __has_feature(memory_sanitizer)
 #include <sanitizer/msan_interface.h>
@@ -135,18 +141,14 @@ static const ssz_hash_fn_t ssz_internal_default_hash_fn = {
     .ctx = NULL,
 };
 
+/* This shared table is reached through public Merkle APIs, so first-use
+   initialization must be serialized across threads. */
 static ssz_chunk_t ssz_internal_default_zero_hashes[64];
-static bool ssz_internal_default_zero_hashes_initialized = false;
 
 static void ssz_internal_init_default_zero_hashes(void)
 {
     ssz_chunk_t computed[64];
     uint8_t pair[SSZ_BYTES_PER_CHUNK * 2u];
-
-    if (ssz_internal_default_zero_hashes_initialized)
-    {
-        return;
-    }
 
     memset(computed[0].bytes, 0u, SSZ_BYTES_PER_CHUNK);
     for (size_t depth = 1u; depth < 64u; depth++)
@@ -157,8 +159,26 @@ static void ssz_internal_init_default_zero_hashes(void)
     }
 
     memcpy(ssz_internal_default_zero_hashes, computed, sizeof(computed));
-    ssz_internal_default_zero_hashes_initialized = true;
 }
+
+#if defined(_WIN32)
+static INIT_ONCE ssz_internal_default_zero_hashes_once = INIT_ONCE_STATIC_INIT;
+
+static BOOL CALLBACK ssz_internal_init_default_zero_hashes_once(
+    PINIT_ONCE init_once,
+    PVOID parameter,
+    PVOID *context)
+{
+    (void)init_once;
+    (void)parameter;
+    (void)context;
+
+    ssz_internal_init_default_zero_hashes();
+    return TRUE;
+}
+#else
+static pthread_once_t ssz_internal_default_zero_hashes_once = PTHREAD_ONCE_INIT;
+#endif
 
 const ssz_hash_fn_t *ssz_hash_default(void)
 {
@@ -167,7 +187,22 @@ const ssz_hash_fn_t *ssz_hash_default(void)
 
 const ssz_chunk_t *ssz_hash_default_zero_hashes(void)
 {
-    ssz_internal_init_default_zero_hashes();
+#if defined(_WIN32)
+    if (InitOnceExecuteOnce(&ssz_internal_default_zero_hashes_once,
+                            ssz_internal_init_default_zero_hashes_once,
+                            NULL,
+                            NULL) == 0)
+    {
+        return NULL;
+    }
+#else
+    if (pthread_once(&ssz_internal_default_zero_hashes_once, ssz_internal_init_default_zero_hashes) !=
+        0)
+    {
+        return NULL;
+    }
+#endif
+
     return ssz_internal_default_zero_hashes;
 }
 

@@ -53,6 +53,8 @@ set(SSZ_PLATFORM_LIBS)
 if(NOT WIN32)
   list(APPEND SSZ_PLATFORM_LIBS m)
 endif()
+find_package(Threads REQUIRED)
+list(APPEND SSZ_PLATFORM_LIBS Threads::Threads)
 
 add_library(ssz
   src/ssz_types.c
@@ -105,6 +107,10 @@ target_include_directories(test_hash PRIVATE
 )
 target_link_libraries(test_hash PRIVATE ssz)
 add_test(NAME test_hash COMMAND test_hash)
+
+add_executable(test_hash_threaded tests/unit/test_hash_threaded.c)
+target_link_libraries(test_hash_threaded PRIVATE ssz)
+add_test(NAME test_hash_threaded COMMAND test_hash_threaded)
 
 add_executable(test_types tests/unit/test_types.c)
 target_link_libraries(test_types PRIVATE ssz)
