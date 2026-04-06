@@ -1,6 +1,8 @@
+#include <stdint.h>
 #include <string.h>
 
 #include "ssz_internal.h"
+#include "ssz_types.h"
 
 static ssz_error_t ssz_types_internal_measure_member(
     ssz_member_codec_t *codec,
@@ -31,11 +33,7 @@ static ssz_error_t ssz_types_internal_capture_member(
     size_t written = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
-    if ((codec == NULL) || (codec->write == NULL))
-    {
-        err = SSZ_ERR_INVALID_ARGUMENT;
-    }
-    else if ((expected_len != 0u) && (out_bytes == NULL))
+    if ((codec == NULL) || (codec->write == NULL) || ((expected_len != 0u) && (out_bytes == NULL)))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
@@ -95,6 +93,7 @@ static ssz_error_t ssz_types_internal_restore_member(
     return err;
 }
 
+/* NOLINTNEXTLINE(readability-function-cognitive-complexity) */
 static ssz_error_t ssz_types_internal_member_is_default(
     ssz_member_codec_t *codec,
     uint64_t member_id,
@@ -110,11 +109,7 @@ static ssz_error_t ssz_types_internal_member_is_default(
     bool is_default = false;
     ssz_error_t err = SSZ_SUCCESS;
 
-    if (out_is_default == NULL)
-    {
-        err = SSZ_ERR_INVALID_ARGUMENT;
-    }
-    else if ((codec == NULL) || (codec->read == NULL) || (codec->write == NULL))
+    if ((out_is_default == NULL) || (codec == NULL) || (codec->read == NULL) || (codec->write == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
@@ -238,15 +233,7 @@ ssz_error_t ssz_default_union(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (option_count == 0u)
-    {
-        err = SSZ_ERR_SCHEMA_INVALID;
-    }
-    else if (option_count > 256u)
-    {
-        err = SSZ_ERR_SCHEMA_INVALID;
-    }
-    else if (has_none && (option_count < 2u))
+    else if ((option_count == 0u) || (option_count > 256u) || (has_none && (option_count < 2u)))
     {
         err = SSZ_ERR_SCHEMA_INVALID;
     }
@@ -272,17 +259,13 @@ ssz_error_t ssz_is_zero_vector_composite(
     ssz_error_t err = SSZ_SUCCESS;
     bool is_zero = true;
 
-    if (out_is_zero == NULL)
+    if ((out_is_zero == NULL) || (codec == NULL) || (codec->read == NULL) || (codec->write == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
     else if (element_count == 0u)
     {
         err = SSZ_ERR_SCHEMA_INVALID;
-    }
-    else if ((codec == NULL) || (codec->read == NULL) || (codec->write == NULL))
-    {
-        err = SSZ_ERR_INVALID_ARGUMENT;
     }
     else
     {
@@ -317,17 +300,13 @@ ssz_error_t ssz_is_zero_container(
     ssz_error_t err = SSZ_SUCCESS;
     bool is_zero = true;
 
-    if (out_is_zero == NULL)
+    if ((out_is_zero == NULL) || (codec == NULL) || (codec->read == NULL) || (codec->write == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
     else if ((field_fixed_sizes == NULL) || (field_count == 0u))
     {
         err = SSZ_ERR_SCHEMA_INVALID;
-    }
-    else if ((codec == NULL) || (codec->read == NULL) || (codec->write == NULL))
-    {
-        err = SSZ_ERR_INVALID_ARGUMENT;
     }
     else
     {
@@ -366,15 +345,7 @@ ssz_error_t ssz_is_zero_union(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (option_count == 0u)
-    {
-        err = SSZ_ERR_SCHEMA_INVALID;
-    }
-    else if (option_count > 256u)
-    {
-        err = SSZ_ERR_SCHEMA_INVALID;
-    }
-    else if (has_none && (option_count < 2u))
+    else if ((option_count == 0u) || (option_count > 256u) || (has_none && (option_count < 2u)))
     {
         err = SSZ_ERR_SCHEMA_INVALID;
     }
@@ -400,7 +371,7 @@ ssz_error_t ssz_is_zero_union(
 
 const char *ssz_error_string(ssz_error_t error)
 {
-    const char *error_string = "SSZ_ERR_UNKNOWN";
+    const char *error_string = NULL;
 
     switch (error)
     {
@@ -444,6 +415,7 @@ const char *ssz_error_string(ssz_error_t error)
             error_string = "SSZ_ERR_HASH_FAILURE";
             break;
         default:
+            error_string = "SSZ_ERR_UNKNOWN";
             break;
     }
 
