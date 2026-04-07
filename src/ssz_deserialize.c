@@ -568,7 +568,7 @@ ssz_error_t ssz_deserialize_container(
         {
             size_t fixed_size = field_fixed_sizes[i];
 
-                    if (fixed_size == 0u)
+            if (fixed_size == 0u)
             {
                 uint32_t offset = ssz_internal_read_u32_le(&in[cursor]);
 
