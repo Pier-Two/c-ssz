@@ -15,6 +15,7 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
     uint32_t first_offset = 0u;
     uint32_t prev_offset = 0u;
 
+    /* NOLINTBEGIN(bugprone-branch-clone) */
     if ((codec == NULL) || (codec->read == NULL) || (in == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
@@ -43,6 +44,7 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
             prev_offset = first_offset;
         }
     }
+    /* NOLINTEND(bugprone-branch-clone) */
 
     if (err == SSZ_SUCCESS)
     {
@@ -338,6 +340,7 @@ ssz_error_t ssz_deserialize_vector_fixed(
     size_t required = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
+    /* NOLINTBEGIN(bugprone-branch-clone) */
     if (element_count == 0u)
     {
         err = SSZ_ERR_SCHEMA_INVALID;
@@ -373,6 +376,7 @@ ssz_error_t ssz_deserialize_vector_fixed(
             /* intentionally empty */
         }
     }
+    /* NOLINTEND(bugprone-branch-clone) */
 
     return err;
 }
@@ -468,6 +472,7 @@ ssz_error_t ssz_deserialize_list_variable(
     uint32_t first_offset = 0u;
     uint32_t element_count_u32 = 0u;
 
+    /* NOLINTBEGIN(bugprone-branch-clone) */
     if (out_element_count == NULL)
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
@@ -518,10 +523,12 @@ ssz_error_t ssz_deserialize_list_variable(
             }
         }
     }
+    /* NOLINTEND(bugprone-branch-clone) */
 
     return err;
 }
 
+/* NOLINTNEXTLINE(readability-function-cognitive-complexity) */
 ssz_error_t ssz_deserialize_container(
     const uint8_t *in,
     size_t in_len,
@@ -568,6 +575,7 @@ ssz_error_t ssz_deserialize_container(
         {
             size_t fixed_size = field_fixed_sizes[i];
 
+            /* NOLINTBEGIN(bugprone-branch-clone) */
             if (fixed_size == 0u)
             {
                 uint32_t offset = ssz_internal_read_u32_le(&in[cursor]);
@@ -617,6 +625,7 @@ ssz_error_t ssz_deserialize_container(
                     }
                 }
             }
+            /* NOLINTEND(bugprone-branch-clone) */
         }
     }
 
@@ -688,6 +697,7 @@ ssz_error_t ssz_deserialize_union(
     ssz_error_t err = SSZ_SUCCESS;
     uint8_t selector = 0u;
 
+    /* NOLINTBEGIN(bugprone-branch-clone) */
     if (out_selector == NULL)
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
@@ -731,6 +741,7 @@ ssz_error_t ssz_deserialize_union(
             err = codec->read(codec->ctx, selector, &in[1u], in_len - 1u);
         }
     }
+    /* NOLINTEND(bugprone-branch-clone) */
 
     if (err == SSZ_SUCCESS)
     {

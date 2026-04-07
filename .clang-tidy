@@ -12,6 +12,7 @@ Checks: >
   -cert-dcl51-cpp,
   clang-analyzer-*,
   misc-*,
+  -misc-include-cleaner,
   -misc-unused-parameters,
   performance-*,
   portability-*,

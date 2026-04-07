@@ -1014,6 +1014,7 @@ static ssz_error_t ssz_internal_merkleize_reader(
     return err;
 }
 
+/* NOLINTNEXTLINE(readability-function-cognitive-complexity) */
 static ssz_error_t ssz_internal_merkleize_progressive_reader_iter(
     const ssz_internal_leaf_source_t *source,
     uint64_t source_start,
