@@ -103,6 +103,10 @@ ssz_error_t ssz_deserialize_uint8(const uint8_t *in, size_t in_len, uint8_t *out
     {
         err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
+    else if (in_len != 1u)
+    {
+        err = SSZ_ERR_ENCODING_INVALID;
+    }
     else
     {
         *out_value = in[0];
@@ -122,6 +126,10 @@ ssz_error_t ssz_deserialize_uint16(const uint8_t *in, size_t in_len, uint16_t *o
     else if (in_len < 2u)
     {
         err = SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+    else if (in_len != 2u)
+    {
+        err = SSZ_ERR_ENCODING_INVALID;
     }
     else
     {
@@ -143,6 +151,10 @@ ssz_error_t ssz_deserialize_uint32(const uint8_t *in, size_t in_len, uint32_t *o
     {
         err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
+    else if (in_len != 4u)
+    {
+        err = SSZ_ERR_ENCODING_INVALID;
+    }
     else
     {
         *out_value = ssz_internal_read_u32_le(in);
@@ -162,6 +174,10 @@ ssz_error_t ssz_deserialize_uint64(const uint8_t *in, size_t in_len, uint64_t *o
     else if (in_len < 8u)
     {
         err = SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+    else if (in_len != 8u)
+    {
+        err = SSZ_ERR_ENCODING_INVALID;
     }
     else
     {
@@ -183,6 +199,10 @@ ssz_error_t ssz_deserialize_uint128(const uint8_t *in, size_t in_len, uint8_t ou
     {
         err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
+    else if (in_len != 16u)
+    {
+        err = SSZ_ERR_ENCODING_INVALID;
+    }
     else
     {
         (void)memcpy(out_value, in, 16u);
@@ -203,6 +223,10 @@ ssz_error_t ssz_deserialize_uint256(const uint8_t *in, size_t in_len, uint8_t ou
     {
         err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
+    else if (in_len != 32u)
+    {
+        err = SSZ_ERR_ENCODING_INVALID;
+    }
     else
     {
         (void)memcpy(out_value, in, 32u);
@@ -222,6 +246,10 @@ ssz_error_t ssz_deserialize_boolean(const uint8_t *in, size_t in_len, uint8_t *o
     else if (in_len < 1u)
     {
         err = SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+    else if (in_len != 1u)
+    {
+        err = SSZ_ERR_ENCODING_INVALID;
     }
     else if (in[0] > 1u)
     {
