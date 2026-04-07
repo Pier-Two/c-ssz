@@ -12,10 +12,10 @@ extern "C"
 {
 #endif
 
-    ssz_error_t ssz_deserialize_uint8(const uint8_t in[1], uint8_t *out_value);
-    ssz_error_t ssz_deserialize_uint16(const uint8_t in[2], uint16_t *out_value);
-    ssz_error_t ssz_deserialize_uint32(const uint8_t in[4], uint32_t *out_value);
-    ssz_error_t ssz_deserialize_uint64(const uint8_t in[8], uint64_t *out_value);
+    ssz_error_t ssz_deserialize_uint8(const uint8_t *in, size_t in_len, uint8_t *out_value);
+    ssz_error_t ssz_deserialize_uint16(const uint8_t *in, size_t in_len, uint16_t *out_value);
+    ssz_error_t ssz_deserialize_uint32(const uint8_t *in, size_t in_len, uint32_t *out_value);
+    ssz_error_t ssz_deserialize_uint64(const uint8_t *in, size_t in_len, uint64_t *out_value);
     ssz_error_t ssz_deserialize_uint128(const uint8_t *in, size_t in_len, uint8_t out_value[16]);
     ssz_error_t ssz_deserialize_uint256(const uint8_t *in, size_t in_len, uint8_t out_value[32]);
     ssz_error_t ssz_deserialize_boolean(const uint8_t in[1], uint8_t *out_value);

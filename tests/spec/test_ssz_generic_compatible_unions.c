@@ -312,7 +312,13 @@ static ssz_error_t compute_list_u16_123_value(const yaml_node_t *node, computed_
         }
     }
 
-    err = ssz_serialize_list_fixed(flat, node->as.sequence.count, 123u, sizeof(uint16_t), NULL, 0u,
+    err = ssz_serialize_list_fixed(
+        flat,
+        node->as.sequence.count,
+        123u,
+        sizeof(uint16_t),
+        NULL,
+        0u,
         &out_len);
     if (err != SSZ_SUCCESS)
     {
@@ -327,8 +333,14 @@ static ssz_error_t compute_list_u16_123_value(const yaml_node_t *node, computed_
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    err = ssz_serialize_list_fixed(flat, node->as.sequence.count, 123u, sizeof(uint16_t), serialized,
-        out_len, &out_len);
+    err = ssz_serialize_list_fixed(
+        flat,
+        node->as.sequence.count,
+        123u,
+        sizeof(uint16_t),
+        serialized,
+        out_len,
+        &out_len);
     if (err != SSZ_SUCCESS)
     {
         free(flat);
@@ -336,8 +348,13 @@ static ssz_error_t compute_list_u16_123_value(const yaml_node_t *node, computed_
         return err;
     }
 
-    err = ssz_hash_tree_root_list_fixed(flat, node->as.sequence.count, 123u, sizeof(uint16_t),
-        ssz_hash_default(), &out_value->root);
+    err = ssz_hash_tree_root_list_fixed(
+        flat,
+        node->as.sequence.count,
+        123u,
+        sizeof(uint16_t),
+        ssz_hash_default(),
+        &out_value->root);
     free(flat);
 
     if (err != SSZ_SUCCESS)
@@ -351,7 +368,9 @@ static ssz_error_t compute_list_u16_123_value(const yaml_node_t *node, computed_
     return SSZ_SUCCESS;
 }
 
-static ssz_error_t compute_progressive_bitlist_value(const yaml_node_t *node, computed_value_t *out_value)
+static ssz_error_t compute_progressive_bitlist_value(
+    const yaml_node_t *node,
+    computed_value_t *out_value)
 {
     uint8_t *encoded = NULL;
     size_t encoded_len = 0u;
@@ -404,7 +423,14 @@ static ssz_error_t compute_progressive_bitlist_value(const yaml_node_t *node, co
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    err = ssz_serialize_bitlist(bits, bitfield_len, bit_len, SSZ_NO_LIMIT, serialized, out_len, &out_len);
+    err = ssz_serialize_bitlist(
+        bits,
+        bitfield_len,
+        bit_len,
+        SSZ_NO_LIMIT,
+        serialized,
+        out_len,
+        &out_len);
     if (err != SSZ_SUCCESS)
     {
         free(encoded);
@@ -413,7 +439,11 @@ static ssz_error_t compute_progressive_bitlist_value(const yaml_node_t *node, co
         return err;
     }
 
-    err = ssz_hash_tree_root_progressive_bitlist(bits, bitfield_len, bit_len, ssz_hash_default(),
+    err = ssz_hash_tree_root_progressive_bitlist(
+        bits,
+        bitfield_len,
+        bit_len,
+        ssz_hash_default(),
         &out_value->root);
 
     free(encoded);
@@ -496,8 +526,9 @@ static ssz_error_t compute_progressive_container(
     ssz_chunk_t data_root;
     ssz_error_t err;
 
-    if ((fields == NULL) || (fixed_sizes == NULL) || (field_slots == NULL) || (active_fields == NULL) ||
-        (out_value == NULL) || (field_count == 0u) || (active_fields_len == 0u))
+    if ((fields == NULL) || (fixed_sizes == NULL) || (field_slots == NULL) ||
+        (active_fields == NULL) || (out_value == NULL) || (field_count == 0u) ||
+        (active_fields_len == 0u))
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
@@ -522,13 +553,7 @@ static ssz_error_t compute_progressive_container(
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    err = ssz_serialize_container(
-        fixed_sizes,
-        field_count,
-        &codec,
-        serialized,
-        out_len,
-        &out_len);
+    err = ssz_serialize_container(fixed_sizes, field_count, &codec, serialized, out_len, &out_len);
     if (err != SSZ_SUCCESS)
     {
         free(serialized);
@@ -585,7 +610,11 @@ static ssz_error_t compute_progressive_container(
         return err;
     }
 
-    err = ssz_mix_in_active_fields(&data_root, active_fields, active_fields_len, ssz_hash_default(),
+    err = ssz_mix_in_active_fields(
+        &data_root,
+        active_fields,
+        active_fields_len,
+        ssz_hash_default(),
         &out_value->root);
     if (err != SSZ_SUCCESS)
     {
@@ -596,7 +625,9 @@ static ssz_error_t compute_progressive_container(
     return SSZ_SUCCESS;
 }
 
-static ssz_error_t compute_payload_single_field(const yaml_node_t *data_node, computed_value_t *out_value)
+static ssz_error_t compute_payload_single_field(
+    const yaml_node_t *data_node,
+    computed_value_t *out_value)
 {
     computed_value_t fields[1];
     const yaml_node_t *a_node;
@@ -623,13 +654,21 @@ static ssz_error_t compute_payload_single_field(const yaml_node_t *data_node, co
         return err;
     }
 
-    err = compute_progressive_container(fields, 1u, fixed_sizes, field_slots, active_fields,
-        sizeof(active_fields), out_value);
+    err = compute_progressive_container(
+        fields,
+        1u,
+        fixed_sizes,
+        field_slots,
+        active_fields,
+        sizeof(active_fields),
+        out_value);
     computed_value_reset(&fields[0]);
     return err;
 }
 
-static ssz_error_t compute_payload_single_list(const yaml_node_t *data_node, computed_value_t *out_value)
+static ssz_error_t compute_payload_single_list(
+    const yaml_node_t *data_node,
+    computed_value_t *out_value)
 {
     computed_value_t fields[1];
     const yaml_node_t *c_node;
@@ -656,8 +695,14 @@ static ssz_error_t compute_payload_single_list(const yaml_node_t *data_node, com
         return err;
     }
 
-    err = compute_progressive_container(fields, 1u, fixed_sizes, field_slots, active_fields,
-        sizeof(active_fields), out_value);
+    err = compute_progressive_container(
+        fields,
+        1u,
+        fixed_sizes,
+        field_slots,
+        active_fields,
+        sizeof(active_fields),
+        out_value);
     computed_value_reset(&fields[0]);
     return err;
 }
@@ -708,8 +753,14 @@ static ssz_error_t compute_payload_var(const yaml_node_t *data_node, computed_va
         return err;
     }
 
-    err = compute_progressive_container(fields, 3u, fixed_sizes, field_slots, active_fields,
-        sizeof(active_fields), out_value);
+    err = compute_progressive_container(
+        fields,
+        3u,
+        fixed_sizes,
+        field_slots,
+        active_fields,
+        sizeof(active_fields),
+        out_value);
 
     computed_value_reset(&fields[0]);
     computed_value_reset(&fields[1]);
@@ -782,7 +833,8 @@ static ssz_error_t validate_list_u16_123_bytes(const uint8_t *data, size_t data_
         return SSZ_ERR_INVALID_ARGUMENT;
     }
 
-    err = ssz_deserialize_list_fixed(data, data_len, 123u, sizeof(uint16_t), copy, data_len, &count);
+    err =
+        ssz_deserialize_list_fixed(data, data_len, 123u, sizeof(uint16_t), copy, data_len, &count);
     free(copy);
     return err;
 }
@@ -807,7 +859,7 @@ static ssz_error_t validate_single_field_read(
     }
 
     field_ctx->seen = true;
-    return ssz_deserialize_uint8(data, &out);
+    return ssz_deserialize_uint8(data, data_len, &out);
 }
 
 static ssz_error_t validate_payload_single_field(const uint8_t *data, size_t data_len)
@@ -881,7 +933,11 @@ typedef struct
     bool seen_c;
 } validate_var_ctx_t;
 
-static ssz_error_t validate_var_read(void *ctx, uint64_t member_id, const uint8_t *data, size_t data_len)
+static ssz_error_t validate_var_read(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
 {
     validate_var_ctx_t *field_ctx = (validate_var_ctx_t *)ctx;
     uint8_t out = 0u;
@@ -898,7 +954,7 @@ static ssz_error_t validate_var_read(void *ctx, uint64_t member_id, const uint8_
             return SSZ_ERR_TYPE_MISMATCH;
         }
         field_ctx->seen_a = true;
-        return ssz_deserialize_uint8(data, &out);
+        return ssz_deserialize_uint8(data, data_len, &out);
     }
     if (member_id == 1u)
     {
@@ -1091,7 +1147,10 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
         !allowed_selectors_for_family(family, &allowed_selectors, &allowed_selector_count))
     {
         report->valid_failed++;
-        spec_report_record_failure(report, case_name, "could not parse union family from case name");
+        spec_report_record_failure(
+            report,
+            case_name,
+            "could not parse union family from case name");
         return;
     }
 
@@ -1100,7 +1159,8 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
     value_path = spec_join_path(case_path, "value.yaml");
     meta_path = spec_join_path(case_path, "meta.yaml");
 
-    if ((case_path == NULL) || (serialized_path == NULL) || (value_path == NULL) || (meta_path == NULL))
+    if ((case_path == NULL) || (serialized_path == NULL) || (value_path == NULL) ||
+        (meta_path == NULL))
     {
         report->valid_failed++;
         spec_report_record_failure(report, case_name, "failed to allocate case paths");
@@ -1124,8 +1184,8 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
 
     selector_node = yaml_mapping_get(value_doc, "selector");
     data_node = yaml_mapping_get(value_doc, "data");
-    if ((selector_node == NULL) || (data_node == NULL) || !yaml_node_parse_u64(selector_node, &parsed_selector) ||
-        (parsed_selector > UINT8_MAX))
+    if ((selector_node == NULL) || (data_node == NULL) ||
+        !yaml_node_parse_u64(selector_node, &parsed_selector) || (parsed_selector > UINT8_MAX))
     {
         report->valid_failed++;
         spec_report_record_failure(report, case_path, "invalid selector/data in value.yaml");
@@ -1286,7 +1346,10 @@ static void run_invalid_case(spec_report_t *report, const char *suite_dir, const
         !allowed_selectors_for_family(family, &allowed_selectors, &allowed_selector_count))
     {
         report->invalid_failed++;
-        spec_report_record_failure(report, case_name, "could not parse union family from case name");
+        spec_report_record_failure(
+            report,
+            case_name,
+            "could not parse union family from case name");
         return;
     }
 

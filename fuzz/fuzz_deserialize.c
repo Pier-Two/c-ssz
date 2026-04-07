@@ -253,18 +253,18 @@ static void fuzz_cover_deserialize_errors(void)
     };
 
     (void)ssz_deserialize_boolean(in, NULL);
-    (void)ssz_deserialize_uint8(in, NULL);
-    (void)ssz_deserialize_uint16(in, NULL);
-    (void)ssz_deserialize_uint32(in, NULL);
-    (void)ssz_deserialize_uint64(in, NULL);
+    (void)ssz_deserialize_uint8(in, 1u, NULL);
+    (void)ssz_deserialize_uint16(in, 2u, NULL);
+    (void)ssz_deserialize_uint32(in, 4u, NULL);
+    (void)ssz_deserialize_uint64(in, 8u, NULL);
     (void)ssz_deserialize_uint128(in, 16u, NULL);
     (void)ssz_deserialize_uint256(in, 32u, NULL);
     (void)ssz_deserialize_boolean(bad_bool, &out_u8);
 
-    (void)ssz_deserialize_uint8(NULL, &out_u8);
-    (void)ssz_deserialize_uint16(NULL, &out_u16);
-    (void)ssz_deserialize_uint32(NULL, &out_u32);
-    (void)ssz_deserialize_uint64(NULL, &out_u64);
+    (void)ssz_deserialize_uint8(NULL, 1u, &out_u8);
+    (void)ssz_deserialize_uint16(NULL, 2u, &out_u16);
+    (void)ssz_deserialize_uint32(NULL, 4u, &out_u32);
+    (void)ssz_deserialize_uint64(NULL, 8u, &out_u64);
     (void)ssz_deserialize_uint128(NULL, 16u, out_u128);
     (void)ssz_deserialize_uint256(NULL, 32u, out_u256);
 
@@ -450,7 +450,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         }
 
         uint8_t out_value = 0u;
-        (void)ssz_deserialize_uint8(input.ptr, &out_value);
+        (void)ssz_deserialize_uint8(input.ptr, input.remaining, &out_value);
         break;
     }
 
@@ -462,7 +462,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         }
 
         uint16_t out_value = 0u;
-        (void)ssz_deserialize_uint16(input.ptr, &out_value);
+        (void)ssz_deserialize_uint16(input.ptr, input.remaining, &out_value);
         break;
     }
 
@@ -474,7 +474,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         }
 
         uint32_t out_value = 0u;
-        (void)ssz_deserialize_uint32(input.ptr, &out_value);
+        (void)ssz_deserialize_uint32(input.ptr, input.remaining, &out_value);
         break;
     }
 
@@ -486,7 +486,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         }
 
         uint64_t out_value = 0u;
-        (void)ssz_deserialize_uint64(input.ptr, &out_value);
+        (void)ssz_deserialize_uint64(input.ptr, input.remaining, &out_value);
         break;
     }
 

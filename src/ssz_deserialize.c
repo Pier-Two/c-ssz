@@ -91,13 +91,17 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
     return err;
 }
 
-ssz_error_t ssz_deserialize_uint8(const uint8_t in[1], uint8_t *out_value)
+ssz_error_t ssz_deserialize_uint8(const uint8_t *in, size_t in_len, uint8_t *out_value)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((in == NULL) || (out_value == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (in_len < 1u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else
     {
@@ -107,13 +111,17 @@ ssz_error_t ssz_deserialize_uint8(const uint8_t in[1], uint8_t *out_value)
     return err;
 }
 
-ssz_error_t ssz_deserialize_uint16(const uint8_t in[2], uint16_t *out_value)
+ssz_error_t ssz_deserialize_uint16(const uint8_t *in, size_t in_len, uint16_t *out_value)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((in == NULL) || (out_value == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (in_len < 2u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else
     {
@@ -123,13 +131,17 @@ ssz_error_t ssz_deserialize_uint16(const uint8_t in[2], uint16_t *out_value)
     return err;
 }
 
-ssz_error_t ssz_deserialize_uint32(const uint8_t in[4], uint32_t *out_value)
+ssz_error_t ssz_deserialize_uint32(const uint8_t *in, size_t in_len, uint32_t *out_value)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((in == NULL) || (out_value == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (in_len < 4u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else
     {
@@ -139,13 +151,17 @@ ssz_error_t ssz_deserialize_uint32(const uint8_t in[4], uint32_t *out_value)
     return err;
 }
 
-ssz_error_t ssz_deserialize_uint64(const uint8_t in[8], uint64_t *out_value)
+ssz_error_t ssz_deserialize_uint64(const uint8_t *in, size_t in_len, uint64_t *out_value)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((in == NULL) || (out_value == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (in_len < 8u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else
     {

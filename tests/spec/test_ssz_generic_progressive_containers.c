@@ -1849,7 +1849,7 @@ static ssz_error_t validate_value_bytes(const value_type_t *type, const uint8_t 
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        return ssz_deserialize_uint8(bytes, &out);
+        return ssz_deserialize_uint8(bytes, len, &out);
     }
 
     if (type->kind == TYPE_UINT16)
@@ -1859,7 +1859,7 @@ static ssz_error_t validate_value_bytes(const value_type_t *type, const uint8_t 
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        return ssz_deserialize_uint16(bytes, &out);
+        return ssz_deserialize_uint16(bytes, len, &out);
     }
 
     if (type->kind == TYPE_UINT32)
@@ -1869,7 +1869,7 @@ static ssz_error_t validate_value_bytes(const value_type_t *type, const uint8_t 
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        return ssz_deserialize_uint32(bytes, &out);
+        return ssz_deserialize_uint32(bytes, len, &out);
     }
 
     if (type->kind == TYPE_UINT64)
@@ -1879,7 +1879,7 @@ static ssz_error_t validate_value_bytes(const value_type_t *type, const uint8_t 
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        return ssz_deserialize_uint64(bytes, &out);
+        return ssz_deserialize_uint64(bytes, len, &out);
     }
 
     if (type->kind == TYPE_UINT128)

@@ -578,7 +578,8 @@ UBENCH(deserialize, uint8)
     uint8_t out_value = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_uint8(g_uint8_encoded, &out_value));
+        BENCH_EXPECT_OK(
+            ssz_deserialize_uint8(g_uint8_encoded, sizeof(g_uint8_encoded), &out_value));
     }
     ubench_do_nothing((void *)&out_value);
 }
@@ -594,7 +595,8 @@ UBENCH(deserialize, uint16)
     uint16_t out_value = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_uint16(g_uint16_encoded, &out_value));
+        BENCH_EXPECT_OK(
+            ssz_deserialize_uint16(g_uint16_encoded, sizeof(g_uint16_encoded), &out_value));
     }
     ubench_do_nothing((void *)&out_value);
 }
@@ -610,7 +612,8 @@ UBENCH(deserialize, uint32)
     uint32_t out_value = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_uint32(g_uint32_encoded, &out_value));
+        BENCH_EXPECT_OK(
+            ssz_deserialize_uint32(g_uint32_encoded, sizeof(g_uint32_encoded), &out_value));
     }
     ubench_do_nothing((void *)&out_value);
 }
@@ -659,7 +662,8 @@ UBENCH(deserialize, uint64)
     uint64_t out_value = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_uint64(g_uint64_encoded, &out_value));
+        BENCH_EXPECT_OK(
+            ssz_deserialize_uint64(g_uint64_encoded, sizeof(g_uint64_encoded), &out_value));
     }
     ubench_do_nothing((void *)&out_value);
 }

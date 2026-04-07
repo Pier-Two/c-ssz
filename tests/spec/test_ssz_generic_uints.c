@@ -36,7 +36,7 @@ static ssz_error_t deserialize_uint_checked(
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        if (ssz_deserialize_uint8(serialized, &value) != SSZ_SUCCESS)
+        if (ssz_deserialize_uint8(serialized, serialized_len, &value) != SSZ_SUCCESS)
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
@@ -53,7 +53,7 @@ static ssz_error_t deserialize_uint_checked(
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        if (ssz_deserialize_uint16(serialized, &value) != SSZ_SUCCESS)
+        if (ssz_deserialize_uint16(serialized, serialized_len, &value) != SSZ_SUCCESS)
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
@@ -71,7 +71,7 @@ static ssz_error_t deserialize_uint_checked(
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        if (ssz_deserialize_uint32(serialized, &value) != SSZ_SUCCESS)
+        if (ssz_deserialize_uint32(serialized, serialized_len, &value) != SSZ_SUCCESS)
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
@@ -88,7 +88,7 @@ static ssz_error_t deserialize_uint_checked(
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        if (ssz_deserialize_uint64(serialized, &value) != SSZ_SUCCESS)
+        if (ssz_deserialize_uint64(serialized, serialized_len, &value) != SSZ_SUCCESS)
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
