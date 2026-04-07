@@ -935,6 +935,25 @@ static bool test_serialize_vector_variable_error_paths(void)
     ASSERT_ERR(ssz_serialize_vector_variable(1u, &cursor_overflow_codec, out, sizeof(out), &out_len),
                SSZ_ERR_OVERFLOW);
 
+    /* Callback returns different length between first and second pass, causing
+       cursor != total after the write loop. Covers ssz_serialize.c:390. */
+    {
+        /* 1 element: first-pass query returns 2, second-pass query returns 1,
+           write returns 1. total = 4 + 2 = 6, cursor = 4 + 1 = 5. */
+        const size_t drift_lengths[3] = {2u, 1u, 1u};
+        const ssz_error_t drift_errors[3] = {SSZ_SUCCESS, SSZ_SUCCESS, SSZ_SUCCESS};
+        scripted_write_ctx_t drift_ctx = {
+            .lengths = drift_lengths,
+            .errors = drift_errors,
+            .step_count = 3u,
+            .step_index = 0u,
+            .fill = 0xAAu,
+        };
+        ssz_member_codec_t drift_codec = make_scripted_codec(&drift_ctx);
+        ASSERT_ERR(ssz_serialize_vector_variable(1u, &drift_codec, out, sizeof(out), &out_len),
+                   SSZ_ERR_TYPE_MISMATCH);
+    }
+
     return true;
 }
 

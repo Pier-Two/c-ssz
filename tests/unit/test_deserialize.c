@@ -171,6 +171,29 @@ static ssz_member_codec_t make_scripted_read_codec(scripted_read_ctx_t *ctx)
     return codec;
 }
 
+typedef struct
+{
+    size_t *sizes;
+} schema_mutating_read_ctx_t;
+
+/* Callback that mutates field_fixed_sizes[1] on the first read, so the loop
+   advances cursor by less than the precomputed fixed_region. */
+static ssz_error_t schema_mutating_read(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
+{
+    (void)data;
+    (void)data_len;
+    schema_mutating_read_ctx_t *m = (schema_mutating_read_ctx_t *)ctx;
+    if (member_id == 0u)
+    {
+        m->sizes[1] = 1u;
+    }
+    return SSZ_SUCCESS;
+}
+
 static bool test_deserialize_basic_round_trips(void)
 {
     uint8_t out_u8 = 0u;
@@ -1066,6 +1089,25 @@ static bool test_deserialize_container_additional_error_paths(void)
                                          3u,
                                          &variable_read_fail_codec),
                SSZ_ERR_TYPE_MISMATCH);
+
+    /* Test: callback mutates field_fixed_sizes during read, causing cursor != fixed_region.
+       This covers the guard at ssz_deserialize.c:622. */
+    {
+        size_t mutating_sizes[2] = {2u, 2u};
+        schema_mutating_read_ctx_t mut_ctx = {.sizes = mutating_sizes};
+        ssz_member_codec_t mut_codec = {
+            .ctx = &mut_ctx,
+            .write = NULL,
+            .read = schema_mutating_read,
+            .root = NULL,
+        };
+        ASSERT_ERR(ssz_deserialize_container((const uint8_t[4]){0xAAu, 0xBBu, 0xCCu, 0xDDu},
+                                             4u,
+                                             mutating_sizes,
+                                             2u,
+                                             &mut_codec),
+                   SSZ_ERR_OFFSET_INVALID);
+    }
 
     return true;
 }
