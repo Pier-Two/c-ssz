@@ -138,5 +138,6 @@ jobs:
             --std=c11 \
             --project=build/compile_commands.json \
             --suppress=missingIncludeSystem \
+            --suppress=preprocessorErrorDirective:*external/* \
             --error-exitcode=1 \
             -i external
