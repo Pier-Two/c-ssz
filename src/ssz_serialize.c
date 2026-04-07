@@ -100,9 +100,9 @@ ssz_error_t ssz_serialize_uint128(const uint8_t *value, size_t value_len, uint8_
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (value_len < 16u)
+    else if (value_len != 16u)
     {
-        err = SSZ_ERR_BUFFER_TOO_SMALL;
+        err = SSZ_ERR_ENCODING_INVALID;
     }
     else
     {
@@ -120,9 +120,9 @@ ssz_error_t ssz_serialize_uint256(const uint8_t *value, size_t value_len, uint8_
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (value_len < 32u)
+    else if (value_len != 32u)
     {
-        err = SSZ_ERR_BUFFER_TOO_SMALL;
+        err = SSZ_ERR_ENCODING_INVALID;
     }
     else
     {

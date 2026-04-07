@@ -261,8 +261,26 @@ static bool test_serialize_boolean_canonical_rejection(void)
     return true;
 }
 
-static bool test_serialize_fixed_width_short_inputs(void)
+static bool test_serialize_fixed_width_exact_and_invalid_lengths(void)
 {
+    const uint8_t exact128[16] = {
+        0x00u,
+        0x11u,
+        0x22u,
+        0x33u,
+        0x44u,
+        0x55u,
+        0x66u,
+        0x77u,
+        0x88u,
+        0x99u,
+        0xAAu,
+        0xBBu,
+        0xCCu,
+        0xDDu,
+        0xEEu,
+        0xFFu,
+    };
     const uint8_t in128[15] = {
         0x00u,
         0x11u,
@@ -280,23 +298,63 @@ static bool test_serialize_fixed_width_short_inputs(void)
         0xDDu,
         0xEEu,
     };
+    const uint8_t overlong128[17] = {
+        0x00u,
+        0x11u,
+        0x22u,
+        0x33u,
+        0x44u,
+        0x55u,
+        0x66u,
+        0x77u,
+        0x88u,
+        0x99u,
+        0xAAu,
+        0xBBu,
+        0xCCu,
+        0xDDu,
+        0xEEu,
+        0xFFu,
+        0x42u,
+    };
+    const uint8_t exact256[32] = {
+        0x00u, 0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x08u, 0x09u, 0x0Au,
+        0x0Bu, 0x0Cu, 0x0Du, 0x0Eu, 0x0Fu, 0x10u, 0x11u, 0x12u, 0x13u, 0x14u, 0x15u,
+        0x16u, 0x17u, 0x18u, 0x19u, 0x1Au, 0x1Bu, 0x1Cu, 0x1Du, 0x1Eu, 0x1Fu,
+    };
     const uint8_t in256[31] = {
         0x00u, 0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x08u, 0x09u, 0x0Au,
         0x0Bu, 0x0Cu, 0x0Du, 0x0Eu, 0x0Fu, 0x10u, 0x11u, 0x12u, 0x13u, 0x14u, 0x15u,
         0x16u, 0x17u, 0x18u, 0x19u, 0x1Au, 0x1Bu, 0x1Cu, 0x1Du, 0x1Eu,
+    };
+    const uint8_t overlong256[33] = {
+        0x00u, 0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x08u, 0x09u, 0x0Au,
+        0x0Bu, 0x0Cu, 0x0Du, 0x0Eu, 0x0Fu, 0x10u, 0x11u, 0x12u, 0x13u, 0x14u, 0x15u,
+        0x16u, 0x17u, 0x18u, 0x19u, 0x1Au, 0x1Bu, 0x1Cu, 0x1Du, 0x1Eu, 0x1Fu, 0x42u,
     };
     uint8_t out128[16];
     uint8_t out256[32];
     uint8_t expected128[16];
     uint8_t expected256[32];
 
+    ASSERT_ERR(ssz_serialize_uint128(exact128, sizeof(exact128), out128), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(out128, exact128, sizeof(out128));
+    ASSERT_ERR(ssz_serialize_uint256(exact256, sizeof(exact256), out256), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(out256, exact256, sizeof(out256));
+
     memset(out128, 0x3C, sizeof(out128));
     memset(out256, 0xC3, sizeof(out256));
     memset(expected128, 0x3C, sizeof(expected128));
     memset(expected256, 0xC3, sizeof(expected256));
 
-    ASSERT_ERR(ssz_serialize_uint128(in128, sizeof(in128), out128), SSZ_ERR_BUFFER_TOO_SMALL);
-    ASSERT_ERR(ssz_serialize_uint256(in256, sizeof(in256), out256), SSZ_ERR_BUFFER_TOO_SMALL);
+    ASSERT_ERR(ssz_serialize_uint128(in128, sizeof(in128), out128), SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(
+        ssz_serialize_uint128(overlong128, sizeof(overlong128), out128),
+        SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(ssz_serialize_uint256(in256, sizeof(in256), out256), SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(
+        ssz_serialize_uint256(overlong256, sizeof(overlong256), out256),
+        SSZ_ERR_ENCODING_INVALID);
     ASSERT_MEM_EQ(out128, expected128, sizeof(out128));
     ASSERT_MEM_EQ(out256, expected256, sizeof(out256));
 
@@ -2286,7 +2344,8 @@ int main(void)
     const test_case_t tests[] = {
         {"serialize_basic_types_and_aliases", test_serialize_basic_types_and_aliases},
         {"serialize_boolean_canonical_rejection", test_serialize_boolean_canonical_rejection},
-        {"serialize_fixed_width_short_inputs", test_serialize_fixed_width_short_inputs},
+        {"serialize_fixed_width_exact_and_invalid_lengths",
+         test_serialize_fixed_width_exact_and_invalid_lengths},
         {"serialize_bitvector_and_padding_validation",
          test_serialize_bitvector_and_padding_validation},
         {"serialize_bitlist_delimiter_and_limit", test_serialize_bitlist_delimiter_and_limit},

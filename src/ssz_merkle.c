@@ -1363,9 +1363,9 @@ ssz_error_t ssz_hash_tree_root_uint128(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (value_len < 16u)
+    else if (value_len != 16u)
     {
-        err = SSZ_ERR_BUFFER_TOO_SMALL;
+        err = SSZ_ERR_ENCODING_INVALID;
     }
     else
     {
@@ -1387,9 +1387,9 @@ ssz_error_t ssz_hash_tree_root_uint256(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (value_len < SSZ_BYTES_PER_CHUNK)
+    else if (value_len != SSZ_BYTES_PER_CHUNK)
     {
-        err = SSZ_ERR_BUFFER_TOO_SMALL;
+        err = SSZ_ERR_ENCODING_INVALID;
     }
     else
     {
@@ -1903,9 +1903,9 @@ ssz_error_t ssz_mix_in_length(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (length_len < SSZ_BYTES_PER_CHUNK)
+    else if (length_len != SSZ_BYTES_PER_CHUNK)
     {
-        err = SSZ_ERR_BUFFER_TOO_SMALL;
+        err = SSZ_ERR_ENCODING_INVALID;
     }
     else
     {
