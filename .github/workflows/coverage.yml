@@ -55,6 +55,13 @@ jobs:
       - name: Coverage summary
         run: lcov --summary build/coverage/coverage-filtered.info
 
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: build/coverage/coverage-filtered.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
   coverage-32bit:
     runs-on: ubuntu-latest
     timeout-minutes: 30
