@@ -1,6 +1,5 @@
 #include "ssz_merkle_cache.h"
 
-#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -2443,10 +2442,11 @@ ssz_error_t ssz_merkle_cache_sync_packed_bytes(
 
     if (err == SSZ_SUCCESS)
     {
-        ssz_error_t len_err = ssz_merkle_cache_set_logical_length(cache, logical_length);
-        assert(len_err == SSZ_SUCCESS);
-        (void)len_err;
-        cache->needs_resync = false;
+        err = ssz_merkle_cache_set_logical_length(cache, logical_length);
+        if (err == SSZ_SUCCESS)
+        {
+            cache->needs_resync = false;
+        }
     }
     else
     {
@@ -2968,10 +2968,11 @@ ssz_error_t ssz_merkle_cache_sync_composite(
             }
             else
             {
-                ssz_error_t len_err = ssz_merkle_cache_set_logical_length(cache, element_count);
-                assert(len_err == SSZ_SUCCESS);
-                (void)len_err;
-                cache->needs_resync = false;
+                err = ssz_merkle_cache_set_logical_length(cache, element_count);
+                if (err == SSZ_SUCCESS)
+                {
+                    cache->needs_resync = false;
+                }
             }
         }
         else
@@ -3122,10 +3123,11 @@ ssz_error_t ssz_merkle_cache_sync_composite(
 
             if (err == SSZ_SUCCESS)
             {
-                ssz_error_t len_err = ssz_merkle_cache_set_logical_length(cache, element_count);
-                assert(len_err == SSZ_SUCCESS);
-                (void)len_err;
-                cache->needs_resync = false;
+                err = ssz_merkle_cache_set_logical_length(cache, element_count);
+                if (err == SSZ_SUCCESS)
+                {
+                    cache->needs_resync = false;
+                }
             }
             else
             {
