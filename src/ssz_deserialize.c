@@ -730,9 +730,11 @@ ssz_error_t ssz_deserialize_container(
                             if ((look_cursor + SSZ_BYTES_PER_LENGTH_OFFSET) > fixed_region)
                             {
                                 err = SSZ_ERR_OFFSET_INVALID;
-                                break;
                             }
-                            end = (size_t)ssz_internal_read_u32_le(&in[look_cursor]);
+                            else
+                            {
+                                end = (size_t)ssz_internal_read_u32_le(&in[look_cursor]);
+                            }
                             break;
                         }
                         look_cursor += field_fixed_sizes[j];
