@@ -702,34 +702,55 @@ ssz_error_t ssz_deserialize_container(
 
             if (fixed_size != 0u)
             {
-                cursor += fixed_size;
-            }
-            else
-            {
-                size_t start = (size_t)ssz_internal_read_u32_le(&in[cursor]);
-                size_t end = in_len;
-                size_t look_cursor = cursor + SSZ_BYTES_PER_LENGTH_OFFSET;
-
-                for (uint32_t j = i + 1u; j < field_count; j++)
-                {
-                    if (field_fixed_sizes[j] == 0u)
-                    {
-                        end = (size_t)ssz_internal_read_u32_le(&in[look_cursor]);
-                        break;
-                    }
-                    look_cursor += field_fixed_sizes[j];
-                }
-
-                if (end < start)
+                if ((cursor + fixed_size) > fixed_region)
                 {
                     err = SSZ_ERR_OFFSET_INVALID;
                 }
                 else
                 {
-                    err = codec->read(codec->ctx, i, &in[start], end - start);
+                    cursor += fixed_size;
+                }
+            }
+            else
+            {
+                if ((cursor + SSZ_BYTES_PER_LENGTH_OFFSET) > fixed_region)
+                {
+                    err = SSZ_ERR_OFFSET_INVALID;
+                }
+                else
+                {
+                    size_t start = (size_t)ssz_internal_read_u32_le(&in[cursor]);
+                    size_t end = in_len;
+                    size_t look_cursor = cursor + SSZ_BYTES_PER_LENGTH_OFFSET;
+
+                    for (uint32_t j = i + 1u; j < field_count; j++)
+                    {
+                        if (field_fixed_sizes[j] == 0u)
+                        {
+                            if ((look_cursor + SSZ_BYTES_PER_LENGTH_OFFSET) > fixed_region)
+                            {
+                                err = SSZ_ERR_OFFSET_INVALID;
+                            }
+                            else
+                            {
+                                end = (size_t)ssz_internal_read_u32_le(&in[look_cursor]);
+                            }
+                            break;
+                        }
+                        look_cursor += field_fixed_sizes[j];
+                    }
+
+                    if ((err == SSZ_SUCCESS) && (end < start))
+                    {
+                        err = SSZ_ERR_OFFSET_INVALID;
+                    }
                     if (err == SSZ_SUCCESS)
                     {
-                        cursor += SSZ_BYTES_PER_LENGTH_OFFSET;
+                        err = codec->read(codec->ctx, i, &in[start], end - start);
+                        if (err == SSZ_SUCCESS)
+                        {
+                            cursor += SSZ_BYTES_PER_LENGTH_OFFSET;
+                        }
                     }
                 }
             }

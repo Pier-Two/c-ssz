@@ -222,6 +222,75 @@ static ssz_error_t schema_mutating_read(
     return SSZ_SUCCESS;
 }
 
+/* Callback that inflates a fixed field size during the second pass to trigger
+   the cursor + fixed_size > fixed_region guard. */
+static ssz_error_t schema_inflate_fixed_read(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
+{
+    (void)data;
+    (void)data_len;
+    schema_mutating_read_ctx_t *m = (schema_mutating_read_ctx_t *)ctx;
+    /* After the first pass, inflate field 1 so the second pass overflows. */
+    if (member_id == 0u)
+    {
+        m->sizes[1] = 9999u;
+    }
+    return SSZ_SUCCESS;
+}
+
+/* Callback that zeroes a fixed field (making it variable) during the second
+   pass, so cursor + OFFSET > fixed_region when hitting the variable slot. */
+static ssz_error_t schema_zero_fixed_read(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
+{
+    (void)data;
+    (void)data_len;
+    schema_mutating_read_ctx_t *m = (schema_mutating_read_ctx_t *)ctx;
+    if (member_id == 0u)
+    {
+        m->sizes[1] = 0u;
+    }
+    return SSZ_SUCCESS;
+}
+
+static ssz_error_t schema_inflate_look_cursor_read(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
+{
+    (void)data;
+    (void)data_len;
+    schema_mutating_read_ctx_t *m = (schema_mutating_read_ctx_t *)ctx;
+    if (member_id == 0u)
+    {
+        m->sizes[2] = 9999u;
+    }
+    return SSZ_SUCCESS;
+}
+
+static ssz_error_t schema_force_end_lt_start_read(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
+{
+    (void)data;
+    (void)data_len;
+    schema_mutating_read_ctx_t *m = (schema_mutating_read_ctx_t *)ctx;
+    if (member_id == 0u)
+    {
+        m->sizes[1] = 0u;
+    }
+    return SSZ_SUCCESS;
+}
+
 static bool test_deserialize_basic_round_trips(void)
 {
     uint8_t out_u8 = 0u;
@@ -1627,6 +1696,119 @@ static bool test_deserialize_container_additional_error_paths(void)
                 mutating_sizes,
                 2u,
                 &mut_codec),
+            SSZ_ERR_OFFSET_INVALID);
+    }
+
+    /* Test: second-pass guard (cursor + fixed_size) > fixed_region.
+       Container: [variable, fixed(2), variable]. Callback inflates field 1 to 9999 during
+       the first variable-field read, so the second pass overflows on the fixed field. */
+    {
+        /* Layout: offset(4) | fixed(2) | offset(4) | var_data_0(1) | var_data_2(1) */
+        const uint8_t payload[] = {
+            0x0Au, 0x00u, 0x00u, 0x00u, /* offset to var field 0: 10 */
+            0xFFu, 0xFFu,               /* fixed field 1: 2 bytes */
+            0x0Bu, 0x00u, 0x00u, 0x00u, /* offset to var field 2: 11 */
+            0xAAu,                      /* var field 0 data */
+            0xBBu,                      /* var field 2 data */
+        };
+        size_t inflate_sizes[3] = {0u, 2u, 0u};
+        schema_mutating_read_ctx_t inflate_ctx = {.sizes = inflate_sizes};
+        ssz_member_codec_t inflate_codec = {
+            .ctx = &inflate_ctx,
+            .write = NULL,
+            .read = schema_inflate_fixed_read,
+            .root = NULL,
+        };
+        ASSERT_ERR(
+            ssz_deserialize_container(
+                payload,
+                sizeof(payload),
+                inflate_sizes,
+                3u,
+                &inflate_codec),
+            SSZ_ERR_OFFSET_INVALID);
+    }
+
+    /* Test: second-pass guard (cursor + OFFSET) > fixed_region for a variable slot.
+       Container: [variable, fixed(2)]. Callback zeroes field 1 (making it variable) during
+       the first read, so the second pass sees two variable fields but cursor is past the
+       fixed region when it hits the now-variable slot. */
+    {
+        /* Layout: offset(4) | fixed(2) | var_data(1) */
+        const uint8_t payload[] = {
+            0x06u, 0x00u, 0x00u, 0x00u, /* offset to var field 0: 6 */
+            0xFFu, 0xFFu,               /* fixed field 1: 2 bytes */
+            0xAAu,                      /* var field 0 data */
+        };
+        size_t zero_sizes[2] = {0u, 2u};
+        schema_mutating_read_ctx_t zero_ctx = {.sizes = zero_sizes};
+        ssz_member_codec_t zero_codec = {
+            .ctx = &zero_ctx,
+            .write = NULL,
+            .read = schema_zero_fixed_read,
+            .root = NULL,
+        };
+        ASSERT_ERR(
+            ssz_deserialize_container(
+                payload,
+                sizeof(payload),
+                zero_sizes,
+                2u,
+                &zero_codec),
+            SSZ_ERR_OFFSET_INVALID);
+    }
+
+    {
+        const uint8_t payload[] = {
+            0x0Cu, 0x00u, 0x00u, 0x00u,
+            0xFFu, 0xFFu,
+            0xEEu, 0xEEu,
+            0x0Du, 0x00u, 0x00u, 0x00u,
+            0xAAu,
+            0xBBu,
+        };
+        size_t look_sizes[4] = {0u, 2u, 2u, 0u};
+        schema_mutating_read_ctx_t look_ctx = {.sizes = look_sizes};
+        ssz_member_codec_t look_codec = {
+            .ctx = &look_ctx,
+            .write = NULL,
+            .read = schema_inflate_look_cursor_read,
+            .root = NULL,
+        };
+        ASSERT_ERR(
+            ssz_deserialize_container(
+                payload,
+                sizeof(payload),
+                look_sizes,
+                4u,
+                &look_codec),
+            SSZ_ERR_OFFSET_INVALID);
+    }
+
+    {
+        const uint8_t payload[] = {
+            0x0Cu, 0x00u, 0x00u, 0x00u,
+            0xFFu, 0xFFu,
+            0x0Du, 0x00u, 0x00u, 0x00u,
+            0x0Cu, 0x00u, 0x00u, 0x00u,
+            0xAAu,
+            0xBBu,
+        };
+        size_t end_sizes[3] = {0u, 2u, 0u};
+        schema_mutating_read_ctx_t end_ctx = {.sizes = end_sizes};
+        ssz_member_codec_t end_codec = {
+            .ctx = &end_ctx,
+            .write = NULL,
+            .read = schema_force_end_lt_start_read,
+            .root = NULL,
+        };
+        ASSERT_ERR(
+            ssz_deserialize_container(
+                payload,
+                sizeof(payload),
+                end_sizes,
+                3u,
+                &end_codec),
             SSZ_ERR_OFFSET_INVALID);
     }
 
