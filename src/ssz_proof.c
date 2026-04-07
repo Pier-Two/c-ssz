@@ -121,6 +121,10 @@ static ssz_error_t ssz_internal_validate_multiproof_indices(
                 {
                     err = SSZ_ERR_INVALID_ARGUMENT;
                 }
+                else
+                {
+                    /* No overlap — nothing to do. */
+                }
             }
         }
     }
