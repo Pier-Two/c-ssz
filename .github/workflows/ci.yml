@@ -140,4 +140,5 @@ jobs:
             --suppress=missingIncludeSystem \
             --suppress=preprocessorErrorDirective:*external/* \
             --error-exitcode=1 \
-            -i external
+            -i external \
+            -i tests
