@@ -29,6 +29,10 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
     {
         err = SSZ_ERR_OFFSET_INVALID;
     }
+    else
+    {
+        /* intentionally empty */
+    }
 
     if (err == SSZ_SUCCESS)
     {

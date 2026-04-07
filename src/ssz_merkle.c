@@ -591,15 +591,12 @@ static ssz_error_t ssz_internal_merkleize_full_range_iter(
                 {
                     break;
                 }
-                else if ((err == SSZ_ERR_BUFFER_TOO_SMALL) &&
-                         (tile_size > SSZ_INTERNAL_STACK_MERKLE_MAX_LEAVES))
+
+                if ((err == SSZ_ERR_BUFFER_TOO_SMALL) &&
+                    (tile_size > SSZ_INTERNAL_STACK_MERKLE_MAX_LEAVES))
                 {
                     tile_size >>= 1u;
                     err = SSZ_SUCCESS;
-                }
-                else
-                {
-                    /* propagate */
                 }
             }
         }
@@ -1112,7 +1109,7 @@ static ssz_error_t ssz_internal_merkleize_progressive_reader_iter(
                     {
                         break;
                     }
-                    else
+
                     {
                         uint64_t previous_width = segment_width / 4u;
 
