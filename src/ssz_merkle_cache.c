@@ -345,7 +345,7 @@ static void ssz_merkle_cache_internal_bind_dirty_set(
 
 static void ssz_merkle_cache_internal_clear_dirty(
     uint64_t *bits,
-    size_t *word_idx,
+    const size_t *word_idx,
     size_t *word_count)
 {
     if ((bits != NULL) && (word_idx != NULL) && (word_count != NULL))
@@ -951,7 +951,7 @@ static ssz_error_t ssz_merkle_cache_internal_hash_dirty_parents_exact(
 static ssz_error_t ssz_merkle_cache_internal_build_parent_dirty_set(
     size_t *child_word_idx,
     size_t child_word_count,
-    uint64_t *child_bits,
+    const uint64_t *child_bits,
     size_t child_word_capacity,
     uint64_t child_width,
     ssz_merkle_cache_dirty_set_t *out_parent_set)

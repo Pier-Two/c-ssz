@@ -5,7 +5,7 @@
 
 static ssz_error_t ssz_internal_prepare_output(
     size_t required,
-    uint8_t *out,
+    const uint8_t *out,
     size_t out_cap,
     size_t *out_len)
 {

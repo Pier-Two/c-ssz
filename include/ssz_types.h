@@ -338,7 +338,6 @@ static inline ssz_error_t ssz_default_vector_fixed(
     size_t required = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
-    /* NOLINTBEGIN(bugprone-branch-clone) */
     if (element_count == 0u)
     {
         err = SSZ_ERR_SCHEMA_INVALID;
@@ -370,7 +369,6 @@ static inline ssz_error_t ssz_default_vector_fixed(
             /* intentionally empty */
         }
     }
-    /* NOLINTEND(bugprone-branch-clone) */
 
     return err;
 }
@@ -550,7 +548,6 @@ static inline ssz_error_t ssz_is_zero_bitvector(
     size_t byte_count = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
-    /* NOLINTBEGIN(bugprone-branch-clone) */
     if (out_is_zero == NULL)
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
@@ -583,7 +580,6 @@ static inline ssz_error_t ssz_is_zero_bitvector(
             *out_is_zero = (byte_count == 0u) || ssz_types_internal_bytes_are_zero(bits_le, byte_count);
         }
     }
-    /* NOLINTEND(bugprone-branch-clone) */
 
     return err;
 }
@@ -613,7 +609,6 @@ static inline ssz_error_t ssz_is_zero_vector_fixed(
     size_t required = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
-    /* NOLINTBEGIN(bugprone-branch-clone) */
     if (out_is_zero == NULL)
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
@@ -642,7 +637,6 @@ static inline ssz_error_t ssz_is_zero_vector_fixed(
     {
         *out_is_zero = (required == 0u) || ssz_types_internal_bytes_are_zero(elements, required);
     }
-    /* NOLINTEND(bugprone-branch-clone) */
 
     return err;
 }

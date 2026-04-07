@@ -93,7 +93,6 @@ static ssz_error_t ssz_types_internal_restore_member(
     return err;
 }
 
-/* NOLINTNEXTLINE(readability-function-cognitive-complexity) */
 static ssz_error_t ssz_types_internal_member_is_default(
     ssz_member_codec_t *codec,
     uint64_t member_id,

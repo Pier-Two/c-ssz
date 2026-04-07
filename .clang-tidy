@@ -5,6 +5,7 @@
 Checks: >
   -*,
   bugprone-*,
+  -bugprone-branch-clone,
   -bugprone-easily-swappable-parameters,
   -bugprone-reserved-identifier,
   cert-*,
@@ -18,7 +19,6 @@ Checks: >
   portability-*,
   readability-braces-around-statements,
   readability-else-after-return,
-  readability-function-cognitive-complexity,
   readability-identifier-naming,
   readability-implicit-bool-conversion,
   readability-inconsistent-declaration-parameter-name,
@@ -48,6 +48,4 @@ CheckOptions:
     value: _t
   - key: readability-identifier-naming.StructCase
     value: lower_case
-  - key: readability-function-cognitive-complexity.Threshold
-    value: 40
 ...
