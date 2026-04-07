@@ -58,6 +58,76 @@ static size_t ssz_internal_dedup_sorted(ssz_gindex_t *values, size_t count)
     return out;
 }
 
+static bool ssz_internal_gindex_covers(ssz_gindex_t ancestor, ssz_gindex_t descendant)
+{
+    bool covers = false;
+
+    if (ancestor <= descendant)
+    {
+        ssz_gindex_t current = descendant;
+
+        while (current > ancestor)
+        {
+            current = ssz_generalized_index_parent(current);
+        }
+
+        covers = (current == ancestor);
+    }
+
+    return covers;
+}
+
+static bool ssz_internal_gindex_overlaps(ssz_gindex_t lhs, ssz_gindex_t rhs)
+{
+    bool overlaps = false;
+
+    if (lhs == rhs)
+    {
+        overlaps = true;
+    }
+    else if (lhs < rhs)
+    {
+        overlaps = ssz_internal_gindex_covers(lhs, rhs);
+    }
+    else
+    {
+        overlaps = ssz_internal_gindex_covers(rhs, lhs);
+    }
+
+    return overlaps;
+}
+
+static ssz_error_t ssz_internal_validate_multiproof_indices(
+    const ssz_gindex_t *indices,
+    size_t index_count)
+{
+    ssz_error_t err = SSZ_SUCCESS;
+
+    for (size_t i = 0u; (i < index_count) && (err == SSZ_SUCCESS); i++)
+    {
+        if (indices[i] == 0u)
+        {
+            err = SSZ_ERR_GINDEX_INVALID;
+        }
+        else
+        {
+            for (size_t j = i + 1u; (j < index_count) && (err == SSZ_SUCCESS); j++)
+            {
+                if (indices[j] == 0u)
+                {
+                    err = SSZ_ERR_GINDEX_INVALID;
+                }
+                else if (ssz_internal_gindex_overlaps(indices[i], indices[j]))
+                {
+                    err = SSZ_ERR_INVALID_ARGUMENT;
+                }
+            }
+        }
+    }
+
+    return err;
+}
+
 static ssz_error_t ssz_internal_compute_helper_indices(
     const ssz_gindex_t *indices,
     size_t index_count,
@@ -76,20 +146,15 @@ static ssz_error_t ssz_internal_compute_helper_indices(
     }
     else
     {
+        err = ssz_internal_validate_multiproof_indices(indices, index_count);
+
         for (size_t i = 0u; (i < index_count) && (err == SSZ_SUCCESS); i++)
         {
-            if (indices[i] == 0u)
+            size_t depth = ssz_generalized_index_length(indices[i]);
+            if (ssz_internal_add_overflow_size(branch_total, depth, &branch_total) ||
+                ssz_internal_add_overflow_size(path_total, depth, &path_total))
             {
-                err = SSZ_ERR_GINDEX_INVALID;
-            }
-            else
-            {
-                size_t depth = ssz_generalized_index_length(indices[i]);
-                if (ssz_internal_add_overflow_size(branch_total, depth, &branch_total) ||
-                    ssz_internal_add_overflow_size(path_total, depth, &path_total))
-                {
-                    err = SSZ_ERR_OVERFLOW;
-                }
+                err = SSZ_ERR_OVERFLOW;
             }
         }
         if (err == SSZ_SUCCESS)
@@ -641,20 +706,13 @@ ssz_error_t ssz_calculate_multi_merkle_root(
 
                 for (size_t i = 0u; (i < leaf_count) && (err == SSZ_SUCCESS); i++)
                 {
-                    if (indices[i] == 0u)
-                    {
-                        err = SSZ_ERR_GINDEX_INVALID;
-                    }
-                    else
-                    {
-                        err = ssz_internal_insert_node(
-                            map_indices,
-                            scratch_nodes,
-                            &map_count,
-                            map_cap,
-                            indices[i],
-                            &leaves[i]);
-                    }
+                    err = ssz_internal_insert_node(
+                        map_indices,
+                        scratch_nodes,
+                        &map_count,
+                        map_cap,
+                        indices[i],
+                        &leaves[i]);
                 }
 
                 for (size_t i = 0u; (i < proof_count) && (err == SSZ_SUCCESS); i++)
