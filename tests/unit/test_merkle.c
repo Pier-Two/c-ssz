@@ -1679,8 +1679,26 @@ static bool test_bytes_reader_batch_path_large_vector(void)
     return true;
 }
 
-static bool test_merkle_fixed_width_short_inputs(void)
+static bool test_merkle_fixed_width_exact_and_invalid_lengths(void)
 {
+    const uint8_t value128_exact[16] = {
+        0x00u,
+        0x11u,
+        0x22u,
+        0x33u,
+        0x44u,
+        0x55u,
+        0x66u,
+        0x77u,
+        0x88u,
+        0x99u,
+        0xAAu,
+        0xBBu,
+        0xCCu,
+        0xDDu,
+        0xEEu,
+        0xFFu,
+    };
     const uint8_t value128[15] = {
         0x00u,
         0x11u,
@@ -1698,28 +1716,88 @@ static bool test_merkle_fixed_width_short_inputs(void)
         0xDDu,
         0xEEu,
     };
+    const uint8_t value128_overlong[17] = {
+        0x00u,
+        0x11u,
+        0x22u,
+        0x33u,
+        0x44u,
+        0x55u,
+        0x66u,
+        0x77u,
+        0x88u,
+        0x99u,
+        0xAAu,
+        0xBBu,
+        0xCCu,
+        0xDDu,
+        0xEEu,
+        0xFFu,
+        0x42u,
+    };
+    const uint8_t value256_exact[32] = {
+        0x00u, 0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x08u, 0x09u, 0x0Au,
+        0x0Bu, 0x0Cu, 0x0Du, 0x0Eu, 0x0Fu, 0x10u, 0x11u, 0x12u, 0x13u, 0x14u, 0x15u,
+        0x16u, 0x17u, 0x18u, 0x19u, 0x1Au, 0x1Bu, 0x1Cu, 0x1Du, 0x1Eu, 0x1Fu,
+    };
     const uint8_t value256[31] = {
         0x00u, 0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x08u, 0x09u, 0x0Au,
         0x0Bu, 0x0Cu, 0x0Du, 0x0Eu, 0x0Fu, 0x10u, 0x11u, 0x12u, 0x13u, 0x14u, 0x15u,
         0x16u, 0x17u, 0x18u, 0x19u, 0x1Au, 0x1Bu, 0x1Cu, 0x1Du, 0x1Eu,
+    };
+    const uint8_t value256_overlong[33] = {
+        0x00u, 0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x08u, 0x09u, 0x0Au,
+        0x0Bu, 0x0Cu, 0x0Du, 0x0Eu, 0x0Fu, 0x10u, 0x11u, 0x12u, 0x13u, 0x14u, 0x15u,
+        0x16u, 0x17u, 0x18u, 0x19u, 0x1Au, 0x1Bu, 0x1Cu, 0x1Du, 0x1Eu, 0x1Fu, 0x42u,
+    };
+    const uint8_t length_overlong[33] = {
+        0x88u, 0x77u, 0x66u, 0x55u, 0x44u, 0x33u, 0x22u, 0x11u, 0x10u, 0x20u, 0x30u,
+        0x40u, 0x50u, 0x60u, 0x70u, 0x80u, 0x90u, 0xA0u, 0xB0u, 0xC0u, 0xD0u, 0xE0u,
+        0xF0u, 0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x08u, 0x09u, 0x42u,
     };
     const uint8_t length[31] = {
         0x88u, 0x77u, 0x66u, 0x55u, 0x44u, 0x33u, 0x22u, 0x11u, 0x10u, 0x20u, 0x30u,
         0x40u, 0x50u, 0x60u, 0x70u, 0x80u, 0x90u, 0xA0u, 0xB0u, 0xC0u, 0xD0u, 0xE0u,
         0xF0u, 0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x08u,
     };
-    ssz_chunk_t root = zero_chunk();
+    ssz_chunk_t root = make_chunk(0xA5u);
+    const ssz_chunk_t expected_invalid = make_chunk(0xA5u);
     const ssz_chunk_t base = make_chunk(0xABu);
 
     ASSERT_ERR(
+        ssz_hash_tree_root_uint128(value128_exact, sizeof(value128_exact), &root),
+        SSZ_SUCCESS);
+    ASSERT_MEM_EQ(root.bytes, value128_exact, sizeof(value128_exact));
+    for (size_t i = sizeof(value128_exact); i < SSZ_BYTES_PER_CHUNK; i++)
+    {
+        ASSERT_TRUE(root.bytes[i] == 0u);
+    }
+
+    ASSERT_ERR(
+        ssz_hash_tree_root_uint256(value256_exact, sizeof(value256_exact), &root),
+        SSZ_SUCCESS);
+    ASSERT_MEM_EQ(root.bytes, value256_exact, sizeof(value256_exact));
+
+    root = expected_invalid;
+    ASSERT_ERR(
         ssz_hash_tree_root_uint128(value128, sizeof(value128), &root),
-        SSZ_ERR_BUFFER_TOO_SMALL);
+        SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(
+        ssz_hash_tree_root_uint128(value128_overlong, sizeof(value128_overlong), &root),
+        SSZ_ERR_ENCODING_INVALID);
     ASSERT_ERR(
         ssz_hash_tree_root_uint256(value256, sizeof(value256), &root),
-        SSZ_ERR_BUFFER_TOO_SMALL);
+        SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(
+        ssz_hash_tree_root_uint256(value256_overlong, sizeof(value256_overlong), &root),
+        SSZ_ERR_ENCODING_INVALID);
     ASSERT_ERR(
         ssz_mix_in_length(&base, length, sizeof(length), NULL, &root),
-        SSZ_ERR_BUFFER_TOO_SMALL);
+        SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(
+        ssz_mix_in_length(&base, length_overlong, sizeof(length_overlong), NULL, &root),
+        SSZ_ERR_ENCODING_INVALID);
+    ASSERT_CHUNK_EQ(root, expected_invalid);
 
     return true;
 }
@@ -1742,7 +1820,8 @@ int main(void)
         {"progressive_hash_tree_root_variants", test_progressive_hash_tree_root_variants},
         {"null_hash_fn_fallback_uses_default", test_null_hash_fn_fallback_uses_default},
         {"merkle_additional_error_paths", test_merkle_additional_error_paths},
-        {"merkle_fixed_width_short_inputs", test_merkle_fixed_width_short_inputs},
+        {"merkle_fixed_width_exact_and_invalid_lengths",
+         test_merkle_fixed_width_exact_and_invalid_lengths},
         {"merkle_active_field_validation_errors", test_merkle_active_field_validation_errors},
         {"merkle_failure_propagation_paths", test_merkle_failure_propagation_paths},
         {"bytes_reader_batch_path_large_vector", test_bytes_reader_batch_path_large_vector},
