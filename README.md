@@ -1,7 +1,8 @@
 # c-ssz
 
 [![CI](https://github.com/Pier-Two/c-ssz/actions/workflows/ci.yml/badge.svg)](https://github.com/Pier-Two/c-ssz/actions/workflows/ci.yml)
-![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/uink45/78fd2e9ece2119db6cea0321a08e36e7/raw/coverage.json)
+![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/uink45/78fd2e9ece2119db6cea0321a08e36e7/raw/test-coverage.json)
+![Fuzz Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/uink45/78fd2e9ece2119db6cea0321a08e36e7/raw/fuzz-coverage.json)
 
 A C99 implementation of the Simple Serialize (SSZ) [specification](https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md) and [Merkle proof formats](https://github.com/ethereum/consensus-specs/blob/dev/ssz/merkle-proofs.md).
 

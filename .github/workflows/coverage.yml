@@ -67,8 +67,8 @@ jobs:
         with:
           auth: ${{ secrets.GIST_TOKEN }}
           gistID: ${{ vars.COVERAGE_GIST_ID }}
-          filename: coverage.json
-          label: coverage
+          filename: test-coverage.json
+          label: test coverage
           message: ${{ steps.coverage.outputs.percentage }}%
           valColorRange: ${{ steps.coverage.outputs.percentage }}
           minColorRange: 50

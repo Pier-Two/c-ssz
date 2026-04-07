@@ -142,7 +142,26 @@ jobs:
 
           llvm-cov report "${bins[0]}" "${object_args[@]}" \
             -instr-profile=build/fuzz-coverage/fuzz.profdata \
-            "${src_files[@]}"
+            "${src_files[@]}" | tee build/fuzz-coverage/report.txt
+
+      - name: Extract fuzz coverage percentage
+        id: fuzz_coverage
+        run: |
+          COVERAGE=$(tail -1 build/fuzz-coverage/report.txt | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%')
+          echo "percentage=$COVERAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Create fuzz coverage badge
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: ${{ vars.COVERAGE_GIST_ID }}
+          filename: fuzz-coverage.json
+          label: fuzz coverage
+          message: ${{ steps.fuzz_coverage.outputs.percentage }}%
+          valColorRange: ${{ steps.fuzz_coverage.outputs.percentage }}
+          minColorRange: 50
+          maxColorRange: 100
 
       - name: Upload fuzz coverage report
         if: always()
