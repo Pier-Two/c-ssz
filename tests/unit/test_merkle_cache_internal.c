@@ -315,6 +315,13 @@ typedef struct
     uint64_t batch_calls;
 } composite_fixture_t;
 
+typedef struct
+{
+    composite_fixture_t composite;
+    uint64_t root_fail_index;
+    ssz_error_t root_fail_err;
+} composite_root_fail_fixture_t;
+
 static void *alloc_zeroed(size_t count, size_t element_size)
 {
     void *ptr = NULL;
@@ -625,6 +632,49 @@ static ssz_error_t composite_token(const void *ctx, uint64_t member_id, uint64_t
         return SSZ_ERR_INVALID_ARGUMENT;
     }
     *out_token = fixture->tokens[member_id];
+    return SSZ_SUCCESS;
+}
+
+static ssz_error_t composite_root_fail_only(
+    const void *ctx,
+    uint64_t member_id,
+    ssz_chunk_t *out_root)
+{
+    composite_root_fail_fixture_t *fixture = (composite_root_fail_fixture_t *)ctx;
+    if ((fixture == NULL) || (out_root == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    fixture->composite.root_calls++;
+    if (member_id == fixture->root_fail_index)
+    {
+        return fixture->root_fail_err;
+    }
+    if (member_id >= fixture->composite.count)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    *out_root = fixture->composite.roots[member_id];
+    return SSZ_SUCCESS;
+}
+
+static ssz_error_t composite_token_fail_only(const void *ctx, uint64_t member_id, uint64_t *out_token)
+{
+    composite_root_fail_fixture_t *fixture = (composite_root_fail_fixture_t *)ctx;
+    if ((fixture == NULL) || (out_token == NULL) || (fixture->composite.tokens == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    fixture->composite.token_calls++;
+    if (member_id == fixture->composite.fail_index)
+    {
+        return fixture->composite.fail_err;
+    }
+    if (member_id >= fixture->composite.count)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    *out_token = fixture->composite.tokens[member_id];
     return SSZ_SUCCESS;
 }
 
@@ -1179,6 +1229,294 @@ static bool test_composite_and_migration_paths(void)
     return true;
 }
 
+static bool test_internal_helpers_and_requirements_edge_cases(void)
+{
+    size_t values[2] = {1u, 0u};
+    ssz_merkle_cache_requirements_t requirements;
+    const ssz_merkle_cache_config_t single_leaf_cfg = make_cache_config(0u, 1u, 0u, 0u, true, NULL);
+    const ssz_merkle_cache_config_t overflow_cfg = make_cache_config(
+        0u,
+        (UINT64_C(1) << 63) + 1u,
+        0u,
+        0u,
+        true,
+        NULL);
+
+    ssz_merkle_cache_internal_sort_size_t_asc(values, 2u);
+    ASSERT_SIZE_EQ(values[0], 0u);
+    ASSERT_SIZE_EQ(values[1], 1u);
+
+    ASSERT_ERR(ssz_merkle_cache_requirements(&single_leaf_cfg, &requirements), SSZ_SUCCESS);
+    ASSERT_U64_EQ(requirements.physical_leaf_capacity, 1u);
+    ASSERT_U64_EQ(requirements.mutable_leaf_capacity, 1u);
+    ASSERT_U64_EQ(requirements.depth, 0u);
+    ASSERT_SIZE_EQ(requirements.parent_dirty_words, 0u);
+    ASSERT_SIZE_EQ(requirements.gather_pair_capacity, 0u);
+    ASSERT_SIZE_EQ(requirements.gather_pairs_count, 0u);
+    ASSERT_SIZE_EQ(requirements.gather_parent_indices_count, 0u);
+
+    ASSERT_ERR(ssz_merkle_cache_requirements(&overflow_cfg, &requirements), SSZ_ERR_OVERFLOW);
+    return true;
+}
+
+static bool test_sync_packed_vector_fixed_comprehensive(void)
+{
+    cache_fixture_t exact_fixture;
+    cache_fixture_t bounded_fixture;
+    cache_fixture_t mixed_fixture;
+    ssz_merkle_cache_t unbound_cache;
+    ssz_chunk_t expected_first;
+    ssz_chunk_t expected_second;
+    const ssz_merkle_cache_config_t exact_cfg =
+        make_cache_config(0u, SSZ_NO_LIMIT, 4u, 77u, false, NULL);
+    const ssz_merkle_cache_config_t bounded_cfg = make_cache_config(0u, 4u, 0u, 0u, false, NULL);
+    const ssz_merkle_cache_config_t mixed_cfg =
+        make_cache_config(0u, SSZ_NO_LIMIT, 4u, 0u, true, NULL);
+    uint8_t elements[40] = {0};
+    size_t leaf_base = 0u;
+
+    (void)memset(&exact_fixture, 0, sizeof(exact_fixture));
+    (void)memset(&bounded_fixture, 0, sizeof(bounded_fixture));
+    (void)memset(&mixed_fixture, 0, sizeof(mixed_fixture));
+    (void)memset(&unbound_cache, 0, sizeof(unbound_cache));
+
+    for (size_t i = 0u; i < sizeof(elements); i++)
+    {
+        elements[i] = (uint8_t)(0x40u + i);
+    }
+
+    ASSERT_ERR(cache_fixture_init(&exact_fixture, &exact_cfg, false), SSZ_SUCCESS);
+    ASSERT_ERR(cache_fixture_init(&bounded_fixture, &bounded_cfg, false), SSZ_SUCCESS);
+    ASSERT_ERR(cache_fixture_init(&mixed_fixture, &mixed_cfg, false), SSZ_SUCCESS);
+
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_packed_vector_fixed(&unbound_cache, elements, 1u, 1u),
+        SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_packed_vector_fixed(&exact_fixture.cache, elements, 0u, 1u),
+        SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_packed_vector_fixed(&exact_fixture.cache, elements, 1u, 0u),
+        SSZ_ERR_SCHEMA_INVALID);
+
+    reset_hooks();
+    g_hooks.u64_to_size_fail_at = 1u;
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_packed_vector_fixed(&exact_fixture.cache, elements, 1u, 1u),
+        SSZ_ERR_OVERFLOW);
+    ASSERT_SIZE_EQ(g_hooks.u64_to_size_calls, 1u);
+
+    reset_hooks();
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_packed_vector_fixed(
+            &exact_fixture.cache,
+            elements,
+            (uint64_t)SIZE_MAX,
+            2u),
+        SSZ_ERR_OVERFLOW);
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_packed_vector_fixed(&exact_fixture.cache, NULL, 1u, 1u),
+        SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_packed_vector_fixed(&bounded_fixture.cache, elements, 1u, 1u),
+        SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_packed_vector_fixed(&mixed_fixture.cache, elements, 1u, 1u),
+        SSZ_ERR_INVALID_ARGUMENT);
+
+    exact_fixture.cache.needs_resync = true;
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_packed_vector_fixed(&exact_fixture.cache, elements, 2u, 20u),
+        SSZ_SUCCESS);
+    ASSERT_U64_EQ(exact_fixture.cache.leaf_count, 2u);
+    ASSERT_U64_EQ(exact_fixture.cache.logical_length, 77u);
+    ASSERT_FALSE(ssz_merkle_cache_needs_resync(&exact_fixture.cache));
+
+    expected_first = zero_chunk();
+    expected_second = zero_chunk();
+    (void)memcpy(expected_first.bytes, elements, SSZ_BYTES_PER_CHUNK);
+    (void)memcpy(
+        expected_second.bytes,
+        &elements[SSZ_BYTES_PER_CHUNK],
+        sizeof(elements) - SSZ_BYTES_PER_CHUNK);
+    leaf_base = (size_t)exact_fixture.cache.level_offsets[0];
+    ASSERT_CHUNK_EQ(exact_fixture.cache.nodes[leaf_base], expected_first);
+    ASSERT_CHUNK_EQ(exact_fixture.cache.nodes[leaf_base + 1u], expected_second);
+
+    cache_fixture_cleanup(&exact_fixture);
+    cache_fixture_cleanup(&bounded_fixture);
+    cache_fixture_cleanup(&mixed_fixture);
+    return true;
+}
+
+static bool test_composite_sync_edge_cases(void)
+{
+    ssz_chunk_t fallback_roots[3] = {
+        make_chunk(0x10u),
+        make_chunk(0x20u),
+        make_chunk(0x30u),
+    };
+    ssz_chunk_t tail_roots[3] = {
+        make_chunk(0x41u),
+        make_chunk(0x42u),
+        make_chunk(0x43u),
+    };
+    ssz_chunk_t shrink_roots[3] = {
+        make_chunk(0x51u),
+        make_chunk(0x52u),
+        make_chunk(0x53u),
+    };
+    uint64_t tail_tokens[3] = {11u, 22u, 33u};
+    uint64_t shrink_tokens[3] = {101u, 202u, 303u};
+    composite_fixture_t fallback_ctx = {
+        .roots = fallback_roots,
+        .tokens = NULL,
+        .count = 3u,
+        .fail_index = UINT64_MAX,
+        .fail_err = SSZ_ERR_HASH_FAILURE,
+        .root_calls = 0u,
+        .token_calls = 0u,
+        .batch_calls = 0u,
+    };
+    composite_root_fail_fixture_t tail_ctx = {
+        .composite =
+            {
+                .roots = tail_roots,
+                .tokens = tail_tokens,
+                .count = 3u,
+                .fail_index = UINT64_MAX,
+                .fail_err = SSZ_ERR_HASH_FAILURE,
+                .root_calls = 0u,
+                .token_calls = 0u,
+                .batch_calls = 0u,
+            },
+        .root_fail_index = UINT64_MAX,
+        .root_fail_err = SSZ_ERR_HASH_FAILURE,
+    };
+    composite_fixture_t shrink_ctx = {
+        .roots = shrink_roots,
+        .tokens = shrink_tokens,
+        .count = 3u,
+        .fail_index = UINT64_MAX,
+        .fail_err = SSZ_ERR_HASH_FAILURE,
+        .root_calls = 0u,
+        .token_calls = 0u,
+        .batch_calls = 0u,
+    };
+    const ssz_member_codec_t fallback_codec = {
+        .ctx = &fallback_ctx,
+        .write = NULL,
+        .read = NULL,
+        .root = composite_root,
+    };
+    const ssz_member_codec_t tail_codec = {
+        .ctx = &tail_ctx,
+        .write = NULL,
+        .read = NULL,
+        .root = composite_root_fail_only,
+    };
+    const ssz_member_codec_t shrink_codec = {
+        .ctx = &shrink_ctx,
+        .write = NULL,
+        .read = NULL,
+        .root = composite_root,
+    };
+    const ssz_merkle_cache_config_t bounded_cfg = make_cache_config(0u, 4u, 0u, 0u, true, NULL);
+    const ssz_merkle_cache_config_t exact_cfg =
+        make_cache_config(0u, SSZ_NO_LIMIT, 4u, 0u, false, NULL);
+    cache_fixture_t fallback_fixture;
+    cache_fixture_t tail_fixture;
+    cache_fixture_t shrink_fixture;
+    ssz_merkle_cache_sync_composite_opts_t fallback_opts;
+    ssz_merkle_cache_sync_composite_opts_t tail_opts;
+    ssz_merkle_cache_sync_composite_opts_t shrink_opts;
+
+    (void)memset(&fallback_fixture, 0, sizeof(fallback_fixture));
+    (void)memset(&tail_fixture, 0, sizeof(tail_fixture));
+    (void)memset(&shrink_fixture, 0, sizeof(shrink_fixture));
+
+    ASSERT_ERR(cache_fixture_init(&fallback_fixture, &bounded_cfg, false), SSZ_SUCCESS);
+    fallback_opts = make_composite_opts(&fallback_ctx, NULL, composite_root_batch, &fallback_fixture.workspace);
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_composite(&fallback_fixture.cache, 3u, 4u, &fallback_codec, &fallback_opts),
+        SSZ_SUCCESS);
+    ASSERT_U64_EQ(fallback_fixture.cache.leaf_count, 3u);
+    ASSERT_U64_EQ(fallback_fixture.cache.logical_length, 3u);
+    ASSERT_U64_EQ(fallback_ctx.batch_calls, 1u);
+    ASSERT_U64_EQ(fallback_ctx.root_calls, 0u);
+    ASSERT_FALSE(ssz_merkle_cache_needs_resync(&fallback_fixture.cache));
+
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_composite(&fallback_fixture.cache, 2u, 4u, &fallback_codec, &fallback_opts),
+        SSZ_SUCCESS);
+    ASSERT_U64_EQ(fallback_fixture.cache.leaf_count, 2u);
+    ASSERT_U64_EQ(fallback_fixture.cache.logical_length, 2u);
+    ASSERT_U64_EQ(fallback_ctx.batch_calls, 2u);
+    ASSERT_FALSE(ssz_merkle_cache_needs_resync(&fallback_fixture.cache));
+
+    ASSERT_ERR(cache_fixture_init(&tail_fixture, &exact_cfg, true), SSZ_SUCCESS);
+    tail_opts = make_composite_opts(&tail_ctx, composite_token_fail_only, NULL, NULL);
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_composite(
+            &tail_fixture.cache,
+            3u,
+            SSZ_NO_LIMIT,
+            &tail_codec,
+            &tail_opts),
+        SSZ_SUCCESS);
+    ASSERT_FALSE(ssz_merkle_cache_needs_resync(&tail_fixture.cache));
+
+    tail_ctx.composite.root_calls = 0u;
+    tail_ctx.composite.token_calls = 0u;
+    tail_roots[2] = make_chunk(0x7au);
+    tail_tokens[2] = 99u;
+    tail_ctx.root_fail_index = 2u;
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_composite(
+            &tail_fixture.cache,
+            3u,
+            SSZ_NO_LIMIT,
+            &tail_codec,
+            &tail_opts),
+        SSZ_ERR_HASH_FAILURE);
+    ASSERT_TRUE(ssz_merkle_cache_needs_resync(&tail_fixture.cache));
+    ASSERT_U64_EQ(tail_ctx.composite.root_calls, 1u);
+    ASSERT_U64_EQ(tail_ctx.composite.token_calls, 3u);
+
+    ASSERT_ERR(cache_fixture_init(&shrink_fixture, &exact_cfg, true), SSZ_SUCCESS);
+    shrink_opts = make_composite_opts(&shrink_ctx, composite_token, NULL, NULL);
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_composite(
+            &shrink_fixture.cache,
+            3u,
+            SSZ_NO_LIMIT,
+            &shrink_codec,
+            &shrink_opts),
+        SSZ_SUCCESS);
+    ASSERT_FALSE(ssz_merkle_cache_needs_resync(&shrink_fixture.cache));
+
+    reset_hooks();
+    g_hooks.add_overflow_u64_fail_at = 1u;
+    shrink_ctx.root_calls = 0u;
+    shrink_ctx.token_calls = 0u;
+    ASSERT_ERR(
+        ssz_merkle_cache_sync_composite(
+            &shrink_fixture.cache,
+            2u,
+            SSZ_NO_LIMIT,
+            &shrink_codec,
+            &shrink_opts),
+        SSZ_ERR_OVERFLOW);
+    ASSERT_TRUE(ssz_merkle_cache_needs_resync(&shrink_fixture.cache));
+    ASSERT_U64_EQ(shrink_ctx.root_calls, 0u);
+    ASSERT_U64_EQ(shrink_ctx.token_calls, 2u);
+
+    cache_fixture_cleanup(&fallback_fixture);
+    cache_fixture_cleanup(&tail_fixture);
+    cache_fixture_cleanup(&shrink_fixture);
+    return true;
+}
+
 int main(void)
 {
     const test_case_t tests[] = {
@@ -1187,6 +1525,9 @@ int main(void)
         {"hash_dirty_parent_paths", test_hash_dirty_parent_paths},
         {"recompute_and_public_error_paths", test_recompute_and_public_error_paths},
         {"composite_and_migration_paths", test_composite_and_migration_paths},
+        {"internal_helpers_and_requirements_edge_cases", test_internal_helpers_and_requirements_edge_cases},
+        {"sync_packed_vector_fixed_comprehensive", test_sync_packed_vector_fixed_comprehensive},
+        {"composite_sync_edge_cases", test_composite_sync_edge_cases},
     };
 
     for (size_t i = 0u; i < (sizeof(tests) / sizeof(tests[0])); i++)

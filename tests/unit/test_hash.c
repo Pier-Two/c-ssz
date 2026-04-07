@@ -1,3 +1,6 @@
+#if !defined(_WIN32)
+#include <pthread.h>
+#endif
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -173,6 +176,9 @@ static ssz_error_t counting_hash(
 typedef struct
 {
     bool sha256_init_should_fail;
+#if !defined(_WIN32)
+    bool pthread_once_should_fail;
+#endif
 } internal_hash_hook_state_t;
 
 static internal_hash_hook_state_t g_internal_hash_hooks;
@@ -191,9 +197,23 @@ static int hook_sha256_init(SHA256_CTX *ctx)
     return SHA256_Init(ctx);
 }
 
+#if !defined(_WIN32)
+static int hook_pthread_once(pthread_once_t *once_control, void (*init_routine)(void))
+{
+    if (g_internal_hash_hooks.pthread_once_should_fail)
+    {
+        return -1;
+    }
+    return pthread_once(once_control, init_routine);
+}
+#endif
+
 static const ssz_hash_fn_t *internal_copy_ssz_hash_default(void);
 
 #define SHA256_Init hook_sha256_init
+#if !defined(_WIN32)
+#define pthread_once hook_pthread_once
+#endif
 #define ssz_hash_sha256 internal_copy_ssz_hash_sha256
 #define ssz_hash_2to1 internal_copy_ssz_hash_2to1
 #define ssz_hash_default internal_copy_ssz_hash_default
@@ -205,6 +225,9 @@ static const ssz_hash_fn_t *internal_copy_ssz_hash_default(void);
    entry points while keeping coverage attributed to src/ssz_hash.c. */
 #include "ssz_hash.c"
 #undef SHA256_Init
+#if !defined(_WIN32)
+#undef pthread_once
+#endif
 #undef ssz_hash_sha256
 #undef ssz_hash_2to1
 #undef ssz_hash_default
@@ -871,6 +894,20 @@ static bool test_hash_internal_sha256_batch_default_defensive_paths(void)
     return true;
 }
 
+#if !defined(_WIN32)
+static bool test_hash_default_zero_hashes_pthread_once_failure(void)
+{
+    reset_internal_hash_hooks();
+    g_internal_hash_hooks.pthread_once_should_fail = true;
+
+    const ssz_chunk_t *result = call_internal_copy_ssz_hash_default_zero_hashes();
+    ASSERT_TRUE(result == NULL);
+
+    reset_internal_hash_hooks();
+    return true;
+}
+#endif
+
 int main(void)
 {
     const test_case_t tests[] = {
@@ -895,6 +932,9 @@ int main(void)
         {"hash_2to1_batch_inplace_error_paths", test_hash_2to1_batch_inplace_error_paths},
         {"hash_2to1_batch_falls_back_to_hash_2to1_provider", test_hash_2to1_batch_falls_back_to_hash_2to1_provider},
         {"hash_internal_sha256_batch_default_defensive_paths", test_hash_internal_sha256_batch_default_defensive_paths},
+#if !defined(_WIN32)
+        {"hash_default_zero_hashes_pthread_once_failure", test_hash_default_zero_hashes_pthread_once_failure},
+#endif
     };
 
     size_t passed = 0u;

@@ -1,6 +1,7 @@
+#include "ssz_deserialize.h"
+
 #include <string.h>
 
-#include "ssz_deserialize.h"
 #include "ssz_internal.h"
 
 static ssz_error_t ssz_internal_deserialize_variable_sequence(
@@ -12,8 +13,6 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
 {
     size_t fixed_region = 0u;
     ssz_error_t err = SSZ_SUCCESS;
-    uint32_t first_offset = 0u;
-    uint32_t prev_offset = 0u;
 
     if ((codec == NULL) || (codec->read == NULL) || (in == NULL))
     {
@@ -23,7 +22,10 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
     {
         err = SSZ_ERR_OVERFLOW;
     }
-    else if (ssz_internal_mul_overflow_size((size_t)element_count, SSZ_BYTES_PER_LENGTH_OFFSET, &fixed_region))
+    else if (ssz_internal_mul_overflow_size(
+                 (size_t)element_count,
+                 SSZ_BYTES_PER_LENGTH_OFFSET,
+                 &fixed_region))
     {
         err = SSZ_ERR_OVERFLOW;
     }
@@ -33,30 +35,32 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
     }
     else
     {
-        first_offset = ssz_internal_read_u32_le(in);
-        if ((size_t)first_offset != fixed_region)
+        /* intentionally empty */
+    }
+
+    if (err == SSZ_SUCCESS)
+    {
+        uint32_t prev_offset = ssz_internal_read_u32_le(in);
+
+        if ((size_t)prev_offset != fixed_region)
         {
             err = SSZ_ERR_OFFSET_INVALID;
         }
         else
         {
-            prev_offset = first_offset;
-        }
-    }
-
-    if (err == SSZ_SUCCESS)
-    {
-        for (uint64_t i = 0u; i < element_count; i++)
-        {
-            size_t offset_pos = (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET;
-            uint32_t offset = ssz_internal_read_u32_le(&in[offset_pos]);
-
-            if (((size_t)offset < fixed_region) || ((size_t)offset > in_len) || (offset < prev_offset))
+            for (uint64_t i = 0u; i < element_count; i++)
             {
-                err = SSZ_ERR_OFFSET_INVALID;
-                break;
+                size_t offset_pos = (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET;
+                uint32_t offset = ssz_internal_read_u32_le(&in[offset_pos]);
+
+                if (((size_t)offset < fixed_region) || ((size_t)offset > in_len) ||
+                    (offset < prev_offset))
+                {
+                    err = SSZ_ERR_OFFSET_INVALID;
+                    break;
+                }
+                prev_offset = offset;
             }
-            prev_offset = offset;
         }
     }
 
@@ -70,7 +74,8 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
 
             if ((i + 1u) < element_count)
             {
-                end = (size_t)ssz_internal_read_u32_le(&in[offset_pos + SSZ_BYTES_PER_LENGTH_OFFSET]);
+                end =
+                    (size_t)ssz_internal_read_u32_le(&in[offset_pos + SSZ_BYTES_PER_LENGTH_OFFSET]);
             }
             if ((end < start) || ((end - start) < min_element_size))
             {
@@ -86,13 +91,17 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
     return err;
 }
 
-ssz_error_t ssz_deserialize_uint8(const uint8_t in[1], uint8_t *out_value)
+ssz_error_t ssz_deserialize_uint8(const uint8_t *in, size_t in_len, uint8_t *out_value)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((in == NULL) || (out_value == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (in_len < 1u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else
     {
@@ -102,13 +111,17 @@ ssz_error_t ssz_deserialize_uint8(const uint8_t in[1], uint8_t *out_value)
     return err;
 }
 
-ssz_error_t ssz_deserialize_uint16(const uint8_t in[2], uint16_t *out_value)
+ssz_error_t ssz_deserialize_uint16(const uint8_t *in, size_t in_len, uint16_t *out_value)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((in == NULL) || (out_value == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (in_len < 2u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else
     {
@@ -118,13 +131,17 @@ ssz_error_t ssz_deserialize_uint16(const uint8_t in[2], uint16_t *out_value)
     return err;
 }
 
-ssz_error_t ssz_deserialize_uint32(const uint8_t in[4], uint32_t *out_value)
+ssz_error_t ssz_deserialize_uint32(const uint8_t *in, size_t in_len, uint32_t *out_value)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((in == NULL) || (out_value == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (in_len < 4u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else
     {
@@ -134,13 +151,17 @@ ssz_error_t ssz_deserialize_uint32(const uint8_t in[4], uint32_t *out_value)
     return err;
 }
 
-ssz_error_t ssz_deserialize_uint64(const uint8_t in[8], uint64_t *out_value)
+ssz_error_t ssz_deserialize_uint64(const uint8_t *in, size_t in_len, uint64_t *out_value)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((in == NULL) || (out_value == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (in_len < 8u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else
     {
@@ -150,13 +171,17 @@ ssz_error_t ssz_deserialize_uint64(const uint8_t in[8], uint64_t *out_value)
     return err;
 }
 
-ssz_error_t ssz_deserialize_uint128(const uint8_t in[16], uint8_t out_value[16])
+ssz_error_t ssz_deserialize_uint128(const uint8_t *in, size_t in_len, uint8_t out_value[16])
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((in == NULL) || (out_value == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (in_len < 16u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else
     {
@@ -166,13 +191,17 @@ ssz_error_t ssz_deserialize_uint128(const uint8_t in[16], uint8_t out_value[16])
     return err;
 }
 
-ssz_error_t ssz_deserialize_uint256(const uint8_t in[32], uint8_t out_value[32])
+ssz_error_t ssz_deserialize_uint256(const uint8_t *in, size_t in_len, uint8_t out_value[32])
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((in == NULL) || (out_value == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (in_len < 32u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else
     {
@@ -182,13 +211,17 @@ ssz_error_t ssz_deserialize_uint256(const uint8_t in[32], uint8_t out_value[32])
     return err;
 }
 
-ssz_error_t ssz_deserialize_boolean(const uint8_t in[1], uint8_t *out_value)
+ssz_error_t ssz_deserialize_boolean(const uint8_t *in, size_t in_len, uint8_t *out_value)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((in == NULL) || (out_value == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (in_len < 1u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else if (in[0] > 1u)
     {
@@ -302,7 +335,8 @@ ssz_error_t ssz_deserialize_bitlist(
     {
         err = SSZ_ERR_OVERFLOW;
     }
-    if ((err == SSZ_SUCCESS) && (out_bytes != 0u) && ((out_bits_le == NULL) || (out_bits_le_len < out_bytes)))
+    if ((err == SSZ_SUCCESS) && (out_bytes != 0u) &&
+        ((out_bits_le == NULL) || (out_bits_le_len < out_bytes)))
     {
         err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
@@ -413,7 +447,6 @@ ssz_error_t ssz_deserialize_list_fixed(
     uint64_t *out_element_count)
 {
     ssz_error_t err = SSZ_SUCCESS;
-    size_t count = 0u;
 
     if (out_element_count == NULL)
     {
@@ -429,7 +462,8 @@ ssz_error_t ssz_deserialize_list_fixed(
     }
     else
     {
-        count = in_len / element_size;
+        size_t count = in_len / element_size;
+
         if ((element_limit != SSZ_NO_LIMIT) && ((uint64_t)count > element_limit))
         {
             err = SSZ_ERR_LIMIT_EXCEEDED;
@@ -463,10 +497,7 @@ ssz_error_t ssz_deserialize_list_variable(
     ssz_member_codec_t *codec,
     uint64_t *out_element_count)
 {
-    uint64_t element_count = 0u;
     ssz_error_t err = SSZ_SUCCESS;
-    uint32_t first_offset = 0u;
-    uint32_t element_count_u32 = 0u;
 
     if (out_element_count == NULL)
     {
@@ -486,15 +517,17 @@ ssz_error_t ssz_deserialize_list_variable(
     }
     else
     {
-        first_offset = ssz_internal_read_u32_le(in);
+        uint32_t first_offset = ssz_internal_read_u32_le(in);
+
         if (((size_t)first_offset > in_len) || ((first_offset % SSZ_BYTES_PER_LENGTH_OFFSET) != 0u))
         {
             err = SSZ_ERR_OFFSET_INVALID;
         }
         else
         {
-            element_count_u32 = first_offset / SSZ_BYTES_PER_LENGTH_OFFSET;
-            element_count = (uint64_t)element_count_u32;
+            uint32_t element_count_u32 = first_offset / SSZ_BYTES_PER_LENGTH_OFFSET;
+            uint64_t element_count = (uint64_t)element_count_u32;
+
             if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
             {
                 err = SSZ_ERR_LIMIT_EXCEEDED;
@@ -533,7 +566,6 @@ ssz_error_t ssz_deserialize_container(
     ssz_error_t err = SSZ_SUCCESS;
     size_t cursor = 0u;
     bool saw_variable = false;
-    uint32_t prev_offset = 0u;
 
     if ((field_fixed_sizes == NULL) || (field_count == 0u))
     {
@@ -564,6 +596,8 @@ ssz_error_t ssz_deserialize_container(
 
     if (err == SSZ_SUCCESS)
     {
+        uint32_t prev_offset;
+
         for (uint32_t i = 0u; (i < field_count) && (err == SSZ_SUCCESS); i++)
         {
             size_t fixed_size = field_fixed_sizes[i];
@@ -757,7 +791,9 @@ ssz_error_t ssz_deserialize_compatible_union(
     }
     else
     {
-        err = ssz_internal_validate_compatible_union_schema(allowed_selectors, allowed_selector_count);
+        err = ssz_internal_validate_compatible_union_schema(
+            allowed_selectors,
+            allowed_selector_count);
         if (err == SSZ_SUCCESS)
         {
             if ((in == NULL) || (in_len < 1u))
@@ -768,7 +804,10 @@ ssz_error_t ssz_deserialize_compatible_union(
             {
                 selector = in[0];
                 if ((selector == 0u) || (selector > 127u) ||
-                    !ssz_internal_selector_allowed(selector, allowed_selectors, allowed_selector_count))
+                    !ssz_internal_selector_allowed(
+                        selector,
+                        allowed_selectors,
+                        allowed_selector_count))
                 {
                     err = SSZ_ERR_SELECTOR_INVALID;
                 }

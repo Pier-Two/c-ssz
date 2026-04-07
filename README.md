@@ -1,5 +1,9 @@
 # c-ssz
 
+[![CI](https://github.com/Pier-Two/c-ssz/actions/workflows/ci.yml/badge.svg)](https://github.com/Pier-Two/c-ssz/actions/workflows/ci.yml)
+![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/uink45/78fd2e9ece2119db6cea0321a08e36e7/raw/test-coverage.json)
+![Fuzz Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/uink45/78fd2e9ece2119db6cea0321a08e36e7/raw/fuzz-coverage.json)
+
 A C99 implementation of the Simple Serialize (SSZ) [specification](https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md) and [Merkle proof formats](https://github.com/ethereum/consensus-specs/blob/dev/ssz/merkle-proofs.md).
 
 ## Features
@@ -62,12 +66,9 @@ Hardware-accelerated SHA-256 via [AWS-LC](https://github.com/aws/aws-lc) with ba
 
 - MISRA C:2012 compliant (checked in CI via cppcheck)
 - CERT C compliant (checked in CI via clang-tidy)
-- Frama-C Eva static analysis
-- CBMC formal verification harnesses
 - GCC `-fanalyzer` and CodeQL
-- AddressSanitizer, UndefinedBehaviorSanitizer
+- AddressSanitizer, UndefinedBehaviorSanitizer, MemorySanitizer, ThreadSanitizer
 - libFuzzer harnesses for all modules
-- ABI stability checks
 
 ## Getting Started
 

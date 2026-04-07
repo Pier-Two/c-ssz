@@ -292,6 +292,16 @@ static ssz_internal_leaf_source_t make_bytes_source(const uint8_t *bytes, size_t
     return source;
 }
 
+static ssz_error_t passthrough_sha256_hash(
+    const void *ctx,
+    const uint8_t *data,
+    size_t data_len,
+    uint8_t out[32])
+{
+    (void)ctx;
+    return ssz_hash_sha256(data, data_len, out);
+}
+
 static bool test_internal_alloc_and_leaf_readers(void)
 {
     ssz_chunk_t leaf = internal_make_chunk(0xA0u);
@@ -731,12 +741,105 @@ static bool test_internal_subtree_progressive_and_public_overflows(void)
     return true;
 }
 
+static bool test_internal_reader_custom_hash_fallback_paths(void)
+{
+    ssz_chunk_t expected_root;
+    ssz_chunk_t actual_root;
+    ssz_chunk_t chunk_leaves[128];
+    ssz_internal_leaf_source_t chunk_source;
+    const ssz_hash_fn_t custom_hash = {
+        .hash = passthrough_sha256_hash,
+        .hash_2to1 = NULL,
+        .hash_2to1_batch = NULL,
+        .ctx = NULL,
+    };
+
+    for (size_t i = 0u; i < 128u; i++)
+    {
+        chunk_leaves[i] = internal_make_chunk((uint8_t)i);
+    }
+    chunk_source = make_chunk_source(chunk_leaves, 128u);
+
+    reset_hooks();
+    IASSERT_ERR(ssz_internal_merkleize_reader(&chunk_source, 0u, 128u, SSZ_NO_LIMIT, NULL, NULL, &expected_root),
+                SSZ_SUCCESS);
+
+    reset_hooks();
+    IASSERT_ERR(ssz_internal_merkleize_reader(
+                    &chunk_source,
+                    0u,
+                    128u,
+                    SSZ_NO_LIMIT,
+                    NULL,
+                    &custom_hash,
+                    &actual_root),
+                SSZ_SUCCESS);
+    IASSERT_CHUNK_EQ(actual_root, expected_root);
+    IASSERT_TRUE(g_hooks.hash_2to1_calls > 1u);
+    IASSERT_TRUE(g_hooks.hash_2to1_batch_calls == 0u);
+    IASSERT_TRUE(g_hooks.hash_2to1_batch_inplace_calls > 0u);
+
+    return true;
+}
+
+static bool test_internal_subtree_empty_range_returns_zero_hash(void)
+{
+    ssz_chunk_t out_root;
+    const ssz_chunk_t *zero_hashes = ssz_hash_default_zero_hashes();
+    ssz_internal_leaf_source_t sequence_source = make_sequence_source(NULL);
+    const uint32_t depth = 3u;
+
+    IASSERT_ERR(ssz_internal_merkleize_subtree_iter(&sequence_source,
+                                                    0u,
+                                                    4u,
+                                                    4u,
+                                                    2u,
+                                                    depth,
+                                                    NULL,
+                                                    NULL,
+                                                    zero_hashes,
+                                                    &out_root),
+                SSZ_SUCCESS);
+    IASSERT_CHUNK_EQ(out_root, zero_hashes[depth]);
+
+    return true;
+}
+
+static bool test_internal_subtree_single_leaf_reads_source(void)
+{
+    ssz_chunk_t out_root;
+    const ssz_chunk_t *zero_hashes = ssz_hash_default_zero_hashes();
+    const ssz_chunk_t leaves[2] = {
+        internal_make_chunk(0x21u),
+        internal_make_chunk(0x42u),
+    };
+    ssz_internal_leaf_source_t chunk_source = make_chunk_source(leaves, 2u);
+
+    IASSERT_ERR(ssz_internal_merkleize_subtree_iter(&chunk_source,
+                                                    0u,
+                                                    2u,
+                                                    1u,
+                                                    1u,
+                                                    0u,
+                                                    NULL,
+                                                    NULL,
+                                                    zero_hashes,
+                                                    &out_root),
+                SSZ_SUCCESS);
+    IASSERT_CHUNK_EQ(out_root, leaves[1]);
+
+    return true;
+}
+
 int main(void)
 {
     const internal_test_case_t tests[] = {
         {"internal_alloc_and_leaf_readers", test_internal_alloc_and_leaf_readers},
         {"internal_fast_merkleize_paths", test_internal_fast_merkleize_paths},
         {"internal_subtree_progressive_and_public_overflows", test_internal_subtree_progressive_and_public_overflows},
+        {"internal_reader_custom_hash_fallback_paths", test_internal_reader_custom_hash_fallback_paths},
+        {"internal_subtree_empty_range_returns_zero_hash", test_internal_subtree_empty_range_returns_zero_hash},
+        {"internal_subtree_single_leaf_reads_source", test_internal_subtree_single_leaf_reads_source},
     };
 
     if (merkle_public_main() != 0)

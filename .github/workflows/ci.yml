@@ -119,23 +119,26 @@ jobs:
       - name: Build
         run: cmake --build build
 
-      - name: Run clang-tidy (informational)
-        continue-on-error: true
+      - name: Run clang-tidy
         run: |
+          set -euo pipefail
           mapfile -t c_files < <(git ls-files 'src/*.c' 'include/*.h')
           if [ ${#c_files[@]} -eq 0 ]; then
             echo "No C source files found."
-            exit 0
+            exit 1
           fi
 
-          clang-tidy -p build "${c_files[@]}"
+          clang-tidy -p build --warnings-as-errors='*' "${c_files[@]}"
 
-      - name: Run cppcheck (informational)
-        continue-on-error: true
+      - name: Run cppcheck
         run: |
+          set -euo pipefail
           cppcheck \
             --enable=warning,style,performance,portability \
             --std=c11 \
             --project=build/compile_commands.json \
             --suppress=missingIncludeSystem \
-            -i external
+            --suppress=preprocessorErrorDirective:*external/* \
+            --error-exitcode=1 \
+            -i external \
+            -i tests

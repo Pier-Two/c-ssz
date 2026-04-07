@@ -360,15 +360,82 @@ static bool test_multi_proof_calculate_and_verify(void)
     return true;
 }
 
+static bool test_multi_proof_non_overlapping_indices_still_verify(void)
+{
+    const ssz_chunk_t l0 = make_chunk(0x10u);
+    const ssz_chunk_t l1 = make_chunk(0x30u);
+    const ssz_chunk_t l2 = make_chunk(0x50u);
+    const ssz_chunk_t l3 = make_chunk(0x70u);
+
+    ssz_chunk_t h01;
+    ssz_chunk_t h23;
+    ssz_chunk_t root;
+    ASSERT_ERR(ssz_hash_2to1(NULL, &l0, &l1, &h01), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1(NULL, &l2, &l3, &h23), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1(NULL, &h01, &h23, &root), SSZ_SUCCESS);
+
+    const ssz_chunk_t leaves[2] = {l0, l3};
+    const ssz_gindex_t indices[2] = {4u, 7u};
+    const ssz_chunk_t proof[2] = {l2, l1};
+
+    ssz_gindex_t helper_scratch[16] = {0u};
+    ssz_gindex_t helpers[4] = {0u};
+    size_t helper_len = 0u;
+    ASSERT_ERR(ssz_get_helper_indices(indices, 2u, helpers, 4u, &helper_len, helper_scratch, 16u),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(helper_len == 2u);
+    ASSERT_TRUE(helpers[0] == 6u);
+    ASSERT_TRUE(helpers[1] == 5u);
+
+    ssz_gindex_t scratch_indices[16] = {0u};
+    ssz_chunk_t scratch_nodes[16];
+    memset(scratch_nodes, 0, sizeof(scratch_nodes));
+
+    ssz_chunk_t computed;
+    ASSERT_ERR(ssz_calculate_multi_merkle_root(leaves,
+                                               indices,
+                                               2u,
+                                               proof,
+                                               2u,
+                                               scratch_indices,
+                                               scratch_nodes,
+                                               16u,
+                                               NULL,
+                                               &computed),
+               SSZ_SUCCESS);
+    ASSERT_CHUNK_EQ(computed, root);
+
+    memset(scratch_nodes, 0, sizeof(scratch_nodes));
+    ASSERT_ERR(ssz_verify_merkle_multiproof(leaves,
+                                            indices,
+                                            2u,
+                                            proof,
+                                            2u,
+                                            &root,
+                                            scratch_indices,
+                                            scratch_nodes,
+                                            16u,
+                                            NULL),
+               SSZ_SUCCESS);
+
+    return true;
+}
+
 static bool test_multi_proof_empty_helper_allows_null_proof(void)
 {
     const ssz_chunk_t root = make_chunk(0xA5u);
     const ssz_chunk_t leaves[1] = {root};
     const ssz_gindex_t indices[1] = {1u};
+    ssz_gindex_t helpers[1] = {0u};
+    size_t helper_len = 0u;
 
     ssz_gindex_t scratch_indices[1] = {0u};
     ssz_chunk_t scratch_nodes[1];
     memset(scratch_nodes, 0, sizeof(scratch_nodes));
+
+    ASSERT_ERR(ssz_get_helper_indices(indices, 1u, helpers, 1u, &helper_len, scratch_indices, 1u),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(helper_len == 0u);
 
     ssz_chunk_t computed;
     ASSERT_ERR(ssz_calculate_multi_merkle_root(leaves,
@@ -396,6 +463,142 @@ static bool test_multi_proof_empty_helper_allows_null_proof(void)
                                             1u,
                                             NULL),
                SSZ_SUCCESS);
+
+    return true;
+}
+
+static bool test_multi_proof_rejects_overlapping_indices(void)
+{
+    const ssz_chunk_t leaves[2] = {make_chunk(0x11u), make_chunk(0x22u)};
+    const ssz_chunk_t expected_root = make_chunk(0x33u);
+    ssz_chunk_t out_root;
+
+    {
+        const ssz_gindex_t indices[2] = {2u, 4u};
+        ssz_gindex_t helpers[4] = {0u};
+        ssz_gindex_t helper_scratch[16] = {0u};
+        size_t helper_len = 0u;
+        ssz_gindex_t scratch_indices[16] = {0u};
+        ssz_chunk_t scratch_nodes[16];
+        memset(scratch_nodes, 0, sizeof(scratch_nodes));
+
+        ASSERT_ERR(ssz_get_helper_indices(indices, 2u, helpers, 4u, &helper_len, helper_scratch, 16u),
+                   SSZ_ERR_INVALID_ARGUMENT);
+        ASSERT_ERR(ssz_calculate_multi_merkle_root(leaves,
+                                                   indices,
+                                                   2u,
+                                                   NULL,
+                                                   0u,
+                                                   scratch_indices,
+                                                   scratch_nodes,
+                                                   16u,
+                                                   NULL,
+                                                   &out_root),
+                   SSZ_ERR_INVALID_ARGUMENT);
+        ASSERT_ERR(ssz_verify_merkle_multiproof(leaves,
+                                                indices,
+                                                2u,
+                                                NULL,
+                                                0u,
+                                                &expected_root,
+                                                scratch_indices,
+                                                scratch_nodes,
+                                                16u,
+                                                NULL),
+                   SSZ_ERR_INVALID_ARGUMENT);
+    }
+
+    {
+        const ssz_gindex_t reversed_indices[2] = {4u, 2u};
+        ssz_gindex_t helpers[4] = {0u};
+        ssz_gindex_t helper_scratch[16] = {0u};
+        size_t helper_len = 0u;
+
+        ASSERT_ERR(
+            ssz_get_helper_indices(reversed_indices, 2u, helpers, 4u, &helper_len, helper_scratch, 16u),
+            SSZ_ERR_INVALID_ARGUMENT);
+    }
+
+    return true;
+}
+
+static bool test_multi_proof_rejects_duplicate_and_root_overlaps(void)
+{
+    const ssz_chunk_t leaves[2] = {make_chunk(0x44u), make_chunk(0x55u)};
+    const ssz_chunk_t expected_root = make_chunk(0x66u);
+    ssz_chunk_t out_root;
+
+    {
+        const ssz_gindex_t duplicate_indices[2] = {5u, 5u};
+        ssz_gindex_t helpers[4] = {0u};
+        ssz_gindex_t helper_scratch[16] = {0u};
+        size_t helper_len = 0u;
+        ssz_gindex_t scratch_indices[16] = {0u};
+        ssz_chunk_t scratch_nodes[16];
+        memset(scratch_nodes, 0, sizeof(scratch_nodes));
+
+        ASSERT_ERR(ssz_get_helper_indices(
+                       duplicate_indices, 2u, helpers, 4u, &helper_len, helper_scratch, 16u),
+                   SSZ_ERR_INVALID_ARGUMENT);
+        ASSERT_ERR(ssz_calculate_multi_merkle_root(leaves,
+                                                   duplicate_indices,
+                                                   2u,
+                                                   NULL,
+                                                   0u,
+                                                   scratch_indices,
+                                                   scratch_nodes,
+                                                   16u,
+                                                   NULL,
+                                                   &out_root),
+                   SSZ_ERR_INVALID_ARGUMENT);
+        ASSERT_ERR(ssz_verify_merkle_multiproof(leaves,
+                                                duplicate_indices,
+                                                2u,
+                                                NULL,
+                                                0u,
+                                                &expected_root,
+                                                scratch_indices,
+                                                scratch_nodes,
+                                                16u,
+                                                NULL),
+                   SSZ_ERR_INVALID_ARGUMENT);
+    }
+
+    {
+        const ssz_gindex_t root_overlap_indices[2] = {1u, 2u};
+        ssz_gindex_t helpers[4] = {0u};
+        ssz_gindex_t helper_scratch[16] = {0u};
+        size_t helper_len = 0u;
+        ssz_gindex_t scratch_indices[16] = {0u};
+        ssz_chunk_t scratch_nodes[16];
+        memset(scratch_nodes, 0, sizeof(scratch_nodes));
+
+        ASSERT_ERR(ssz_get_helper_indices(
+                       root_overlap_indices, 2u, helpers, 4u, &helper_len, helper_scratch, 16u),
+                   SSZ_ERR_INVALID_ARGUMENT);
+        ASSERT_ERR(ssz_calculate_multi_merkle_root(leaves,
+                                                   root_overlap_indices,
+                                                   2u,
+                                                   NULL,
+                                                   0u,
+                                                   scratch_indices,
+                                                   scratch_nodes,
+                                                   16u,
+                                                   NULL,
+                                                   &out_root),
+                   SSZ_ERR_INVALID_ARGUMENT);
+        ASSERT_ERR(ssz_verify_merkle_multiproof(leaves,
+                                                root_overlap_indices,
+                                                2u,
+                                                NULL,
+                                                0u,
+                                                &expected_root,
+                                                scratch_indices,
+                                                scratch_nodes,
+                                                16u,
+                                                NULL),
+                   SSZ_ERR_INVALID_ARGUMENT);
+    }
 
     return true;
 }
@@ -669,6 +872,15 @@ static bool test_indices_and_helper_error_paths(void)
                SSZ_SUCCESS);
     ASSERT_TRUE(out_len == 0u);
 
+    ASSERT_ERR(ssz_get_helper_indices((const ssz_gindex_t[]){2u, 4u},
+                                      2u,
+                                      out_buf,
+                                      4u,
+                                      &out_len,
+                                      scratch,
+                                      16u),
+               SSZ_ERR_INVALID_ARGUMENT);
+
     ASSERT_ERR(ssz_get_helper_indices((const ssz_gindex_t[]){7u, 6u, 5u},
                                       3u,
                                       NULL,
@@ -772,41 +984,14 @@ static bool test_multiproof_additional_error_paths(void)
                                                &(ssz_chunk_t){0}),
                SSZ_ERR_PROOF_INVALID);
 
-    {
-        const ssz_chunk_t same_leaves[2] = {l1, l1};
-        const ssz_gindex_t same_indices[2] = {2u, 2u};
-        size_t same_helper_len = 0u;
-        ssz_gindex_t same_helper_scratch[16] = {0u};
-        ASSERT_ERR(ssz_get_helper_indices(same_indices,
-                                          2u,
-                                          NULL,
-                                          0u,
-                                          &same_helper_len,
-                                          same_helper_scratch,
-                                          16u),
-                   SSZ_SUCCESS);
-
-        ssz_chunk_t same_proof[4];
-        for (size_t i = 0u; i < same_helper_len; i++)
-        {
-            same_proof[i] = make_chunk((uint8_t)(0x90u + i));
-        }
-
-        ssz_gindex_t same_idx_scratch[16] = {0u};
-        ssz_chunk_t same_node_scratch[16];
-        memset(same_node_scratch, 0, sizeof(same_node_scratch));
-        ASSERT_ERR(ssz_calculate_multi_merkle_root(same_leaves,
-                                                   same_indices,
-                                                   2u,
-                                                   same_proof,
-                                                   same_helper_len,
-                                                   same_idx_scratch,
-                                                   same_node_scratch,
-                                                   16u,
-                                                   NULL,
-                                                   &(ssz_chunk_t){0}),
-                   SSZ_SUCCESS);
-    }
+    ASSERT_ERR(ssz_get_helper_indices((const ssz_gindex_t[]){2u, 2u},
+                                      2u,
+                                      NULL,
+                                      0u,
+                                      &helper_len,
+                                      helper_scratch,
+                                      16u),
+               SSZ_ERR_INVALID_ARGUMENT);
 
     ssz_gindex_t zero_cap_idx[1] = {0u};
     ssz_chunk_t zero_cap_nodes[1];
@@ -876,37 +1061,17 @@ static bool test_multiproof_additional_error_paths(void)
         }
     }
 
-    const ssz_chunk_t dup_leaves[2] = {l1, l2};
-    const ssz_gindex_t dup_indices[2] = {5u, 5u};
-    size_t dup_helper_len = 0u;
-    ssz_gindex_t dup_helper_scratch[16] = {0u};
-    ASSERT_ERR(ssz_get_helper_indices(dup_indices,
-                                      2u,
-                                      NULL,
-                                      0u,
-                                      &dup_helper_len,
-                                      dup_helper_scratch,
-                                      16u),
-               SSZ_SUCCESS);
-    ssz_chunk_t dup_proof[4];
-    for (size_t i = 0u; i < dup_helper_len; i++)
-    {
-        dup_proof[i] = make_chunk((uint8_t)(0xA0u + i));
-    }
-    ssz_gindex_t dup_calc_idx[16] = {0u};
-    ssz_chunk_t dup_calc_nodes[16];
-    memset(dup_calc_nodes, 0, sizeof(dup_calc_nodes));
-    ASSERT_ERR(ssz_calculate_multi_merkle_root(dup_leaves,
-                                               dup_indices,
+    ASSERT_ERR(ssz_calculate_multi_merkle_root((const ssz_chunk_t[]){l1, l2},
+                                               (const ssz_gindex_t[]){5u, 5u},
                                                2u,
-                                               dup_proof,
-                                               dup_helper_len,
-                                               dup_calc_idx,
-                                               dup_calc_nodes,
+                                               NULL,
+                                               0u,
+                                               calc_scratch_idx,
+                                               calc_scratch_nodes,
                                                16u,
                                                NULL,
                                                &(ssz_chunk_t){0}),
-               SSZ_ERR_PROOF_INVALID);
+               SSZ_ERR_INVALID_ARGUMENT);
 
     {
         size_t scratch_cap = helper_len + 2u;
@@ -1012,7 +1177,12 @@ int main(void)
         {"get_helper_indices_multi_index", test_get_helper_indices_multi_index},
         {"single_proof_calculate_and_verify", test_single_proof_calculate_and_verify},
         {"multi_proof_calculate_and_verify", test_multi_proof_calculate_and_verify},
+        {"multi_proof_non_overlapping_indices_still_verify",
+         test_multi_proof_non_overlapping_indices_still_verify},
         {"multi_proof_empty_helper_allows_null_proof", test_multi_proof_empty_helper_allows_null_proof},
+        {"multi_proof_rejects_overlapping_indices", test_multi_proof_rejects_overlapping_indices},
+        {"multi_proof_rejects_duplicate_and_root_overlaps",
+         test_multi_proof_rejects_duplicate_and_root_overlaps},
         {"proof_error_cases", test_proof_error_cases},
         {"get_generalized_index_error_paths", test_get_generalized_index_error_paths},
         {"indices_and_helper_error_paths", test_indices_and_helper_error_paths},

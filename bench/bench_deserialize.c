@@ -1,8 +1,8 @@
-#include "ubench.h"
-#include "ssz.h"
-
 #include <stdint.h>
 #include <string.h>
+
+#include "ssz.h"
+#include "ubench.h"
 
 #define DESER_VECTOR_FIXED_COUNT        1024u
 #define DESER_VECTOR_FIXED_ELEMENT_SIZE 8u
@@ -11,8 +11,9 @@
 #define DESER_VECTOR_VARIABLE_COUNT   256u
 #define DESER_VECTOR_VARIABLE_MIN_LEN 24u
 #define DESER_VECTOR_VARIABLE_SPAN    16u
-#define DESER_VECTOR_VARIABLE_MAX_LEN (DESER_VECTOR_VARIABLE_MIN_LEN + DESER_VECTOR_VARIABLE_SPAN - 1u)
-#define DESER_VECTOR_VARIABLE_CAP                                                                      \
+#define DESER_VECTOR_VARIABLE_MAX_LEN \
+    (DESER_VECTOR_VARIABLE_MIN_LEN + DESER_VECTOR_VARIABLE_SPAN - 1u)
+#define DESER_VECTOR_VARIABLE_CAP \
     (DESER_VECTOR_VARIABLE_COUNT * (SSZ_BYTES_PER_LENGTH_OFFSET + DESER_VECTOR_VARIABLE_MAX_LEN))
 
 #define DESER_LIST_FIXED_COUNT        1024u
@@ -25,7 +26,7 @@
 #define DESER_LIST_VARIABLE_MIN_LEN 16u
 #define DESER_LIST_VARIABLE_SPAN    24u
 #define DESER_LIST_VARIABLE_MAX_LEN (DESER_LIST_VARIABLE_MIN_LEN + DESER_LIST_VARIABLE_SPAN - 1u)
-#define DESER_LIST_VARIABLE_CAP                                                                      \
+#define DESER_LIST_VARIABLE_CAP \
     (DESER_LIST_VARIABLE_COUNT * (SSZ_BYTES_PER_LENGTH_OFFSET + DESER_LIST_VARIABLE_MAX_LEN))
 
 #define DESER_BITVECTOR_BIT_COUNT 8192u
@@ -42,32 +43,36 @@
 #define DESER_UNION_COMPAT_SELECTOR_A 2u
 #define DESER_UNION_COMPAT_SELECTOR_B 7u
 
-#define DESER_CONTAINER_FIELD_COUNT   7u
-#define DESER_CONTAINER_VAR0_LEN      96u
-#define DESER_CONTAINER_VAR1_LEN      128u
-#define DESER_CONTAINER_OUTPUT_CAP    512u
-#define DESER_CONTAINER_FIXED_REGION  (48u + 32u + 8u + 1u + 8u + 4u + 4u)
-#define DESER_CONTAINER_EXPECTED_SIZE                                                               \
+#define DESER_CONTAINER_FIELD_COUNT  7u
+#define DESER_CONTAINER_VAR0_LEN     96u
+#define DESER_CONTAINER_VAR1_LEN     128u
+#define DESER_CONTAINER_OUTPUT_CAP   512u
+#define DESER_CONTAINER_FIXED_REGION (48u + 32u + 8u + 1u + 8u + 4u + 4u)
+#define DESER_CONTAINER_EXPECTED_SIZE \
     (DESER_CONTAINER_FIXED_REGION + DESER_CONTAINER_VAR0_LEN + DESER_CONTAINER_VAR1_LEN)
 
-typedef struct {
+typedef struct
+{
     size_t min_len;
     size_t span;
     uint8_t seed;
 } bench_var_payload_ctx_t;
 
-typedef struct {
+typedef struct
+{
     uint64_t id;
     const uint8_t *data;
     size_t len;
 } bench_payload_entry_t;
 
-typedef struct {
+typedef struct
+{
     const bench_payload_entry_t *entries;
     size_t entry_count;
 } bench_payload_map_t;
 
-typedef struct {
+typedef struct
+{
     uint64_t callback_count;
     uint64_t byte_acc;
 } bench_read_sink_t;
@@ -177,15 +182,15 @@ static ssz_error_t bench_read_sink_callback(
     return SSZ_SUCCESS;
 }
 
-#define BENCH_EXPECT_OK(expr)                                                                        \
-    do                                                                                               \
-    {                                                                                                \
-        ssz_error_t bench_err__ = (expr);                                                            \
-        if (bench_err__ != SSZ_SUCCESS)                                                              \
-        {                                                                                            \
-            ubench_do_nothing((void *)&bench_err__);                                                \
-            return;                                                                                  \
-        }                                                                                            \
+#define BENCH_EXPECT_OK(expr)                        \
+    do                                               \
+    {                                                \
+        ssz_error_t bench_err__ = (expr);            \
+        if (bench_err__ != SSZ_SUCCESS)              \
+        {                                            \
+            ubench_do_nothing((void *)&bench_err__); \
+            return;                                  \
+        }                                            \
     } while (0)
 
 static int g_init_state = 0;
@@ -349,13 +354,14 @@ static void bench_init_deserialize_data(void)
     }
     g_bitlist_raw[sizeof(g_bitlist_raw) - 1u] &= 0x3Fu;
 
-    err = ssz_serialize_bitlist(g_bitlist_raw,
-                                sizeof(g_bitlist_raw),
-                                DESER_BITLIST_BIT_LEN,
-                                DESER_BITLIST_BIT_MAX,
-                                g_bitlist_encoded,
-                                sizeof(g_bitlist_encoded),
-                                &g_bitlist_encoded_len);
+    err = ssz_serialize_bitlist(
+        g_bitlist_raw,
+        sizeof(g_bitlist_raw),
+        DESER_BITLIST_BIT_LEN,
+        DESER_BITLIST_BIT_MAX,
+        g_bitlist_encoded,
+        sizeof(g_bitlist_encoded),
+        &g_bitlist_encoded_len);
     if ((err != SSZ_SUCCESS) || (g_bitlist_encoded_len > sizeof(g_bitlist_encoded)))
     {
         g_init_state = -1;
@@ -374,11 +380,12 @@ static void bench_init_deserialize_data(void)
         .root = NULL,
     };
 
-    err = ssz_serialize_vector_variable(DESER_VECTOR_VARIABLE_COUNT,
-                                        &g_vector_variable_write_codec,
-                                        g_vector_variable_encoded,
-                                        sizeof(g_vector_variable_encoded),
-                                        &g_vector_variable_encoded_len);
+    err = ssz_serialize_vector_variable(
+        DESER_VECTOR_VARIABLE_COUNT,
+        &g_vector_variable_write_codec,
+        g_vector_variable_encoded,
+        sizeof(g_vector_variable_encoded),
+        &g_vector_variable_encoded_len);
     if ((err != SSZ_SUCCESS) || (g_vector_variable_encoded_len > sizeof(g_vector_variable_encoded)))
     {
         g_init_state = -1;
@@ -397,12 +404,13 @@ static void bench_init_deserialize_data(void)
         .root = NULL,
     };
 
-    err = ssz_serialize_list_variable(DESER_LIST_VARIABLE_COUNT,
-                                      DESER_LIST_VARIABLE_LIMIT,
-                                      &g_list_variable_write_codec,
-                                      g_list_variable_encoded,
-                                      sizeof(g_list_variable_encoded),
-                                      &g_list_variable_encoded_len);
+    err = ssz_serialize_list_variable(
+        DESER_LIST_VARIABLE_COUNT,
+        DESER_LIST_VARIABLE_LIMIT,
+        &g_list_variable_write_codec,
+        g_list_variable_encoded,
+        sizeof(g_list_variable_encoded),
+        &g_list_variable_encoded_len);
     if ((err != SSZ_SUCCESS) || (g_list_variable_encoded_len > sizeof(g_list_variable_encoded)))
     {
         g_init_state = -1;
@@ -435,13 +443,20 @@ static void bench_init_deserialize_data(void)
         g_container_field6[i] = (uint8_t)(0xC0u + (uint8_t)i);
     }
 
-    g_container_entries[0] = (bench_payload_entry_t){0u, g_container_field0, sizeof(g_container_field0)};
-    g_container_entries[1] = (bench_payload_entry_t){1u, g_container_field1, sizeof(g_container_field1)};
-    g_container_entries[2] = (bench_payload_entry_t){2u, g_container_field2, sizeof(g_container_field2)};
-    g_container_entries[3] = (bench_payload_entry_t){3u, g_container_field3, sizeof(g_container_field3)};
-    g_container_entries[4] = (bench_payload_entry_t){4u, g_container_field4, sizeof(g_container_field4)};
-    g_container_entries[5] = (bench_payload_entry_t){5u, g_container_field5, sizeof(g_container_field5)};
-    g_container_entries[6] = (bench_payload_entry_t){6u, g_container_field6, sizeof(g_container_field6)};
+    g_container_entries[0] =
+        (bench_payload_entry_t){0u, g_container_field0, sizeof(g_container_field0)};
+    g_container_entries[1] =
+        (bench_payload_entry_t){1u, g_container_field1, sizeof(g_container_field1)};
+    g_container_entries[2] =
+        (bench_payload_entry_t){2u, g_container_field2, sizeof(g_container_field2)};
+    g_container_entries[3] =
+        (bench_payload_entry_t){3u, g_container_field3, sizeof(g_container_field3)};
+    g_container_entries[4] =
+        (bench_payload_entry_t){4u, g_container_field4, sizeof(g_container_field4)};
+    g_container_entries[5] =
+        (bench_payload_entry_t){5u, g_container_field5, sizeof(g_container_field5)};
+    g_container_entries[6] =
+        (bench_payload_entry_t){6u, g_container_field6, sizeof(g_container_field6)};
 
     g_container_payload_map = (bench_payload_map_t){
         .entries = g_container_entries,
@@ -454,14 +469,14 @@ static void bench_init_deserialize_data(void)
         .root = NULL,
     };
 
-    err = ssz_serialize_container(g_container_field_fixed_sizes,
-                                  DESER_CONTAINER_FIELD_COUNT,
-                                  &g_container_write_codec,
-                                  g_container_encoded,
-                                  sizeof(g_container_encoded),
-                                  &g_container_encoded_len);
-    if ((err != SSZ_SUCCESS) ||
-        (g_container_encoded_len != DESER_CONTAINER_EXPECTED_SIZE) ||
+    err = ssz_serialize_container(
+        g_container_field_fixed_sizes,
+        DESER_CONTAINER_FIELD_COUNT,
+        &g_container_write_codec,
+        g_container_encoded,
+        sizeof(g_container_encoded),
+        &g_container_encoded_len);
+    if ((err != SSZ_SUCCESS) || (g_container_encoded_len != DESER_CONTAINER_EXPECTED_SIZE) ||
         (g_container_encoded_len > sizeof(g_container_encoded)))
     {
         g_init_state = -1;
@@ -489,26 +504,28 @@ static void bench_init_deserialize_data(void)
         .root = NULL,
     };
 
-    err = ssz_serialize_union(DESER_UNION_SELECTOR_PAYLOAD,
-                              DESER_UNION_OPTION_COUNT,
-                              true,
-                              &g_union_write_codec,
-                              g_union_encoded,
-                              sizeof(g_union_encoded),
-                              &g_union_encoded_len);
+    err = ssz_serialize_union(
+        DESER_UNION_SELECTOR_PAYLOAD,
+        DESER_UNION_OPTION_COUNT,
+        true,
+        &g_union_write_codec,
+        g_union_encoded,
+        sizeof(g_union_encoded),
+        &g_union_encoded_len);
     if ((err != SSZ_SUCCESS) || (g_union_encoded_len != 1u + sizeof(g_union_payload_selector2)))
     {
         g_init_state = -1;
         return;
     }
 
-    err = ssz_serialize_compatible_union(DESER_UNION_COMPAT_SELECTOR_B,
-                                         g_compatible_union_allowed_selectors,
-                                         sizeof(g_compatible_union_allowed_selectors),
-                                         &g_union_write_codec,
-                                         g_compatible_union_encoded,
-                                         sizeof(g_compatible_union_encoded),
-                                         &g_compatible_union_encoded_len);
+    err = ssz_serialize_compatible_union(
+        DESER_UNION_COMPAT_SELECTOR_B,
+        g_compatible_union_allowed_selectors,
+        sizeof(g_compatible_union_allowed_selectors),
+        &g_union_write_codec,
+        g_compatible_union_encoded,
+        sizeof(g_compatible_union_encoded),
+        &g_compatible_union_encoded_len);
     if ((err != SSZ_SUCCESS) ||
         (g_compatible_union_encoded_len != 1u + sizeof(g_union_payload_selector7)))
     {
@@ -561,7 +578,8 @@ UBENCH(deserialize, uint8)
     uint8_t out_value = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_uint8(g_uint8_encoded, &out_value));
+        BENCH_EXPECT_OK(
+            ssz_deserialize_uint8(g_uint8_encoded, sizeof(g_uint8_encoded), &out_value));
     }
     ubench_do_nothing((void *)&out_value);
 }
@@ -577,7 +595,8 @@ UBENCH(deserialize, uint16)
     uint16_t out_value = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_uint16(g_uint16_encoded, &out_value));
+        BENCH_EXPECT_OK(
+            ssz_deserialize_uint16(g_uint16_encoded, sizeof(g_uint16_encoded), &out_value));
     }
     ubench_do_nothing((void *)&out_value);
 }
@@ -593,7 +612,8 @@ UBENCH(deserialize, uint32)
     uint32_t out_value = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_uint32(g_uint32_encoded, &out_value));
+        BENCH_EXPECT_OK(
+            ssz_deserialize_uint32(g_uint32_encoded, sizeof(g_uint32_encoded), &out_value));
     }
     ubench_do_nothing((void *)&out_value);
 }
@@ -609,7 +629,8 @@ UBENCH(deserialize, uint128)
     uint8_t out_value[16];
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_uint128(g_uint128_encoded, out_value));
+        BENCH_EXPECT_OK(
+            ssz_deserialize_uint128(g_uint128_encoded, sizeof(g_uint128_encoded), out_value));
     }
     ubench_do_nothing(out_value);
 }
@@ -625,7 +646,8 @@ UBENCH(deserialize, boolean)
     uint8_t out_value = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_boolean(g_boolean_encoded, &out_value));
+        BENCH_EXPECT_OK(
+            ssz_deserialize_boolean(g_boolean_encoded, sizeof(g_boolean_encoded), &out_value));
     }
     ubench_do_nothing((void *)&out_value);
 }
@@ -641,7 +663,8 @@ UBENCH(deserialize, uint64)
     uint64_t out_value = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_uint64(g_uint64_encoded, &out_value));
+        BENCH_EXPECT_OK(
+            ssz_deserialize_uint64(g_uint64_encoded, sizeof(g_uint64_encoded), &out_value));
     }
     ubench_do_nothing((void *)&out_value);
 }
@@ -657,7 +680,8 @@ UBENCH(deserialize, uint256)
     uint8_t out_value[32];
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_uint256(g_uint256_encoded, out_value));
+        BENCH_EXPECT_OK(
+            ssz_deserialize_uint256(g_uint256_encoded, sizeof(g_uint256_encoded), out_value));
     }
     ubench_do_nothing(out_value);
 }
@@ -670,12 +694,13 @@ UBENCH(deserialize, vector_fixed_1024x8)
         return;
     }
 
-    BENCH_EXPECT_OK(ssz_deserialize_vector_fixed(g_vector_fixed_encoded,
-                                                 sizeof(g_vector_fixed_encoded),
-                                                 DESER_VECTOR_FIXED_COUNT,
-                                                 DESER_VECTOR_FIXED_ELEMENT_SIZE,
-                                                 g_vector_fixed_decoded,
-                                                 sizeof(g_vector_fixed_decoded)));
+    BENCH_EXPECT_OK(ssz_deserialize_vector_fixed(
+        g_vector_fixed_encoded,
+        sizeof(g_vector_fixed_encoded),
+        DESER_VECTOR_FIXED_COUNT,
+        DESER_VECTOR_FIXED_ELEMENT_SIZE,
+        g_vector_fixed_decoded,
+        sizeof(g_vector_fixed_decoded)));
     ubench_do_nothing(g_vector_fixed_decoded);
 }
 
@@ -690,11 +715,12 @@ UBENCH(deserialize, vector_variable_256)
     g_vector_variable_read_sink.callback_count = 0u;
     g_vector_variable_read_sink.byte_acc = 0u;
 
-    BENCH_EXPECT_OK(ssz_deserialize_vector_variable(g_vector_variable_encoded,
-                                                    g_vector_variable_encoded_len,
-                                                    DESER_VECTOR_VARIABLE_COUNT,
-                                                    DESER_VECTOR_VARIABLE_MIN_LEN,
-                                                    &g_vector_variable_read_codec));
+    BENCH_EXPECT_OK(ssz_deserialize_vector_variable(
+        g_vector_variable_encoded,
+        g_vector_variable_encoded_len,
+        DESER_VECTOR_VARIABLE_COUNT,
+        DESER_VECTOR_VARIABLE_MIN_LEN,
+        &g_vector_variable_read_codec));
 
     ubench_do_nothing((void *)&g_vector_variable_read_sink);
 }
@@ -708,13 +734,14 @@ UBENCH(deserialize, list_fixed_1024x32)
     }
 
     uint64_t out_count = 0u;
-    BENCH_EXPECT_OK(ssz_deserialize_list_fixed(g_list_fixed_encoded,
-                                               sizeof(g_list_fixed_encoded),
-                                               DESER_LIST_FIXED_LIMIT,
-                                               DESER_LIST_FIXED_ELEMENT_SIZE,
-                                               g_list_fixed_decoded,
-                                               sizeof(g_list_fixed_decoded),
-                                               &out_count));
+    BENCH_EXPECT_OK(ssz_deserialize_list_fixed(
+        g_list_fixed_encoded,
+        sizeof(g_list_fixed_encoded),
+        DESER_LIST_FIXED_LIMIT,
+        DESER_LIST_FIXED_ELEMENT_SIZE,
+        g_list_fixed_decoded,
+        sizeof(g_list_fixed_decoded),
+        &out_count));
     ubench_do_nothing(g_list_fixed_decoded);
     ubench_do_nothing((void *)&out_count);
 }
@@ -731,12 +758,13 @@ UBENCH(deserialize, list_variable_192)
     g_list_variable_read_sink.byte_acc = 0u;
 
     uint64_t out_count = 0u;
-    BENCH_EXPECT_OK(ssz_deserialize_list_variable(g_list_variable_encoded,
-                                                  g_list_variable_encoded_len,
-                                                  DESER_LIST_VARIABLE_LIMIT,
-                                                  DESER_LIST_VARIABLE_MIN_LEN,
-                                                  &g_list_variable_read_codec,
-                                                  &out_count));
+    BENCH_EXPECT_OK(ssz_deserialize_list_variable(
+        g_list_variable_encoded,
+        g_list_variable_encoded_len,
+        DESER_LIST_VARIABLE_LIMIT,
+        DESER_LIST_VARIABLE_MIN_LEN,
+        &g_list_variable_read_codec,
+        &out_count));
 
     ubench_do_nothing((void *)&g_list_variable_read_sink);
     ubench_do_nothing((void *)&out_count);
@@ -752,11 +780,12 @@ UBENCH(deserialize, bitvector_8192)
 
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_bitvector(g_bitvector_encoded,
-                                                  sizeof(g_bitvector_encoded),
-                                                  DESER_BITVECTOR_BIT_COUNT,
-                                                  g_bitvector_decoded,
-                                                  sizeof(g_bitvector_decoded)));
+        BENCH_EXPECT_OK(ssz_deserialize_bitvector(
+            g_bitvector_encoded,
+            sizeof(g_bitvector_encoded),
+            DESER_BITVECTOR_BIT_COUNT,
+            g_bitvector_decoded,
+            sizeof(g_bitvector_decoded)));
     }
     ubench_do_nothing(g_bitvector_decoded);
 }
@@ -772,12 +801,13 @@ UBENCH(deserialize, bitlist_8190)
     uint64_t out_bit_len = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_bitlist(g_bitlist_encoded,
-                                                g_bitlist_encoded_len,
-                                                DESER_BITLIST_BIT_MAX,
-                                                g_bitlist_decoded,
-                                                sizeof(g_bitlist_decoded),
-                                                &out_bit_len));
+        BENCH_EXPECT_OK(ssz_deserialize_bitlist(
+            g_bitlist_encoded,
+            g_bitlist_encoded_len,
+            DESER_BITLIST_BIT_MAX,
+            g_bitlist_decoded,
+            sizeof(g_bitlist_decoded),
+            &out_bit_len));
     }
 
     ubench_do_nothing(g_bitlist_decoded);
@@ -797,11 +827,12 @@ UBENCH(deserialize, container_validator_like_mixed)
 
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_container(g_container_encoded,
-                                                  g_container_encoded_len,
-                                                  g_container_field_fixed_sizes,
-                                                  DESER_CONTAINER_FIELD_COUNT,
-                                                  &g_container_read_codec));
+        BENCH_EXPECT_OK(ssz_deserialize_container(
+            g_container_encoded,
+            g_container_encoded_len,
+            g_container_field_fixed_sizes,
+            DESER_CONTAINER_FIELD_COUNT,
+            &g_container_read_codec));
     }
 
     ubench_do_nothing((void *)&g_container_read_sink);
@@ -821,12 +852,13 @@ UBENCH(deserialize, union)
     uint8_t out_selector = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_union(g_union_encoded,
-                                              g_union_encoded_len,
-                                              DESER_UNION_OPTION_COUNT,
-                                              true,
-                                              &g_union_read_codec,
-                                              &out_selector));
+        BENCH_EXPECT_OK(ssz_deserialize_union(
+            g_union_encoded,
+            g_union_encoded_len,
+            DESER_UNION_OPTION_COUNT,
+            true,
+            &g_union_read_codec,
+            &out_selector));
     }
 
     ubench_do_nothing((void *)&g_union_read_sink);
@@ -847,12 +879,13 @@ UBENCH(deserialize, compatible_union)
     uint8_t out_selector = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_compatible_union(g_compatible_union_encoded,
-                                                         g_compatible_union_encoded_len,
-                                                         g_compatible_union_allowed_selectors,
-                                                         sizeof(g_compatible_union_allowed_selectors),
-                                                         &g_compatible_union_read_codec,
-                                                         &out_selector));
+        BENCH_EXPECT_OK(ssz_deserialize_compatible_union(
+            g_compatible_union_encoded,
+            g_compatible_union_encoded_len,
+            g_compatible_union_allowed_selectors,
+            sizeof(g_compatible_union_allowed_selectors),
+            &g_compatible_union_read_codec,
+            &out_selector));
     }
 
     ubench_do_nothing((void *)&g_compatible_union_read_sink);

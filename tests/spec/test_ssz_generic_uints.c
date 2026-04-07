@@ -13,7 +13,8 @@
 
 static bool parse_case_bits(const char *case_name, unsigned int *out_bits)
 {
-    return (case_name != NULL) && (out_bits != NULL) && (sscanf(case_name, "uint_%u", out_bits) == 1);
+    return (case_name != NULL) && (out_bits != NULL) &&
+           (sscanf(case_name, "uint_%u", out_bits) == 1);
 }
 
 static ssz_error_t deserialize_uint_checked(
@@ -35,7 +36,7 @@ static ssz_error_t deserialize_uint_checked(
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        if (ssz_deserialize_uint8(serialized, &value) != SSZ_SUCCESS)
+        if (ssz_deserialize_uint8(serialized, serialized_len, &value) != SSZ_SUCCESS)
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
@@ -52,7 +53,7 @@ static ssz_error_t deserialize_uint_checked(
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        if (ssz_deserialize_uint16(serialized, &value) != SSZ_SUCCESS)
+        if (ssz_deserialize_uint16(serialized, serialized_len, &value) != SSZ_SUCCESS)
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
@@ -70,7 +71,7 @@ static ssz_error_t deserialize_uint_checked(
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        if (ssz_deserialize_uint32(serialized, &value) != SSZ_SUCCESS)
+        if (ssz_deserialize_uint32(serialized, serialized_len, &value) != SSZ_SUCCESS)
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
@@ -87,7 +88,7 @@ static ssz_error_t deserialize_uint_checked(
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        if (ssz_deserialize_uint64(serialized, &value) != SSZ_SUCCESS)
+        if (ssz_deserialize_uint64(serialized, serialized_len, &value) != SSZ_SUCCESS)
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
@@ -105,7 +106,7 @@ static ssz_error_t deserialize_uint_checked(
         }
         *out_u64 = 0u;
         memset(out_wide, 0, 32u);
-        return ssz_deserialize_uint128(serialized, out_wide);
+        return ssz_deserialize_uint128(serialized, serialized_len, out_wide);
     }
 
     if (bits == 256u)
@@ -116,7 +117,7 @@ static ssz_error_t deserialize_uint_checked(
         }
         *out_u64 = 0u;
         memset(out_wide, 0, 32u);
-        return ssz_deserialize_uint256(serialized, out_wide);
+        return ssz_deserialize_uint256(serialized, serialized_len, out_wide);
     }
 
     return SSZ_ERR_SCHEMA_INVALID;
@@ -214,7 +215,7 @@ static ssz_error_t serialize_uint(
         {
             return SSZ_ERR_INVALID_ARGUMENT;
         }
-        if (ssz_serialize_uint128(wide, bytes) != SSZ_SUCCESS)
+        if (ssz_serialize_uint128(wide, 16u, bytes) != SSZ_SUCCESS)
         {
             free(bytes);
             return SSZ_ERR_ENCODING_INVALID;
@@ -231,7 +232,7 @@ static ssz_error_t serialize_uint(
         {
             return SSZ_ERR_INVALID_ARGUMENT;
         }
-        if (ssz_serialize_uint256(wide, bytes) != SSZ_SUCCESS)
+        if (ssz_serialize_uint256(wide, 32u, bytes) != SSZ_SUCCESS)
         {
             free(bytes);
             return SSZ_ERR_ENCODING_INVALID;
@@ -244,7 +245,11 @@ static ssz_error_t serialize_uint(
     return SSZ_ERR_SCHEMA_INVALID;
 }
 
-static ssz_error_t root_uint(unsigned int bits, uint64_t value_u64, const uint8_t wide[32], ssz_chunk_t *out)
+static ssz_error_t root_uint(
+    unsigned int bits,
+    uint64_t value_u64,
+    const uint8_t wide[32],
+    ssz_chunk_t *out)
 {
     if ((wide == NULL) || (out == NULL))
     {
@@ -269,17 +274,21 @@ static ssz_error_t root_uint(unsigned int bits, uint64_t value_u64, const uint8_
     }
     if (bits == 128u)
     {
-        return ssz_hash_tree_root_uint128(wide, out);
+        return ssz_hash_tree_root_uint128(wide, 16u, out);
     }
     if (bits == 256u)
     {
-        return ssz_hash_tree_root_uint256(wide, out);
+        return ssz_hash_tree_root_uint256(wide, 32u, out);
     }
 
     return SSZ_ERR_SCHEMA_INVALID;
 }
 
-static bool load_expected_value(const char *value_path, unsigned int bits, uint64_t *out_u64, uint8_t out_wide[32])
+static bool load_expected_value(
+    const char *value_path,
+    unsigned int bits,
+    uint64_t *out_u64,
+    uint8_t out_wide[32])
 {
     yaml_node_t *doc;
 
@@ -320,8 +329,12 @@ static bool load_expected_value(const char *value_path, unsigned int bits, uint6
     return true;
 }
 
-static bool values_match(unsigned int bits, uint64_t actual_u64, const uint8_t actual_wide[32],
-    uint64_t expected_u64, const uint8_t expected_wide[32])
+static bool values_match(
+    unsigned int bits,
+    uint64_t actual_u64,
+    const uint8_t actual_wide[32],
+    uint64_t expected_u64,
+    const uint8_t expected_wide[32])
 {
     if (bits <= 64u)
     {
@@ -356,7 +369,8 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
     value_path = spec_join_path(case_path, "value.yaml");
     meta_path = spec_join_path(case_path, "meta.yaml");
 
-    if ((case_path == NULL) || (serialized_path == NULL) || (value_path == NULL) || (meta_path == NULL))
+    if ((case_path == NULL) || (serialized_path == NULL) || (value_path == NULL) ||
+        (meta_path == NULL))
     {
         report->valid_failed++;
         spec_report_record_failure(report, case_name, "failed to allocate case paths");
@@ -391,7 +405,8 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
         goto done;
     }
 
-    if (deserialize_uint_checked(bits, serialized, serialized_len, &actual_u64, actual_wide) != SSZ_SUCCESS)
+    if (deserialize_uint_checked(bits, serialized, serialized_len, &actual_u64, actual_wide) !=
+        SSZ_SUCCESS)
     {
         report->valid_failed++;
         spec_report_record_failure(report, case_path, "deserialization failed");
@@ -401,7 +416,10 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
     if (!values_match(bits, actual_u64, actual_wide, expected_u64, expected_wide))
     {
         report->valid_failed++;
-        spec_report_record_failure(report, case_path, "deserialized value does not match value.yaml");
+        spec_report_record_failure(
+            report,
+            case_path,
+            "deserialized value does not match value.yaml");
         goto done;
     }
 

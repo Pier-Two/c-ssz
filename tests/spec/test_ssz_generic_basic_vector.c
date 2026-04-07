@@ -275,7 +275,7 @@ static ssz_error_t deserialize_vector_checked(
     for (size_t i = 0u; i < expected_len; i++)
     {
         uint8_t value = 0u;
-        ssz_error_t err = ssz_deserialize_boolean(serialized + i, &value);
+        ssz_error_t err = ssz_deserialize_boolean(serialized + i, 1u, &value);
         if (err != SSZ_SUCCESS)
         {
             return err;
