@@ -259,13 +259,13 @@ static bool test_deserialize_basic_round_trips(void)
     ASSERT_MEM_EQ(out_u256, in_u256, sizeof(in_u256));
 
     ASSERT_ERR(ssz_serialize_boolean(1u, in_bool), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_deserialize_boolean(in_bool, &out_bool), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_deserialize_boolean(in_bool, sizeof(in_bool), &out_bool), SSZ_SUCCESS);
     ASSERT_TRUE(out_bool == 1u);
 
     ASSERT_ERR(ssz_deserialize_uint8(in_u8, sizeof(in_u8), &out_byte), SSZ_SUCCESS);
     ASSERT_TRUE(out_byte == 0xABu);
 
-    ASSERT_ERR(ssz_deserialize_boolean(in_bool, &out_bit), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_deserialize_boolean(in_bool, sizeof(in_bool), &out_bit), SSZ_SUCCESS);
     ASSERT_TRUE(out_bit == 1u);
 
     return true;
@@ -275,15 +275,15 @@ static bool test_deserialize_boolean_canonical_enforcement(void)
 {
     uint8_t out = 0u;
 
-    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0x00u}, &out), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0x00u}, 1u, &out), SSZ_SUCCESS);
     ASSERT_TRUE(out == 0u);
 
-    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0x01u}, &out), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0x01u}, 1u, &out), SSZ_SUCCESS);
     ASSERT_TRUE(out == 1u);
 
-    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0x02u}, &out), SSZ_ERR_ENCODING_INVALID);
-    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0x80u}, &out), SSZ_ERR_ENCODING_INVALID);
-    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0xFFu}, &out), SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0x02u}, 1u, &out), SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0x80u}, 1u, &out), SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0xFFu}, 1u, &out), SSZ_ERR_ENCODING_INVALID);
 
     return true;
 }
@@ -322,12 +322,14 @@ static bool test_deserialize_fixed_width_short_inputs(void)
     uint64_t out_u64 = UINT64_C(0x8899AABBCCDDEEFF);
     uint8_t out_u128[16];
     uint8_t out_u256[32];
+    uint8_t out_bool = 0x44u;
     const uint8_t expected_u8 = 0x11u;
     const uint16_t expected_u16 = UINT16_C(0x2233);
     const uint32_t expected_u32 = UINT32_C(0x44556677);
     const uint64_t expected_u64 = UINT64_C(0x8899AABBCCDDEEFF);
     uint8_t expected_u128[16];
     uint8_t expected_u256[32];
+    const uint8_t expected_bool = 0x44u;
 
     memset(out_u128, 0xA5, sizeof(out_u128));
     memset(out_u256, 0x5A, sizeof(out_u256));
@@ -344,12 +346,14 @@ static bool test_deserialize_fixed_width_short_inputs(void)
     ASSERT_ERR(
         ssz_deserialize_uint256(in_u256, sizeof(in_u256), out_u256),
         SSZ_ERR_BUFFER_TOO_SMALL);
+    ASSERT_ERR(ssz_deserialize_boolean(in_u8, 0u, &out_bool), SSZ_ERR_BUFFER_TOO_SMALL);
     ASSERT_TRUE(out_u8 == expected_u8);
     ASSERT_TRUE(out_u16 == expected_u16);
     ASSERT_TRUE(out_u32 == expected_u32);
     ASSERT_TRUE(out_u64 == expected_u64);
     ASSERT_MEM_EQ(out_u128, expected_u128, sizeof(out_u128));
     ASSERT_MEM_EQ(out_u256, expected_u256, sizeof(out_u256));
+    ASSERT_TRUE(out_bool == expected_bool);
 
     return true;
 }
@@ -963,7 +967,7 @@ static bool test_deserialize_error_cases(void)
     ASSERT_ERR(ssz_deserialize_uint64(NULL, 8u, &out_u64), SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_deserialize_uint128(NULL, 16u, out128), SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(ssz_deserialize_uint256(NULL, 32u, out256), SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_deserialize_boolean(NULL, &out_bool), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_boolean(NULL, 1u, &out_bool), SSZ_ERR_INVALID_ARGUMENT);
 
     ASSERT_ERR(
         ssz_deserialize_uint8((const uint8_t[1]){0x00u}, 1u, NULL),
@@ -983,7 +987,7 @@ static bool test_deserialize_error_cases(void)
     ASSERT_ERR(
         ssz_deserialize_uint256((const uint8_t[32]){0u}, 32u, NULL),
         SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0u}, NULL), SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(ssz_deserialize_boolean((const uint8_t[1]){0u}, 1u, NULL), SSZ_ERR_INVALID_ARGUMENT);
 
     ASSERT_ERR(
         ssz_deserialize_bitvector((const uint8_t[2]){0x00u, 0x00u}, 2u, 9u, NULL, 0u),

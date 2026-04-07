@@ -42,7 +42,7 @@ static ssz_error_t deserialize_boolean_checked(const uint8_t *bytes, size_t len,
     {
         return SSZ_ERR_ENCODING_INVALID;
     }
-    return ssz_deserialize_boolean(bytes, out);
+    return ssz_deserialize_boolean(bytes, len, out);
 }
 
 static void run_valid_case(spec_report_t *report, const char *suite_dir, const char *case_name)

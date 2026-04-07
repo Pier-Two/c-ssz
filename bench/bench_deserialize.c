@@ -646,7 +646,8 @@ UBENCH(deserialize, boolean)
     uint8_t out_value = 0u;
     for (size_t i = 0u; i < DESER_SMALL_BATCH; i++)
     {
-        BENCH_EXPECT_OK(ssz_deserialize_boolean(g_boolean_encoded, &out_value));
+        BENCH_EXPECT_OK(
+            ssz_deserialize_boolean(g_boolean_encoded, sizeof(g_boolean_encoded), &out_value));
     }
     ubench_do_nothing((void *)&out_value);
 }

@@ -211,13 +211,17 @@ ssz_error_t ssz_deserialize_uint256(const uint8_t *in, size_t in_len, uint8_t ou
     return err;
 }
 
-ssz_error_t ssz_deserialize_boolean(const uint8_t in[1], uint8_t *out_value)
+ssz_error_t ssz_deserialize_boolean(const uint8_t *in, size_t in_len, uint8_t *out_value)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((in == NULL) || (out_value == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (in_len < 1u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else if (in[0] > 1u)
     {

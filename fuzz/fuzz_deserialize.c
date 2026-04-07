@@ -252,14 +252,14 @@ static void fuzz_cover_deserialize_errors(void)
         .root = NULL,
     };
 
-    (void)ssz_deserialize_boolean(in, NULL);
+    (void)ssz_deserialize_boolean(in, 1u, NULL);
     (void)ssz_deserialize_uint8(in, 1u, NULL);
     (void)ssz_deserialize_uint16(in, 2u, NULL);
     (void)ssz_deserialize_uint32(in, 4u, NULL);
     (void)ssz_deserialize_uint64(in, 8u, NULL);
     (void)ssz_deserialize_uint128(in, 16u, NULL);
     (void)ssz_deserialize_uint256(in, 32u, NULL);
-    (void)ssz_deserialize_boolean(bad_bool, &out_u8);
+    (void)ssz_deserialize_boolean(bad_bool, sizeof(bad_bool), &out_u8);
 
     (void)ssz_deserialize_uint8(NULL, 1u, &out_u8);
     (void)ssz_deserialize_uint16(NULL, 2u, &out_u16);
@@ -438,7 +438,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         }
 
         uint8_t out_value = 0u;
-        (void)ssz_deserialize_boolean(input.ptr, &out_value);
+        (void)ssz_deserialize_boolean(input.ptr, input.remaining, &out_value);
         break;
     }
 

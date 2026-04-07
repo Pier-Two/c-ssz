@@ -262,7 +262,7 @@ static ssz_error_t deserialize_progressive_list_checked(
         for (size_t i = 0u; i < (size_t)(*out_count); i++)
         {
             uint8_t value = 0u;
-            err = ssz_deserialize_boolean(out + i, &value);
+            err = ssz_deserialize_boolean(out + i, 1u, &value);
             if (err != SSZ_SUCCESS)
             {
                 return err;
