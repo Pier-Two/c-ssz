@@ -333,6 +333,7 @@ ssz_error_t ssz_serialize_vector_variable(
     else
     {
         total = fixed_region;
+
         for (uint64_t i = 0u; (i < element_count) && (err == SSZ_SUCCESS); i++)
         {
             size_t encoded_len = 0u;
@@ -446,7 +447,6 @@ ssz_error_t ssz_serialize_list_variable(
     size_t *out_len)
 {
     size_t fixed_region = 0u;
-    size_t total = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
@@ -518,7 +518,8 @@ ssz_error_t ssz_serialize_list_variable(
     }
     else
     {
-        total = fixed_region;
+        size_t total = fixed_region;
+
         for (uint64_t i = 0u; (i < element_count) && (err == SSZ_SUCCESS); i++)
         {
             size_t encoded_len = 0u;
@@ -551,7 +552,6 @@ ssz_error_t ssz_serialize_container(
     size_t *out_len)
 {
     size_t fixed_region = 0u;
-    size_t total = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((field_fixed_sizes == NULL) || (field_count == 0u))
@@ -660,7 +660,8 @@ ssz_error_t ssz_serialize_container(
     }
     if ((err == SSZ_SUCCESS) && (out == NULL))
     {
-        total = fixed_region;
+        size_t total = fixed_region;
+
         for (uint32_t i = 0u; (i < field_count) && (err == SSZ_SUCCESS); i++)
         {
             size_t encoded_len = 0u;

@@ -12,8 +12,6 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
 {
     size_t fixed_region = 0u;
     ssz_error_t err = SSZ_SUCCESS;
-    uint32_t first_offset = 0u;
-    uint32_t prev_offset = 0u;
 
     if ((codec == NULL) || (codec->read == NULL) || (in == NULL))
     {
@@ -31,32 +29,29 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
     {
         err = SSZ_ERR_OFFSET_INVALID;
     }
-    else
+
+    if (err == SSZ_SUCCESS)
     {
-        first_offset = ssz_internal_read_u32_le(in);
-        if ((size_t)first_offset != fixed_region)
+        uint32_t prev_offset = ssz_internal_read_u32_le(in);
+
+        if ((size_t)prev_offset != fixed_region)
         {
             err = SSZ_ERR_OFFSET_INVALID;
         }
         else
         {
-            prev_offset = first_offset;
-        }
-    }
-
-    if (err == SSZ_SUCCESS)
-    {
-        for (uint64_t i = 0u; i < element_count; i++)
-        {
-            size_t offset_pos = (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET;
-            uint32_t offset = ssz_internal_read_u32_le(&in[offset_pos]);
-
-            if (((size_t)offset < fixed_region) || ((size_t)offset > in_len) || (offset < prev_offset))
+            for (uint64_t i = 0u; i < element_count; i++)
             {
-                err = SSZ_ERR_OFFSET_INVALID;
-                break;
+                size_t offset_pos = (size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET;
+                uint32_t offset = ssz_internal_read_u32_le(&in[offset_pos]);
+
+                if (((size_t)offset < fixed_region) || ((size_t)offset > in_len) || (offset < prev_offset))
+                {
+                    err = SSZ_ERR_OFFSET_INVALID;
+                    break;
+                }
+                prev_offset = offset;
             }
-            prev_offset = offset;
         }
     }
 
@@ -413,7 +408,6 @@ ssz_error_t ssz_deserialize_list_fixed(
     uint64_t *out_element_count)
 {
     ssz_error_t err = SSZ_SUCCESS;
-    size_t count = 0u;
 
     if (out_element_count == NULL)
     {
@@ -429,7 +423,8 @@ ssz_error_t ssz_deserialize_list_fixed(
     }
     else
     {
-        count = in_len / element_size;
+        size_t count = in_len / element_size;
+
         if ((element_limit != SSZ_NO_LIMIT) && ((uint64_t)count > element_limit))
         {
             err = SSZ_ERR_LIMIT_EXCEEDED;
@@ -463,10 +458,7 @@ ssz_error_t ssz_deserialize_list_variable(
     ssz_member_codec_t *codec,
     uint64_t *out_element_count)
 {
-    uint64_t element_count = 0u;
     ssz_error_t err = SSZ_SUCCESS;
-    uint32_t first_offset = 0u;
-    uint32_t element_count_u32 = 0u;
 
     if (out_element_count == NULL)
     {
@@ -486,15 +478,17 @@ ssz_error_t ssz_deserialize_list_variable(
     }
     else
     {
-        first_offset = ssz_internal_read_u32_le(in);
+        uint32_t first_offset = ssz_internal_read_u32_le(in);
+
         if (((size_t)first_offset > in_len) || ((first_offset % SSZ_BYTES_PER_LENGTH_OFFSET) != 0u))
         {
             err = SSZ_ERR_OFFSET_INVALID;
         }
         else
         {
-            element_count_u32 = first_offset / SSZ_BYTES_PER_LENGTH_OFFSET;
-            element_count = (uint64_t)element_count_u32;
+            uint32_t element_count_u32 = first_offset / SSZ_BYTES_PER_LENGTH_OFFSET;
+            uint64_t element_count = (uint64_t)element_count_u32;
+
             if ((element_limit != SSZ_NO_LIMIT) && (element_count > element_limit))
             {
                 err = SSZ_ERR_LIMIT_EXCEEDED;
@@ -533,7 +527,6 @@ ssz_error_t ssz_deserialize_container(
     ssz_error_t err = SSZ_SUCCESS;
     size_t cursor = 0u;
     bool saw_variable = false;
-    uint32_t prev_offset = 0u;
 
     if ((field_fixed_sizes == NULL) || (field_count == 0u))
     {
@@ -564,6 +557,8 @@ ssz_error_t ssz_deserialize_container(
 
     if (err == SSZ_SUCCESS)
     {
+        uint32_t prev_offset;
+
         for (uint32_t i = 0u; (i < field_count) && (err == SSZ_SUCCESS); i++)
         {
             size_t fixed_size = field_fixed_sizes[i];

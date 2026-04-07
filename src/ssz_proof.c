@@ -391,7 +391,6 @@ ssz_error_t ssz_get_branch_indices(
     size_t *out_len)
 {
     ssz_error_t err = SSZ_SUCCESS;
-    size_t required = 0u;
 
     if (tree_index == 0u)
     {
@@ -399,7 +398,8 @@ ssz_error_t ssz_get_branch_indices(
     }
     else
     {
-        required = ssz_generalized_index_length(tree_index);
+        size_t required = ssz_generalized_index_length(tree_index);
+
         if (out_indices == NULL)
         {
             if (out_len == NULL)
@@ -443,7 +443,6 @@ ssz_error_t ssz_get_path_indices(
     size_t *out_len)
 {
     ssz_error_t err = SSZ_SUCCESS;
-    size_t required = 0u;
 
     if (tree_index == 0u)
     {
@@ -451,7 +450,8 @@ ssz_error_t ssz_get_path_indices(
     }
     else
     {
-        required = ssz_generalized_index_length(tree_index);
+        size_t required = ssz_generalized_index_length(tree_index);
+
         if (out_indices == NULL)
         {
             if (out_len == NULL)
@@ -608,10 +608,6 @@ ssz_error_t ssz_calculate_multi_merkle_root(
 {
     size_t helper_count = 0u;
     ssz_error_t err = SSZ_SUCCESS;
-    size_t map_offset = 0u;
-    ssz_gindex_t *map_indices = NULL;
-    size_t map_cap = 0u;
-    size_t map_count = 0u;
 
     if ((leaf_count == 0u) || (leaves == NULL) || (indices == NULL) ||
         ((proof_count != 0u) && (proof == NULL)) ||
@@ -629,115 +625,112 @@ ssz_error_t ssz_calculate_multi_merkle_root(
             {
                 err = SSZ_ERR_PROOF_INVALID;
             }
+            else if (helper_count > scratch_cap)
+            {
+                err = SSZ_ERR_BUFFER_TOO_SMALL;
+            }
+            else if ((scratch_cap - helper_count) == 0u)
+            {
+                err = SSZ_ERR_BUFFER_TOO_SMALL;
+            }
             else
             {
-                map_offset = helper_count;
-                if (map_offset > scratch_cap)
+                ssz_gindex_t *map_indices = &scratch_indices[helper_count];
+                size_t map_cap = scratch_cap - helper_count;
+                size_t map_count = 0u;
+
+                for (size_t i = 0u; (i < leaf_count) && (err == SSZ_SUCCESS); i++)
                 {
-                    err = SSZ_ERR_BUFFER_TOO_SMALL;
-                }
-                else
-                {
-                    map_indices = &scratch_indices[map_offset];
-                    map_cap = scratch_cap - map_offset;
-                    if (map_cap == 0u)
+                    if (indices[i] == 0u)
                     {
-                        err = SSZ_ERR_BUFFER_TOO_SMALL;
+                        err = SSZ_ERR_GINDEX_INVALID;
+                    }
+                    else
+                    {
+                        err = ssz_internal_insert_node(
+                            map_indices,
+                            scratch_nodes,
+                            &map_count,
+                            map_cap,
+                            indices[i],
+                            &leaves[i]);
                     }
                 }
-            }
-        }
 
-        for (size_t i = 0u; (i < leaf_count) && (err == SSZ_SUCCESS); i++)
-        {
-            if (indices[i] == 0u)
-            {
-                err = SSZ_ERR_GINDEX_INVALID;
-            }
-            else
-            {
-                err = ssz_internal_insert_node(
-                    map_indices,
-                    scratch_nodes,
-                    &map_count,
-                    map_cap,
-                    indices[i],
-                    &leaves[i]);
-            }
-        }
-
-        for (size_t i = 0u; (i < proof_count) && (err == SSZ_SUCCESS); i++)
-        {
-            err = ssz_internal_insert_node(
-                map_indices,
-                scratch_nodes,
-                &map_count,
-                map_cap,
-                scratch_indices[i],
-                &proof[i]);
-        }
-
-        if (err == SSZ_SUCCESS)
-        {
-            ssz_internal_sort_pairs_desc(map_indices, scratch_nodes, map_count);
-
-            size_t pos = 0u;
-            while ((pos < map_count) && (err == SSZ_SUCCESS))
-            {
-                ssz_gindex_t k = map_indices[pos];
-                if (k > 1u)
+                for (size_t i = 0u; (i < proof_count) && (err == SSZ_SUCCESS); i++)
                 {
-                    ssz_gindex_t sibling = ssz_generalized_index_sibling(k);
-                    ssz_gindex_t parent = ssz_generalized_index_parent(k);
+                    err = ssz_internal_insert_node(
+                        map_indices,
+                        scratch_nodes,
+                        &map_count,
+                        map_cap,
+                        scratch_indices[i],
+                        &proof[i]);
+                }
 
-                    if ((ssz_internal_find_node(map_indices, map_count, sibling) >= 0) &&
-                        (ssz_internal_find_node(map_indices, map_count, parent) < 0))
+                if (err == SSZ_SUCCESS)
+                {
+                    ssz_internal_sort_pairs_desc(map_indices, scratch_nodes, map_count);
+
+                    size_t pos = 0u;
+                    while ((pos < map_count) && (err == SSZ_SUCCESS))
                     {
-                        ssz_gindex_t left_index = (k | 1u) ^ 1u;
-                        ssz_gindex_t right_index = (k | 1u);
-                        ptrdiff_t left_pos =
-                            ssz_internal_find_node(map_indices, map_count, left_index);
-                        ptrdiff_t right_pos =
-                            ssz_internal_find_node(map_indices, map_count, right_index);
+                        ssz_gindex_t k = map_indices[pos];
+                        if (k > 1u)
+                        {
+                            ssz_gindex_t sibling = ssz_generalized_index_sibling(k);
+                            ssz_gindex_t parent = ssz_generalized_index_parent(k);
 
-                        if ((left_pos < 0) || (right_pos < 0))
+                            if ((ssz_internal_find_node(map_indices, map_count, sibling) >= 0) &&
+                                (ssz_internal_find_node(map_indices, map_count, parent) < 0))
+                            {
+                                ssz_gindex_t left_index = (k | 1u) ^ 1u;
+                                ssz_gindex_t right_index = (k | 1u);
+                                ptrdiff_t left_pos =
+                                    ssz_internal_find_node(map_indices, map_count, left_index);
+                                ptrdiff_t right_pos =
+                                    ssz_internal_find_node(map_indices, map_count, right_index);
+
+                                if ((left_pos < 0) || (right_pos < 0))
+                                {
+                                    err = SSZ_ERR_PROOF_INVALID;
+                                }
+                                else
+                                {
+                                    ssz_chunk_t parent_node;
+                                    err = ssz_hash_2to1(hash_fn,
+                                                       &scratch_nodes[(size_t)left_pos],
+                                                       &scratch_nodes[(size_t)right_pos],
+                                                       &parent_node);
+                                    if (err == SSZ_SUCCESS)
+                                    {
+                                        err = ssz_internal_insert_node(
+                                            map_indices,
+                                            scratch_nodes,
+                                            &map_count,
+                                            map_cap,
+                                            parent,
+                                            &parent_node);
+                                    }
+                                }
+                            }
+                        }
+
+                        pos++;
+                    }
+
+                    if (err == SSZ_SUCCESS)
+                    {
+                        ptrdiff_t root_pos = ssz_internal_find_node(map_indices, map_count, 1u);
+                        if (root_pos < 0)
                         {
                             err = SSZ_ERR_PROOF_INVALID;
                         }
                         else
                         {
-                            ssz_chunk_t parent_node;
-                            err = ssz_hash_2to1(hash_fn,
-                                               &scratch_nodes[(size_t)left_pos],
-                                               &scratch_nodes[(size_t)right_pos],
-                                               &parent_node);
-                            if (err == SSZ_SUCCESS)
-                            {
-                                err = ssz_internal_insert_node(
-                                    map_indices,
-                                    scratch_nodes,
-                                    &map_count,
-                                    map_cap,
-                                    parent,
-                                    &parent_node);
-                            }
+                            *out_root = scratch_nodes[(size_t)root_pos];
                         }
                     }
-                }
-
-                pos++;
-            }
-
-            if (err == SSZ_SUCCESS)
-            {
-                ptrdiff_t root_pos = ssz_internal_find_node(map_indices, map_count, 1u);
-                if (root_pos < 0)
-                {
-                    err = SSZ_ERR_PROOF_INVALID;
-                }
-                else
-                {
-                    *out_root = scratch_nodes[(size_t)root_pos];
                 }
             }
         }

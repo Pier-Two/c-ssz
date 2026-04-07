@@ -265,7 +265,6 @@ static ssz_error_t ssz_merkle_cache_internal_compute_level_offsets(
     uint32_t depth,
     size_t out_offsets[64])
 {
-    uint64_t width = leaf_capacity;
     size_t running = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
@@ -275,6 +274,8 @@ static ssz_error_t ssz_merkle_cache_internal_compute_level_offsets(
     }
     else
     {
+        uint64_t width = leaf_capacity;
+
         for (uint32_t level = 0u; (level <= depth) && (err == SSZ_SUCCESS); level++)
         {
             size_t width_sz = 0u;
@@ -382,8 +383,6 @@ static ssz_error_t ssz_merkle_cache_internal_dirty_mark_bit(
     uint64_t bit_index)
 {
     size_t word = 0u;
-    uint64_t mask = 0u;
-    uint64_t prior = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((bits == NULL) || (word_idx == NULL) || (word_count == NULL))
@@ -400,8 +399,9 @@ static ssz_error_t ssz_merkle_cache_internal_dirty_mark_bit(
     }
     else
     {
-        mask = UINT64_C(1) << (bit_index & 63u);
-        prior = bits[word];
+        uint64_t mask = UINT64_C(1) << (bit_index & 63u);
+        uint64_t prior = bits[word];
+
         if ((prior & mask) != 0u)
         {
             /* already marked */
@@ -474,7 +474,6 @@ static bool ssz_merkle_cache_internal_token_valid_get(
     uint64_t index)
 {
     size_t word = 0u;
-    uint64_t mask = 0u;
     bool is_valid = false;
 
     if ((cache == NULL) || !cache->token_storage_ready || (cache->token_valid_bits == NULL))
@@ -491,7 +490,8 @@ static bool ssz_merkle_cache_internal_token_valid_get(
     }
     else
     {
-        mask = UINT64_C(1) << (index & 63u);
+        uint64_t mask = UINT64_C(1) << (index & 63u);
+
         is_valid = (cache->token_valid_bits[word] & mask) != 0u;
     }
 
@@ -504,7 +504,6 @@ static void ssz_merkle_cache_internal_token_valid_set(
     bool value)
 {
     size_t word = 0u;
-    uint64_t mask = 0u;
 
     if ((cache == NULL) || !cache->token_storage_ready || (cache->token_valid_bits == NULL))
     {
@@ -520,7 +519,8 @@ static void ssz_merkle_cache_internal_token_valid_set(
     }
     else
     {
-        mask = UINT64_C(1) << (index & 63u);
+        uint64_t mask = UINT64_C(1) << (index & 63u);
+
         if (value)
         {
             cache->token_valid_bits[word] |= mask;
@@ -673,7 +673,6 @@ static ssz_error_t ssz_merkle_cache_internal_effective_tree_depth(
     uint32_t *out_depth)
 {
     uint64_t width = 0u;
-    uint64_t tree_size = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((cache == NULL) || (out_depth == NULL))
@@ -695,7 +694,8 @@ static ssz_error_t ssz_merkle_cache_internal_effective_tree_depth(
 
     if (err == SSZ_SUCCESS)
     {
-        tree_size = ssz_next_pow_of_two(width);
+        uint64_t tree_size = ssz_next_pow_of_two(width);
+
         if (tree_size == 0u)
         {
             err = SSZ_ERR_OVERFLOW;
@@ -794,10 +794,6 @@ static ssz_error_t ssz_merkle_cache_internal_hash_dirty_parents_exact(
     uint64_t parent_width)
 {
     size_t gather_count = 0u;
-    bool run_active = false;
-    uint64_t run_start = 0u;
-    uint64_t run_prev = 0u;
-    uint64_t run_len = 0u;
     ssz_chunk_t *parent_level_nodes = NULL;
     const ssz_chunk_t *child_level_nodes = NULL;
     ssz_error_t err = SSZ_SUCCESS;
@@ -816,14 +812,17 @@ static ssz_error_t ssz_merkle_cache_internal_hash_dirty_parents_exact(
             dirty_parents->word_idx,
             *dirty_parents->word_count);
 
+        bool run_active = false;
+        uint64_t run_start = 0u;
+        uint64_t run_prev = 0u;
+        uint64_t run_len = 0u;
+
         child_level_nodes = &cache->nodes[cache->level_offsets[level]];
         parent_level_nodes = &cache->nodes[cache->level_offsets[level + 1u]];
 
         for (size_t wi = 0u; (wi < *dirty_parents->word_count) && (err == SSZ_SUCCESS); wi++)
         {
             size_t word_index = dirty_parents->word_idx[wi];
-            uint64_t word_bits = 0u;
-            uint64_t base = 0u;
 
             if (word_index >= dirty_parents->word_capacity)
             {
@@ -831,8 +830,8 @@ static ssz_error_t ssz_merkle_cache_internal_hash_dirty_parents_exact(
             }
             else
             {
-                word_bits = dirty_parents->bits[word_index];
-                base = ((uint64_t)word_index) << 6u;
+                uint64_t word_bits = dirty_parents->bits[word_index];
+                uint64_t base = ((uint64_t)word_index) << 6u;
 
                 while ((word_bits != 0u) && (err == SSZ_SUCCESS))
                 {
@@ -974,8 +973,6 @@ static ssz_error_t ssz_merkle_cache_internal_build_parent_dirty_set(
         for (size_t wi = 0u; (wi < child_word_count) && (err == SSZ_SUCCESS); wi++)
         {
             size_t word_index = child_word_idx[wi];
-            uint64_t word_bits = 0u;
-            uint64_t base = 0u;
 
             if (word_index >= child_word_capacity)
             {
@@ -983,8 +980,8 @@ static ssz_error_t ssz_merkle_cache_internal_build_parent_dirty_set(
             }
             else
             {
-                word_bits = child_bits[word_index];
-                base = ((uint64_t)word_index) << 6u;
+                uint64_t word_bits = child_bits[word_index];
+                uint64_t base = ((uint64_t)word_index) << 6u;
 
                 while ((word_bits != 0u) && (err == SSZ_SUCCESS))
                 {
@@ -1013,8 +1010,6 @@ static ssz_error_t ssz_merkle_cache_internal_build_parent_dirty_set(
 
 static ssz_error_t ssz_merkle_cache_internal_recompute_data_root(ssz_merkle_cache_t *cache)
 {
-    uint64_t current_width = 0u;
-    bool current_is_leaf = true;
     ssz_merkle_cache_dirty_set_t leaf_set;
     ssz_merkle_cache_dirty_set_t parent_sets[2];
     ssz_merkle_cache_dirty_set_t *current_scratch = NULL;
@@ -1041,6 +1036,9 @@ static ssz_error_t ssz_merkle_cache_internal_recompute_data_root(ssz_merkle_cach
     }
     else
     {
+        bool current_is_leaf = true;
+        uint64_t current_width = cache->leaf_capacity;
+
         ssz_merkle_cache_internal_bind_dirty_set(
             &leaf_set,
             cache->leaf_dirty_bits,
@@ -1061,7 +1059,6 @@ static ssz_error_t ssz_merkle_cache_internal_recompute_data_root(ssz_merkle_cach
             cache->parent_dirty_word_capacity);
 
         current_set = &leaf_set;
-        current_width = cache->leaf_capacity;
 
         for (uint32_t level = 0u; (level < cache->depth) && (err == SSZ_SUCCESS); level++)
         {
@@ -1346,7 +1343,6 @@ static ssz_error_t ssz_merkle_cache_internal_validate_storage(
     const ssz_merkle_cache_storage_t *storage,
     bool *out_token_storage_ready)
 {
-    bool token_storage_ready = false;
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((requirements == NULL) || (storage == NULL) || (out_token_storage_ready == NULL))
@@ -1416,7 +1412,8 @@ static ssz_error_t ssz_merkle_cache_internal_validate_storage(
     }
     else
     {
-        token_storage_ready = ssz_merkle_cache_internal_storage_has_tokens(storage);
+        bool token_storage_ready = ssz_merkle_cache_internal_storage_has_tokens(storage);
+
         if (token_storage_ready &&
             ((storage->token_values_count < requirements->token_values_count) ||
              (storage->token_valid_words < requirements->token_valid_words) ||
@@ -1715,7 +1712,7 @@ static ssz_error_t ssz_merkle_cache_internal_migrate_nodes(
 }
 
 static ssz_error_t ssz_merkle_cache_internal_ensure_capacity_for_count(
-    ssz_merkle_cache_t *cache,
+    const ssz_merkle_cache_t *cache,
     uint64_t required_count)
 {
     ssz_error_t err = SSZ_SUCCESS;
@@ -2384,7 +2381,6 @@ ssz_error_t ssz_merkle_cache_sync_packed_bytes(
         {
             ssz_chunk_t leaf;
             size_t chunk_offset = 0u;
-            size_t copy_len = SSZ_BYTES_PER_CHUNK;
 
             (void)memset(leaf.bytes, 0, sizeof(leaf.bytes));
             if (!ssz_internal_u64_to_size(chunk_index, &chunk_offset) ||
@@ -2396,7 +2392,9 @@ ssz_error_t ssz_merkle_cache_sync_packed_bytes(
             {
                 if (chunk_offset < bytes_len)
                 {
+                    size_t copy_len = SSZ_BYTES_PER_CHUNK;
                     size_t remaining = bytes_len - chunk_offset;
+
                     if (remaining < copy_len)
                     {
                         copy_len = remaining;
@@ -2845,7 +2843,6 @@ static ssz_error_t ssz_merkle_cache_internal_sync_composite_fallback(
     const ssz_member_codec_t *codec,
     const ssz_merkle_cache_sync_composite_opts_t *opts)
 {
-    uint64_t old_leaf_count = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((cache == NULL) || (codec == NULL))
@@ -2854,7 +2851,8 @@ static ssz_error_t ssz_merkle_cache_internal_sync_composite_fallback(
     }
     else
     {
-        old_leaf_count = cache->leaf_count;
+        uint64_t old_leaf_count = cache->leaf_count;
+
         if ((opts != NULL) && (opts->root_batch != NULL) && (element_count != 0u))
         {
             err = ssz_merkle_cache_internal_sync_composite_run(
@@ -2925,9 +2923,6 @@ ssz_error_t ssz_merkle_cache_sync_composite(
     const ssz_member_codec_t *codec,
     const ssz_merkle_cache_sync_composite_opts_t *opts)
 {
-    uint64_t old_leaf_count = 0u;
-    uint64_t run_start = 0u;
-    uint64_t run_len = 0u;
     ssz_error_t err = SSZ_SUCCESS;
     bool mark_needs_resync = false;
 
@@ -2960,8 +2955,6 @@ ssz_error_t ssz_merkle_cache_sync_composite(
 
     if (err == SSZ_SUCCESS)
     {
-        old_leaf_count = cache->leaf_count;
-
         if ((opts == NULL) || (opts->token == NULL))
         {
             err = ssz_merkle_cache_internal_sync_composite_fallback(
@@ -2983,10 +2976,13 @@ ssz_error_t ssz_merkle_cache_sync_composite(
         }
         else
         {
+            uint64_t old_leaf_count = cache->leaf_count;
+            uint64_t run_start = 0u;
+            uint64_t run_len = 0u;
+
             for (uint64_t i = 0u; (i < element_count) && (err == SSZ_SUCCESS); i++)
             {
                 uint64_t token = 0u;
-                bool unchanged = false;
 
                 err = opts->token(opts->ctx, i, &token);
                 if (err != SSZ_SUCCESS)
@@ -2995,6 +2991,8 @@ ssz_error_t ssz_merkle_cache_sync_composite(
                 }
                 else
                 {
+                    bool unchanged = false;
+
                     if (i < old_leaf_count)
                     {
                         size_t token_index = 0u;
