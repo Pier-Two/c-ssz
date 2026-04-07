@@ -368,7 +368,12 @@ static void fuzz_cover_serialize_errors(void)
         };
 
         (void)ssz_serialize_vector_variable(1u, NULL, out, sizeof(out), &out_len);
-        (void)ssz_serialize_vector_variable((uint64_t)SIZE_MAX, &codec_ok, out, sizeof(out), &out_len);
+        (void)ssz_serialize_vector_variable(
+            (uint64_t)SIZE_MAX,
+            &codec_ok,
+            out,
+            sizeof(out),
+            &out_len);
 #if UINT64_MAX > SIZE_MAX
         (void)ssz_serialize_vector_variable(
             (uint64_t)SIZE_MAX + 1u,
@@ -388,7 +393,14 @@ static void fuzz_cover_serialize_errors(void)
         (void)ssz_serialize_vector_variable(1u, &codec_cursor_overflow, out, sizeof(out), &out_len);
 
         (void)ssz_serialize_list_fixed(NULL, 2u, SSZ_NO_LIMIT, 2u, out, sizeof(out), &out_len);
-        (void)ssz_serialize_list_fixed(elems, (uint64_t)SIZE_MAX, SSZ_NO_LIMIT, 2u, out, sizeof(out), &out_len);
+        (void)ssz_serialize_list_fixed(
+            elems,
+            (uint64_t)SIZE_MAX,
+            SSZ_NO_LIMIT,
+            2u,
+            out,
+            sizeof(out),
+            &out_len);
 #if UINT64_MAX > SIZE_MAX
         (void)ssz_serialize_list_fixed(
             elems,
@@ -402,15 +414,43 @@ static void fuzz_cover_serialize_errors(void)
         (void)ssz_serialize_list_fixed(elems, 2u, SSZ_NO_LIMIT, 2u, out, 1u, &out_len);
 
         (void)ssz_serialize_list_variable(2u, SSZ_NO_LIMIT, NULL, out, sizeof(out), &out_len);
-        (void)ssz_serialize_list_variable((uint64_t)SIZE_MAX, SSZ_NO_LIMIT, &codec_ok, out, sizeof(out),
-                                          &out_len);
+        (void)ssz_serialize_list_variable(
+            (uint64_t)SIZE_MAX,
+            SSZ_NO_LIMIT,
+            &codec_ok,
+            out,
+            sizeof(out),
+            &out_len);
 #if UINT64_MAX > SIZE_MAX
-        (void)ssz_serialize_list_variable((uint64_t)SIZE_MAX + 1u, SSZ_NO_LIMIT, &codec_ok, out,
-                                          sizeof(out), &out_len);
+        (void)ssz_serialize_list_variable(
+            (uint64_t)SIZE_MAX + 1u,
+            SSZ_NO_LIMIT,
+            &codec_ok,
+            out,
+            sizeof(out),
+            &out_len);
 #endif
-        (void)ssz_serialize_list_variable(2u, SSZ_NO_LIMIT, &codec_size_err, out, sizeof(out), &out_len);
-        (void)ssz_serialize_list_variable(2u, SSZ_NO_LIMIT, &codec_size_max, out, sizeof(out), &out_len);
-        (void)ssz_serialize_list_variable(2u, SSZ_NO_LIMIT, &codec_u32_max, out, sizeof(out), &out_len);
+        (void)ssz_serialize_list_variable(
+            2u,
+            SSZ_NO_LIMIT,
+            &codec_size_err,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_list_variable(
+            2u,
+            SSZ_NO_LIMIT,
+            &codec_size_max,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_list_variable(
+            2u,
+            SSZ_NO_LIMIT,
+            &codec_u32_max,
+            out,
+            sizeof(out),
+            &out_len);
         (void)ssz_serialize_list_variable(1u, SSZ_NO_LIMIT, &codec_ok, out, 0u, &out_len);
         (void)ssz_serialize_list_variable(
             1u,
@@ -419,7 +459,13 @@ static void fuzz_cover_serialize_errors(void)
             out,
             sizeof(out),
             &out_len);
-        (void)ssz_serialize_list_variable(1u, SSZ_NO_LIMIT, &codec_write_err, out, sizeof(out), &out_len);
+        (void)ssz_serialize_list_variable(
+            1u,
+            SSZ_NO_LIMIT,
+            &codec_write_err,
+            out,
+            sizeof(out),
+            &out_len);
         (void)ssz_serialize_list_variable(
             1u,
             SSZ_NO_LIMIT,
@@ -447,11 +493,41 @@ static void fuzz_cover_serialize_errors(void)
         const size_t field_fixed_sizes_fixed2[1] = {2u};
         const size_t field_fixed_sizes_fixed3[1] = {3u};
         (void)ssz_serialize_container(field_fixed_sizes_var, 1u, NULL, out, sizeof(out), &out_len);
-        (void)ssz_serialize_container(field_fixed_sizes_bad, 2u, &codec_ok, out, sizeof(out), &out_len);
-        (void)ssz_serialize_container(field_fixed_sizes_var, 1u, &codec_size_err, out, sizeof(out), &out_len);
-        (void)ssz_serialize_container(field_fixed_sizes_var, 1u, &codec_size_max, out, sizeof(out), &out_len);
-        (void)ssz_serialize_container(field_fixed_sizes_fixed3, 1u, &codec_ok, out, sizeof(out), &out_len);
-        (void)ssz_serialize_container(field_fixed_sizes_var, 1u, &codec_u32_max, out, sizeof(out), &out_len);
+        (void)ssz_serialize_container(
+            field_fixed_sizes_bad,
+            2u,
+            &codec_ok,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_container(
+            field_fixed_sizes_var,
+            1u,
+            &codec_size_err,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_container(
+            field_fixed_sizes_var,
+            1u,
+            &codec_size_max,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_container(
+            field_fixed_sizes_fixed3,
+            1u,
+            &codec_ok,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_container(
+            field_fixed_sizes_var,
+            1u,
+            &codec_u32_max,
+            out,
+            sizeof(out),
+            &out_len);
         (void)ssz_serialize_container(field_fixed_sizes_var, 1u, &codec_ok, out, 0u, &out_len);
         (void)ssz_serialize_container(
             field_fixed_sizes_var,
@@ -460,7 +536,13 @@ static void fuzz_cover_serialize_errors(void)
             out,
             sizeof(out),
             &out_len);
-        (void)ssz_serialize_container(field_fixed_sizes_var, 1u, &codec_write_err, out, sizeof(out), &out_len);
+        (void)ssz_serialize_container(
+            field_fixed_sizes_var,
+            1u,
+            &codec_write_err,
+            out,
+            sizeof(out),
+            &out_len);
         (void)ssz_serialize_container(
             field_fixed_sizes_var,
             1u,
@@ -544,14 +626,8 @@ static void fuzz_cover_serialize_errors(void)
                 out,
                 sizeof(out),
                 &out_len);
-            (void)ssz_serialize_compatible_union(
-                1u,
-                allowed_good,
-                1u,
-                &codec_ok,
-                out,
-                1u,
-                &out_len);
+            (void)
+                ssz_serialize_compatible_union(1u, allowed_good, 1u, &codec_ok, out, 1u, &out_len);
             (void)ssz_serialize_compatible_union(
                 1u,
                 allowed_good,
@@ -588,507 +664,451 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 
     switch (api_selector % 16u)
     {
-        case 0u:
+    case 0u:
+    {
+        uint8_t value = fuzz_take_u8(&input);
+        uint8_t out[1] = {0u};
+        (void)ssz_serialize_boolean(value, out);
+        (void)ssz_serialize_boolean(value, NULL);
+        break;
+    }
+
+    case 1u:
+    {
+        uint8_t value = fuzz_take_u8(&input);
+        uint8_t out[1] = {0u};
+        (void)ssz_serialize_uint8(value, out);
+        (void)ssz_serialize_uint8(value, NULL);
+        break;
+    }
+
+    case 2u:
+    {
+        uint16_t value = (uint16_t)fuzz_take_u64(&input);
+        uint8_t out[2] = {0u};
+        (void)ssz_serialize_uint16(value, out);
+        (void)ssz_serialize_uint16(value, NULL);
+        break;
+    }
+
+    case 3u:
+    {
+        uint32_t value = (uint32_t)fuzz_take_u64(&input);
+        uint8_t out[4] = {0u};
+        (void)ssz_serialize_uint32(value, out);
+        (void)ssz_serialize_uint32(value, NULL);
+        break;
+    }
+
+    case 4u:
+    {
+        uint64_t value = fuzz_take_u64(&input);
+        uint8_t out[8] = {0u};
+        (void)ssz_serialize_uint64(value, out);
+        (void)ssz_serialize_uint64(value, NULL);
+        break;
+    }
+
+    case 5u:
+    {
+        uint8_t value[16] = {0u};
+        uint8_t out[16] = {0u};
+        fuzz_fill_bytes(&input, value, sizeof(value));
+        (void)ssz_serialize_uint128(value, sizeof(value), out);
+        (void)ssz_serialize_uint128(NULL, sizeof(value), out);
+        (void)ssz_serialize_uint128(value, sizeof(value), NULL);
+        break;
+    }
+
+    case 6u:
+    {
+        uint8_t value[32] = {0u};
+        uint8_t out[32] = {0u};
+        fuzz_fill_bytes(&input, value, sizeof(value));
+        (void)ssz_serialize_uint256(value, sizeof(value), out);
+        (void)ssz_serialize_uint256(NULL, sizeof(value), out);
+        (void)ssz_serialize_uint256(value, sizeof(value), NULL);
+        break;
+    }
+
+    case 7u:
+    {
+        uint64_t bit_count = fuzz_take_u64_bounded(&input, 511u) + 1u;
+        size_t byte_count = (size_t)((bit_count + 7u) / 8u);
+        uint8_t bits[64] = {0u};
+        fuzz_fill_bytes(&input, bits, byte_count);
+        if ((bit_count % 8u) != 0u)
         {
-            uint8_t value = fuzz_take_u8(&input);
-            uint8_t out[1] = {0u};
-            (void)ssz_serialize_boolean(value, out);
-            (void)ssz_serialize_boolean(value, NULL);
-            break;
+            uint8_t mask = (uint8_t)((1u << (bit_count % 8u)) - 1u);
+            bits[byte_count - 1u] = (uint8_t)(bits[byte_count - 1u] & mask);
         }
 
-        case 1u:
+        uint8_t out[64] = {0u};
+        size_t out_len = 0u;
+
+        (void)ssz_serialize_bitvector(bits, byte_count, bit_count, NULL, 0u, &out_len);
+        (void)ssz_serialize_bitvector(bits, byte_count, bit_count, out, sizeof(out), &out_len);
+        (void)ssz_serialize_bitvector(bits, byte_count, bit_count, out, sizeof(out), NULL);
+        (void)ssz_serialize_bitvector(bits, byte_count, 0u, out, sizeof(out), &out_len);
+        break;
+    }
+
+    case 8u:
+    {
+        uint64_t bit_len = fuzz_take_u64_bounded(&input, 512u);
+        size_t data_bytes = (size_t)((bit_len + 7u) / 8u);
+        uint8_t bits[64] = {0u};
+        fuzz_fill_bytes(&input, bits, data_bytes);
+        if ((bit_len != 0u) && ((bit_len % 8u) != 0u))
         {
-            uint8_t value = fuzz_take_u8(&input);
-            uint8_t out[1] = {0u};
-            (void)ssz_serialize_uint8(value, out);
-            (void)ssz_serialize_uint8(value, NULL);
-            break;
+            uint8_t mask = (uint8_t)((1u << (bit_len % 8u)) - 1u);
+            bits[data_bytes - 1u] = (uint8_t)(bits[data_bytes - 1u] & mask);
         }
 
-        case 2u:
+        uint64_t bit_limit = ((fuzz_take_u8(&input) & 1u) != 0u)
+                                 ? SSZ_NO_LIMIT
+                                 : (bit_len + fuzz_take_u64_bounded(&input, 32u));
+
+        uint8_t out[80] = {0u};
+        size_t out_len = 0u;
+
+        (void)ssz_serialize_bitlist(bits, data_bytes, bit_len, bit_limit, NULL, 0u, &out_len);
+        (void)
+            ssz_serialize_bitlist(bits, data_bytes, bit_len, bit_limit, out, sizeof(out), &out_len);
+        (void)ssz_serialize_bitlist(bits, data_bytes, bit_len, bit_limit, out, sizeof(out), NULL);
+        if (bit_len != 0u)
         {
-            uint16_t value = (uint16_t)fuzz_take_u64(&input);
-            uint8_t out[2] = {0u};
-            (void)ssz_serialize_uint16(value, out);
-            (void)ssz_serialize_uint16(value, NULL);
-            break;
+            (void)ssz_serialize_bitlist(
+                bits,
+                data_bytes,
+                bit_len,
+                bit_len - 1u,
+                out,
+                sizeof(out),
+                &out_len);
         }
+        break;
+    }
 
-        case 3u:
-        {
-            uint32_t value = (uint32_t)fuzz_take_u64(&input);
-            uint8_t out[4] = {0u};
-            (void)ssz_serialize_uint32(value, out);
-            (void)ssz_serialize_uint32(value, NULL);
-            break;
-        }
+    case 9u:
+    {
+        uint64_t element_count = fuzz_take_u64_bounded(&input, 63u) + 1u;
+        size_t element_size = fuzz_take_size_bounded(&input, 31u) + 1u;
+        size_t required = (size_t)element_count * element_size;
 
-        case 4u:
-        {
-            uint64_t value = fuzz_take_u64(&input);
-            uint8_t out[8] = {0u};
-            (void)ssz_serialize_uint64(value, out);
-            (void)ssz_serialize_uint64(value, NULL);
-            break;
-        }
+        uint8_t elements[2048] = {0u};
+        uint8_t out[2048] = {0u};
+        size_t out_len = 0u;
 
-        case 5u:
-        {
-            uint8_t value[16] = {0u};
-            uint8_t out[16] = {0u};
-            fuzz_fill_bytes(&input, value, sizeof(value));
-            (void)ssz_serialize_uint128(value, out);
-            (void)ssz_serialize_uint128(NULL, out);
-            (void)ssz_serialize_uint128(value, NULL);
-            break;
-        }
+        fuzz_fill_bytes(&input, elements, required);
 
-        case 6u:
-        {
-            uint8_t value[32] = {0u};
-            uint8_t out[32] = {0u};
-            fuzz_fill_bytes(&input, value, sizeof(value));
-            (void)ssz_serialize_uint256(value, out);
-            (void)ssz_serialize_uint256(NULL, out);
-            (void)ssz_serialize_uint256(value, NULL);
-            break;
-        }
+        (void)ssz_serialize_vector_fixed(elements, element_count, element_size, NULL, 0u, &out_len);
+        (void)ssz_serialize_vector_fixed(
+            elements,
+            element_count,
+            element_size,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_vector_fixed(
+            elements,
+            element_count,
+            element_size,
+            out,
+            sizeof(out),
+            NULL);
+        (void)ssz_serialize_vector_fixed(elements, 0u, element_size, out, sizeof(out), &out_len);
+        break;
+    }
 
-        case 7u:
-        {
-            uint64_t bit_count = fuzz_take_u64_bounded(&input, 511u) + 1u;
-            size_t byte_count = (size_t)((bit_count + 7u) / 8u);
-            uint8_t bits[64] = {0u};
-            fuzz_fill_bytes(&input, bits, byte_count);
-            if ((bit_count % 8u) != 0u)
-            {
-                uint8_t mask = (uint8_t)((1u << (bit_count % 8u)) - 1u);
-                bits[byte_count - 1u] = (uint8_t)(bits[byte_count - 1u] & mask);
-            }
+    case 10u:
+    {
+        uint64_t element_count = fuzz_take_u64_bounded(&input, 63u) + 1u;
+        fuzz_write_ctx_t write_ctx = {
+            .data = input.ptr,
+            .data_len = input.remaining,
+            .mode = 0u,
+        };
+        ssz_member_codec_t codec = {
+            .ctx = &write_ctx,
+            .write = fuzz_member_write,
+            .read = NULL,
+            .root = NULL,
+        };
 
-            uint8_t out[64] = {0u};
-            size_t out_len = 0u;
+        uint8_t out[1024] = {0u};
+        size_t out_len = 0u;
 
-            (void)ssz_serialize_bitvector(bits, byte_count, bit_count, NULL, 0u, &out_len);
-            (void)ssz_serialize_bitvector(bits, byte_count, bit_count, out, sizeof(out), &out_len);
-            (void)ssz_serialize_bitvector(bits, byte_count, bit_count, out, sizeof(out), NULL);
-            (void)ssz_serialize_bitvector(bits, byte_count, 0u, out, sizeof(out), &out_len);
-            break;
-        }
+        (void)ssz_serialize_vector_variable(element_count, &codec, NULL, 0u, &out_len);
+        (void)ssz_serialize_vector_variable(element_count, &codec, out, sizeof(out), &out_len);
+        (void)ssz_serialize_vector_variable(element_count, &codec, out, sizeof(out), NULL);
+        (void)ssz_serialize_vector_variable(0u, &codec, out, sizeof(out), &out_len);
+        break;
+    }
 
-        case 8u:
-        {
-            uint64_t bit_len = fuzz_take_u64_bounded(&input, 512u);
-            size_t data_bytes = (size_t)((bit_len + 7u) / 8u);
-            uint8_t bits[64] = {0u};
-            fuzz_fill_bytes(&input, bits, data_bytes);
-            if ((bit_len != 0u) && ((bit_len % 8u) != 0u))
-            {
-                uint8_t mask = (uint8_t)((1u << (bit_len % 8u)) - 1u);
-                bits[data_bytes - 1u] = (uint8_t)(bits[data_bytes - 1u] & mask);
-            }
-
-            uint64_t bit_limit = ((fuzz_take_u8(&input) & 1u) != 0u)
+    case 11u:
+    {
+        uint64_t element_count = fuzz_take_u64_bounded(&input, 64u);
+        size_t element_size = fuzz_take_size_bounded(&input, 31u) + 1u;
+        size_t required = (size_t)element_count * element_size;
+        uint64_t element_limit = ((fuzz_take_u8(&input) & 1u) != 0u)
                                      ? SSZ_NO_LIMIT
-                                     : (bit_len + fuzz_take_u64_bounded(&input, 32u));
+                                     : (element_count + fuzz_take_u64_bounded(&input, 8u));
 
-            uint8_t out[80] = {0u};
-            size_t out_len = 0u;
+        uint8_t elements[2048] = {0u};
+        uint8_t out[2048] = {0u};
+        size_t out_len = 0u;
 
-            (void)ssz_serialize_bitlist(bits, data_bytes, bit_len, bit_limit, NULL, 0u, &out_len);
-            (void)ssz_serialize_bitlist(bits, data_bytes, bit_len, bit_limit, out, sizeof(out), &out_len);
-            (void)ssz_serialize_bitlist(bits, data_bytes, bit_len, bit_limit, out, sizeof(out), NULL);
-            if (bit_len != 0u)
-            {
-                (void)ssz_serialize_bitlist(bits, data_bytes, bit_len, bit_len - 1u, out, sizeof(out), &out_len);
-            }
-            break;
-        }
+        fuzz_fill_bytes(&input, elements, required);
 
-        case 9u:
+        (void)ssz_serialize_list_fixed(
+            elements,
+            element_count,
+            element_limit,
+            element_size,
+            NULL,
+            0u,
+            &out_len);
+        (void)ssz_serialize_list_fixed(
+            elements,
+            element_count,
+            element_limit,
+            element_size,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_list_fixed(
+            elements,
+            element_count,
+            element_limit,
+            element_size,
+            out,
+            sizeof(out),
+            NULL);
+        if (element_count != 0u)
         {
-            uint64_t element_count = fuzz_take_u64_bounded(&input, 63u) + 1u;
-            size_t element_size = fuzz_take_size_bounded(&input, 31u) + 1u;
-            size_t required = (size_t)element_count * element_size;
-
-            uint8_t elements[2048] = {0u};
-            uint8_t out[2048] = {0u};
-            size_t out_len = 0u;
-
-            fuzz_fill_bytes(&input, elements, required);
-
-            (void)ssz_serialize_vector_fixed(
-                elements,
-                element_count,
-                element_size,
-                NULL,
-                0u,
-                &out_len);
-            (void)ssz_serialize_vector_fixed(
-                elements,
-                element_count,
-                element_size,
-                out,
-                sizeof(out),
-                &out_len);
-            (void)ssz_serialize_vector_fixed(
-                elements,
-                element_count,
-                element_size,
-                out,
-                sizeof(out),
-                NULL);
-            (void)ssz_serialize_vector_fixed(
-                elements,
-                0u,
-                element_size,
-                out,
-                sizeof(out),
-                &out_len);
-            break;
-        }
-
-        case 10u:
-        {
-            uint64_t element_count = fuzz_take_u64_bounded(&input, 63u) + 1u;
-            fuzz_write_ctx_t write_ctx = {
-                .data = input.ptr,
-                .data_len = input.remaining,
-                .mode = 0u,
-            };
-            ssz_member_codec_t codec = {
-                .ctx = &write_ctx,
-                .write = fuzz_member_write,
-                .read = NULL,
-                .root = NULL,
-            };
-
-            uint8_t out[1024] = {0u};
-            size_t out_len = 0u;
-
-            (void)ssz_serialize_vector_variable(element_count, &codec, NULL, 0u, &out_len);
-            (void)ssz_serialize_vector_variable(
-                element_count,
-                &codec,
-                out,
-                sizeof(out),
-                &out_len);
-            (void)ssz_serialize_vector_variable(
-                element_count,
-                &codec,
-                out,
-                sizeof(out),
-                NULL);
-            (void)ssz_serialize_vector_variable(0u, &codec, out, sizeof(out), &out_len);
-            break;
-        }
-
-        case 11u:
-        {
-            uint64_t element_count = fuzz_take_u64_bounded(&input, 64u);
-            size_t element_size = fuzz_take_size_bounded(&input, 31u) + 1u;
-            size_t required = (size_t)element_count * element_size;
-            uint64_t element_limit = ((fuzz_take_u8(&input) & 1u) != 0u)
-                                         ? SSZ_NO_LIMIT
-                                         : (element_count + fuzz_take_u64_bounded(&input, 8u));
-
-            uint8_t elements[2048] = {0u};
-            uint8_t out[2048] = {0u};
-            size_t out_len = 0u;
-
-            fuzz_fill_bytes(&input, elements, required);
-
             (void)ssz_serialize_list_fixed(
                 elements,
                 element_count,
-                element_limit,
-                element_size,
-                NULL,
-                0u,
-                &out_len);
-            (void)ssz_serialize_list_fixed(
-                elements,
-                element_count,
-                element_limit,
+                element_count - 1u,
                 element_size,
                 out,
                 sizeof(out),
                 &out_len);
-            (void)ssz_serialize_list_fixed(
-                elements,
-                element_count,
-                element_limit,
-                element_size,
-                out,
-                sizeof(out),
-                NULL);
-            if (element_count != 0u)
-            {
-                (void)ssz_serialize_list_fixed(
-                    elements,
-                    element_count,
-                    element_count - 1u,
-                    element_size,
-                    out,
-                    sizeof(out),
-                    &out_len);
-            }
-            (void)ssz_serialize_list_fixed(
-                elements,
-                element_count,
-                element_limit,
-                0u,
-                out,
-                sizeof(out),
-                &out_len);
-            break;
         }
+        (void)ssz_serialize_list_fixed(
+            elements,
+            element_count,
+            element_limit,
+            0u,
+            out,
+            sizeof(out),
+            &out_len);
+        break;
+    }
 
-        case 12u:
+    case 12u:
+    {
+        uint64_t element_count = fuzz_take_u64_bounded(&input, 64u);
+        uint64_t element_limit = ((fuzz_take_u8(&input) & 1u) != 0u)
+                                     ? SSZ_NO_LIMIT
+                                     : (element_count + fuzz_take_u64_bounded(&input, 8u));
+
+        fuzz_write_ctx_t write_ctx = {
+            .data = input.ptr,
+            .data_len = input.remaining,
+            .mode = 0u,
+        };
+        ssz_member_codec_t codec = {
+            .ctx = &write_ctx,
+            .write = fuzz_member_write,
+            .read = NULL,
+            .root = NULL,
+        };
+
+        uint8_t out[1024] = {0u};
+        size_t out_len = 0u;
+
+        (void)ssz_serialize_list_variable(element_count, element_limit, &codec, NULL, 0u, &out_len);
+        (void)ssz_serialize_list_variable(
+            element_count,
+            element_limit,
+            &codec,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_list_variable(
+            element_count,
+            element_limit,
+            &codec,
+            out,
+            sizeof(out),
+            NULL);
+        if (element_count != 0u)
         {
-            uint64_t element_count = fuzz_take_u64_bounded(&input, 64u);
-            uint64_t element_limit = ((fuzz_take_u8(&input) & 1u) != 0u)
-                                         ? SSZ_NO_LIMIT
-                                         : (element_count + fuzz_take_u64_bounded(&input, 8u));
-
-            fuzz_write_ctx_t write_ctx = {
-                .data = input.ptr,
-                .data_len = input.remaining,
-                .mode = 0u,
-            };
-            ssz_member_codec_t codec = {
-                .ctx = &write_ctx,
-                .write = fuzz_member_write,
-                .read = NULL,
-                .root = NULL,
-            };
-
-            uint8_t out[1024] = {0u};
-            size_t out_len = 0u;
-
             (void)ssz_serialize_list_variable(
                 element_count,
-                element_limit,
-                &codec,
-                NULL,
-                0u,
-                &out_len);
-            (void)ssz_serialize_list_variable(
-                element_count,
-                element_limit,
+                element_count - 1u,
                 &codec,
                 out,
                 sizeof(out),
                 &out_len);
-            (void)ssz_serialize_list_variable(
-                element_count,
-                element_limit,
-                &codec,
-                out,
-                sizeof(out),
-                NULL);
-            if (element_count != 0u)
-            {
-                (void)ssz_serialize_list_variable(
-                    element_count,
-                    element_count - 1u,
-                    &codec,
-                    out,
-                    sizeof(out),
-                    &out_len);
-            }
-            break;
         }
+        break;
+    }
 
-        case 13u:
+    case 13u:
+    {
+        uint32_t field_count = (uint32_t)(fuzz_take_u64_bounded(&input, 7u) + 1u);
+        size_t field_fixed_sizes[8] = {0u};
+
+        fuzz_write_ctx_t write_ctx = {
+            .data = input.ptr,
+            .data_len = input.remaining,
+            .mode = 0u,
+        };
+        for (uint32_t i = 0u; i < field_count; i++)
         {
-            uint32_t field_count = (uint32_t)(fuzz_take_u64_bounded(&input, 7u) + 1u);
-            size_t field_fixed_sizes[8] = {0u};
-
-            fuzz_write_ctx_t write_ctx = {
-                .data = input.ptr,
-                .data_len = input.remaining,
-                .mode = 0u,
-            };
-            for (uint32_t i = 0u; i < field_count; i++)
-            {
-                field_fixed_sizes[i] = ((i & 1u) == 0u) ? fuzz_member_len(&write_ctx, i) : 0u;
-            }
-
-            ssz_member_codec_t codec = {
-                .ctx = &write_ctx,
-                .write = fuzz_member_write,
-                .read = NULL,
-                .root = NULL,
-            };
-
-            uint8_t out[512] = {0u};
-            size_t out_len = 0u;
-
-            (void)ssz_serialize_container(
-                field_fixed_sizes,
-                field_count,
-                &codec,
-                NULL,
-                0u,
-                &out_len);
-            (void)ssz_serialize_container(
-                field_fixed_sizes,
-                field_count,
-                &codec,
-                out,
-                sizeof(out),
-                &out_len);
-            (void)ssz_serialize_container(
-                field_fixed_sizes,
-                field_count,
-                &codec,
-                out,
-                sizeof(out),
-                NULL);
-            (void)ssz_serialize_container(
-                NULL,
-                field_count,
-                &codec,
-                out,
-                sizeof(out),
-                &out_len);
-            (void)ssz_serialize_container(
-                field_fixed_sizes,
-                0u,
-                &codec,
-                out,
-                sizeof(out),
-                &out_len);
-            break;
+            field_fixed_sizes[i] = ((i & 1u) == 0u) ? fuzz_member_len(&write_ctx, i) : 0u;
         }
 
-        case 14u:
+        ssz_member_codec_t codec = {
+            .ctx = &write_ctx,
+            .write = fuzz_member_write,
+            .read = NULL,
+            .root = NULL,
+        };
+
+        uint8_t out[512] = {0u};
+        size_t out_len = 0u;
+
+        (void)ssz_serialize_container(field_fixed_sizes, field_count, &codec, NULL, 0u, &out_len);
+        (void)ssz_serialize_container(
+            field_fixed_sizes,
+            field_count,
+            &codec,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)
+            ssz_serialize_container(field_fixed_sizes, field_count, &codec, out, sizeof(out), NULL);
+        (void)ssz_serialize_container(NULL, field_count, &codec, out, sizeof(out), &out_len);
+        (void)ssz_serialize_container(field_fixed_sizes, 0u, &codec, out, sizeof(out), &out_len);
+        break;
+    }
+
+    case 14u:
+    {
+        uint32_t option_count = (uint32_t)(fuzz_take_u64_bounded(&input, 15u) + 2u);
+        uint8_t selector = (uint8_t)fuzz_take_u64_bounded(&input, option_count - 1u);
+        uint8_t normal_selector = (uint8_t)((selector % (option_count - 1u)) + 1u);
+
+        fuzz_write_ctx_t write_ctx = {
+            .data = input.ptr,
+            .data_len = input.remaining,
+            .mode = 0u,
+        };
+        ssz_member_codec_t codec = {
+            .ctx = &write_ctx,
+            .write = fuzz_member_write,
+            .read = NULL,
+            .root = NULL,
+        };
+
+        uint8_t out[256] = {0u};
+        size_t out_len = 0u;
+
+        (void)ssz_serialize_union(0u, option_count, true, &codec, NULL, 0u, &out_len);
+        (void)ssz_serialize_union(0u, option_count, true, &codec, out, sizeof(out), &out_len);
+        (void)ssz_serialize_union(normal_selector, option_count, true, &codec, NULL, 0u, &out_len);
+        (void)ssz_serialize_union(
+            normal_selector,
+            option_count,
+            true,
+            &codec,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_union(
+            normal_selector,
+            option_count,
+            true,
+            &codec,
+            out,
+            sizeof(out),
+            NULL);
+        (void)ssz_serialize_union(
+            (uint8_t)option_count,
+            option_count,
+            true,
+            &codec,
+            out,
+            sizeof(out),
+            &out_len);
+        break;
+    }
+
+    default:
+    {
+        uint32_t allowed_selector_count = (uint32_t)(fuzz_take_u64_bounded(&input, 7u) + 1u);
+        uint8_t allowed_selectors[8] = {0u};
+        for (uint32_t i = 0u; i < allowed_selector_count; i++)
         {
-            uint32_t option_count = (uint32_t)(fuzz_take_u64_bounded(&input, 15u) + 2u);
-            uint8_t selector = (uint8_t)fuzz_take_u64_bounded(&input, option_count - 1u);
-            uint8_t normal_selector = (uint8_t)((selector % (option_count - 1u)) + 1u);
-
-            fuzz_write_ctx_t write_ctx = {
-                .data = input.ptr,
-                .data_len = input.remaining,
-                .mode = 0u,
-            };
-            ssz_member_codec_t codec = {
-                .ctx = &write_ctx,
-                .write = fuzz_member_write,
-                .read = NULL,
-                .root = NULL,
-            };
-
-            uint8_t out[256] = {0u};
-            size_t out_len = 0u;
-
-            (void)ssz_serialize_union(0u, option_count, true, &codec, NULL, 0u, &out_len);
-            (void)ssz_serialize_union(0u, option_count, true, &codec, out, sizeof(out), &out_len);
-            (void)ssz_serialize_union(
-                normal_selector,
-                option_count,
-                true,
-                &codec,
-                NULL,
-                0u,
-                &out_len);
-            (void)ssz_serialize_union(
-                normal_selector,
-                option_count,
-                true,
-                &codec,
-                out,
-                sizeof(out),
-                &out_len);
-            (void)ssz_serialize_union(
-                normal_selector,
-                option_count,
-                true,
-                &codec,
-                out,
-                sizeof(out),
-                NULL);
-            (void)ssz_serialize_union(
-                (uint8_t)option_count,
-                option_count,
-                true,
-                &codec,
-                out,
-                sizeof(out),
-                &out_len);
-            break;
+            allowed_selectors[i] = (uint8_t)(1u + (fuzz_take_u8(&input) % 127u));
         }
+        uint8_t selector = allowed_selectors[fuzz_take_u8(&input) % allowed_selector_count];
 
-        default:
-        {
-            uint32_t allowed_selector_count = (uint32_t)(fuzz_take_u64_bounded(&input, 7u) + 1u);
-            uint8_t allowed_selectors[8] = {0u};
-            for (uint32_t i = 0u; i < allowed_selector_count; i++)
-            {
-                allowed_selectors[i] = (uint8_t)(1u + (fuzz_take_u8(&input) % 127u));
-            }
-            uint8_t selector = allowed_selectors[fuzz_take_u8(&input) % allowed_selector_count];
+        fuzz_write_ctx_t write_ctx = {
+            .data = input.ptr,
+            .data_len = input.remaining,
+            .mode = 0u,
+        };
+        ssz_member_codec_t codec = {
+            .ctx = &write_ctx,
+            .write = fuzz_member_write,
+            .read = NULL,
+            .root = NULL,
+        };
 
-            fuzz_write_ctx_t write_ctx = {
-                .data = input.ptr,
-                .data_len = input.remaining,
-                .mode = 0u,
-            };
-            ssz_member_codec_t codec = {
-                .ctx = &write_ctx,
-                .write = fuzz_member_write,
-                .read = NULL,
-                .root = NULL,
-            };
+        uint8_t out[256] = {0u};
+        size_t out_len = 0u;
 
-            uint8_t out[256] = {0u};
-            size_t out_len = 0u;
-
-            (void)ssz_serialize_compatible_union(
-                selector,
-                allowed_selectors,
-                allowed_selector_count,
-                &codec,
-                NULL,
-                0u,
-                &out_len);
-            (void)ssz_serialize_compatible_union(
-                selector,
-                allowed_selectors,
-                allowed_selector_count,
-                &codec,
-                out,
-                sizeof(out),
-                &out_len);
-            (void)ssz_serialize_compatible_union(
-                selector,
-                allowed_selectors,
-                allowed_selector_count,
-                &codec,
-                out,
-                sizeof(out),
-                NULL);
-            (void)ssz_serialize_compatible_union(
-                0u,
-                allowed_selectors,
-                allowed_selector_count,
-                &codec,
-                out,
-                sizeof(out),
-                &out_len);
-            (void)ssz_serialize_compatible_union(
-                selector,
-                NULL,
-                0u,
-                &codec,
-                out,
-                sizeof(out),
-                &out_len);
-            break;
-        }
+        (void)ssz_serialize_compatible_union(
+            selector,
+            allowed_selectors,
+            allowed_selector_count,
+            &codec,
+            NULL,
+            0u,
+            &out_len);
+        (void)ssz_serialize_compatible_union(
+            selector,
+            allowed_selectors,
+            allowed_selector_count,
+            &codec,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)ssz_serialize_compatible_union(
+            selector,
+            allowed_selectors,
+            allowed_selector_count,
+            &codec,
+            out,
+            sizeof(out),
+            NULL);
+        (void)ssz_serialize_compatible_union(
+            0u,
+            allowed_selectors,
+            allowed_selector_count,
+            &codec,
+            out,
+            sizeof(out),
+            &out_len);
+        (void)
+            ssz_serialize_compatible_union(selector, NULL, 0u, &codec, out, sizeof(out), &out_len);
+        break;
+    }
     }
 
     fuzz_cover_serialize_errors();

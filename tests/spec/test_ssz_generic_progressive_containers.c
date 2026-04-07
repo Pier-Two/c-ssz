@@ -65,10 +65,7 @@ static ssz_error_t compute_value_from_yaml(
     const value_type_t *type,
     const yaml_node_t *node,
     computed_value_t *out_value);
-static ssz_error_t validate_value_bytes(
-    const value_type_t *type,
-    const uint8_t *bytes,
-    size_t len);
+static ssz_error_t validate_value_bytes(const value_type_t *type, const uint8_t *bytes, size_t len);
 
 static bool add_overflow_size(size_t a, size_t b, size_t *out)
 {
@@ -120,8 +117,8 @@ static bool value_type_is_basic(const value_type_t *type)
     }
 
     return (type->kind == TYPE_UINT8) || (type->kind == TYPE_UINT16) ||
-        (type->kind == TYPE_UINT32) || (type->kind == TYPE_UINT64) ||
-        (type->kind == TYPE_UINT128) || (type->kind == TYPE_UINT256);
+           (type->kind == TYPE_UINT32) || (type->kind == TYPE_UINT64) ||
+           (type->kind == TYPE_UINT128) || (type->kind == TYPE_UINT256);
 }
 
 static bool value_type_is_fixed(const value_type_t *type, size_t *out_size)
@@ -516,13 +513,13 @@ static ssz_error_t compute_uint_basic(
         {
             return err;
         }
-        err = ssz_serialize_uint128(decoded, bytes);
+        err = ssz_serialize_uint128(decoded, sizeof(decoded), bytes);
         if (err != SSZ_SUCCESS)
         {
             free(bytes);
             return err;
         }
-        err = ssz_hash_tree_root_uint128(decoded, &out_value->root);
+        err = ssz_hash_tree_root_uint128(decoded, sizeof(decoded), &out_value->root);
         if (err != SSZ_SUCCESS)
         {
             free(bytes);
@@ -547,13 +544,13 @@ static ssz_error_t compute_uint_basic(
         {
             return err;
         }
-        err = ssz_serialize_uint256(decoded, bytes);
+        err = ssz_serialize_uint256(decoded, sizeof(decoded), bytes);
         if (err != SSZ_SUCCESS)
         {
             free(bytes);
             return err;
         }
-        err = ssz_hash_tree_root_uint256(decoded, &out_value->root);
+        err = ssz_hash_tree_root_uint256(decoded, sizeof(decoded), &out_value->root);
         if (err != SSZ_SUCCESS)
         {
             free(bytes);
@@ -631,7 +628,8 @@ static ssz_error_t compute_bitvector_like(
             return SSZ_ERR_INVALID_ARGUMENT;
         }
 
-        err = ssz_serialize_bitvector(bits, bitfield_len, type->param, out_bytes, out_len, &out_len);
+        err =
+            ssz_serialize_bitvector(bits, bitfield_len, type->param, out_bytes, out_len, &out_len);
         if (err != SSZ_SUCCESS)
         {
             free(encoded);
@@ -640,7 +638,11 @@ static ssz_error_t compute_bitvector_like(
             return err;
         }
 
-        err = ssz_hash_tree_root_bitvector(bits, bitfield_len, type->param, ssz_hash_default(),
+        err = ssz_hash_tree_root_bitvector(
+            bits,
+            bitfield_len,
+            type->param,
+            ssz_hash_default(),
             &out_value->root);
         if (err != SSZ_SUCCESS)
         {
@@ -673,7 +675,13 @@ static ssz_error_t compute_bitvector_like(
             return SSZ_ERR_INVALID_ARGUMENT;
         }
 
-        err = ssz_deserialize_bitlist(encoded, encoded_len, type->param, bits, bitfield_len, &bit_len);
+        err = ssz_deserialize_bitlist(
+            encoded,
+            encoded_len,
+            type->param,
+            bits,
+            bitfield_len,
+            &bit_len);
         if (err != SSZ_SUCCESS)
         {
             free(encoded);
@@ -713,7 +721,12 @@ static ssz_error_t compute_bitvector_like(
             return err;
         }
 
-        err = ssz_hash_tree_root_bitlist(bits, bitfield_len, bit_len, type->param, ssz_hash_default(),
+        err = ssz_hash_tree_root_bitlist(
+            bits,
+            bitfield_len,
+            bit_len,
+            type->param,
+            ssz_hash_default(),
             &out_value->root);
         if (err != SSZ_SUCCESS)
         {
@@ -741,7 +754,13 @@ static ssz_error_t compute_bitvector_like(
             return SSZ_ERR_INVALID_ARGUMENT;
         }
 
-        err = ssz_deserialize_bitlist(encoded, encoded_len, SSZ_NO_LIMIT, bits, bitfield_len, &bit_len);
+        err = ssz_deserialize_bitlist(
+            encoded,
+            encoded_len,
+            SSZ_NO_LIMIT,
+            bits,
+            bitfield_len,
+            &bit_len);
         if (err != SSZ_SUCCESS)
         {
             free(encoded);
@@ -765,7 +784,14 @@ static ssz_error_t compute_bitvector_like(
             return SSZ_ERR_INVALID_ARGUMENT;
         }
 
-        err = ssz_serialize_bitlist(bits, bitfield_len, bit_len, SSZ_NO_LIMIT, out_bytes, out_len, &out_len);
+        err = ssz_serialize_bitlist(
+            bits,
+            bitfield_len,
+            bit_len,
+            SSZ_NO_LIMIT,
+            out_bytes,
+            out_len,
+            &out_len);
         if (err != SSZ_SUCCESS)
         {
             free(encoded);
@@ -774,7 +800,11 @@ static ssz_error_t compute_bitvector_like(
             return err;
         }
 
-        err = ssz_hash_tree_root_progressive_bitlist(bits, bitfield_len, bit_len, ssz_hash_default(),
+        err = ssz_hash_tree_root_progressive_bitlist(
+            bits,
+            bitfield_len,
+            bit_len,
+            ssz_hash_default(),
             &out_value->root);
         if (err != SSZ_SUCCESS)
         {
@@ -839,7 +869,13 @@ static ssz_error_t compute_byte_list(
         return err;
     }
 
-    err = ssz_hash_tree_root_list_fixed(raw, raw_len, type->param, 1u, ssz_hash_default(), &out_value->root);
+    err = ssz_hash_tree_root_list_fixed(
+        raw,
+        raw_len,
+        type->param,
+        1u,
+        ssz_hash_default(),
+        &out_value->root);
     if (err != SSZ_SUCCESS)
     {
         free(raw);
@@ -950,7 +986,8 @@ static ssz_error_t compute_children(
 
     for (size_t i = 0u; i < count; i++)
     {
-        ssz_error_t err = compute_value_from_yaml(elem_type, sequence->as.sequence.items[i], &values[i]);
+        ssz_error_t err =
+            compute_value_from_yaml(elem_type, sequence->as.sequence.items[i], &values[i]);
         if (err != SSZ_SUCCESS)
         {
             free_computed_array(values, count);
@@ -1108,7 +1145,11 @@ static ssz_error_t compute_vector(
             return SSZ_ERR_INVALID_ARGUMENT;
         }
 
-        err = ssz_serialize_vector_variable(type->param, &codec, serialized, serialized_len,
+        err = ssz_serialize_vector_variable(
+            type->param,
+            &codec,
+            serialized,
+            serialized_len,
             &serialized_len);
         if (err != SSZ_SUCCESS)
         {
@@ -1127,12 +1168,19 @@ static ssz_error_t compute_vector(
 
     if (elem_basic && elem_fixed)
     {
-        err = ssz_hash_tree_root_vector_fixed(flat, type->param, elem_size, ssz_hash_default(),
+        err = ssz_hash_tree_root_vector_fixed(
+            flat,
+            type->param,
+            elem_size,
+            ssz_hash_default(),
             &out_value->root);
     }
     else
     {
-        err = ssz_hash_tree_root_vector_composite(type->param, &codec, ssz_hash_default(),
+        err = ssz_hash_tree_root_vector_composite(
+            type->param,
+            &codec,
+            ssz_hash_default(),
             &out_value->root);
     }
 
@@ -1209,7 +1257,13 @@ static ssz_error_t compute_list_like(
         }
         else
         {
-            err = ssz_serialize_list_fixed(flat, child_count, limit, elem_size, NULL, 0u,
+            err = ssz_serialize_list_fixed(
+                flat,
+                child_count,
+                limit,
+                elem_size,
+                NULL,
+                0u,
                 &serialized_len);
         }
         if (err != SSZ_SUCCESS)
@@ -1240,8 +1294,14 @@ static ssz_error_t compute_list_like(
         }
         else
         {
-            err = ssz_serialize_list_fixed(flat, child_count, limit, elem_size, serialized,
-                serialized_len, &serialized_len);
+            err = ssz_serialize_list_fixed(
+                flat,
+                child_count,
+                limit,
+                elem_size,
+                serialized,
+                serialized_len,
+                &serialized_len);
         }
         if (err != SSZ_SUCCESS)
         {
@@ -1262,13 +1322,18 @@ static ssz_error_t compute_list_like(
 
         if (type->kind == TYPE_PROGRESSIVE_LIST)
         {
-            err = ssz_serialize_list_variable(child_count, SSZ_NO_LIMIT, &codec, NULL, 0u,
+            err = ssz_serialize_list_variable(
+                child_count,
+                SSZ_NO_LIMIT,
+                &codec,
+                NULL,
+                0u,
                 &serialized_len);
         }
         else
         {
-            err = ssz_serialize_list_variable(child_count, limit, &codec, NULL, 0u,
-                &serialized_len);
+            err =
+                ssz_serialize_list_variable(child_count, limit, &codec, NULL, 0u, &serialized_len);
         }
         if (err != SSZ_SUCCESS)
         {
@@ -1285,13 +1350,23 @@ static ssz_error_t compute_list_like(
 
         if (type->kind == TYPE_PROGRESSIVE_LIST)
         {
-            err = ssz_serialize_list_variable(child_count, SSZ_NO_LIMIT, &codec, serialized,
-                serialized_len, &serialized_len);
+            err = ssz_serialize_list_variable(
+                child_count,
+                SSZ_NO_LIMIT,
+                &codec,
+                serialized,
+                serialized_len,
+                &serialized_len);
         }
         else
         {
-            err = ssz_serialize_list_variable(child_count, limit, &codec, serialized,
-                serialized_len, &serialized_len);
+            err = ssz_serialize_list_variable(
+                child_count,
+                limit,
+                &codec,
+                serialized,
+                serialized_len,
+                &serialized_len);
         }
         if (err != SSZ_SUCCESS)
         {
@@ -1312,26 +1387,42 @@ static ssz_error_t compute_list_like(
     {
         if (type->kind == TYPE_PROGRESSIVE_LIST)
         {
-            err = ssz_hash_tree_root_progressive_list_fixed(flat, child_count, elem_size,
-                ssz_hash_default(), &out_value->root);
+            err = ssz_hash_tree_root_progressive_list_fixed(
+                flat,
+                child_count,
+                elem_size,
+                ssz_hash_default(),
+                &out_value->root);
         }
         else
         {
-            err = ssz_hash_tree_root_list_fixed(flat, child_count, limit, elem_size,
-                ssz_hash_default(), &out_value->root);
+            err = ssz_hash_tree_root_list_fixed(
+                flat,
+                child_count,
+                limit,
+                elem_size,
+                ssz_hash_default(),
+                &out_value->root);
         }
     }
     else
     {
         if (type->kind == TYPE_PROGRESSIVE_LIST)
         {
-            err = ssz_hash_tree_root_progressive_list_composite(child_count, &codec,
-                ssz_hash_default(), &out_value->root);
+            err = ssz_hash_tree_root_progressive_list_composite(
+                child_count,
+                &codec,
+                ssz_hash_default(),
+                &out_value->root);
         }
         else
         {
-            err = ssz_hash_tree_root_list_composite(child_count, limit, &codec,
-                ssz_hash_default(), &out_value->root);
+            err = ssz_hash_tree_root_list_composite(
+                child_count,
+                limit,
+                &codec,
+                ssz_hash_default(),
+                &out_value->root);
         }
     }
 
@@ -1471,7 +1562,11 @@ static ssz_error_t compute_progressive_container_root(
         return err;
     }
 
-    return ssz_mix_in_active_fields(&data_root, active_fields, active_fields_len, ssz_hash_default(),
+    return ssz_mix_in_active_fields(
+        &data_root,
+        active_fields,
+        active_fields_len,
+        ssz_hash_default(),
         out_root);
 }
 
@@ -1619,7 +1714,11 @@ static ssz_error_t compute_container(
 
     if (container->is_progressive)
     {
-        err = compute_progressive_container_root(container, fields, active_fields, active_fields_len,
+        err = compute_progressive_container_root(
+            container,
+            fields,
+            active_fields,
+            active_fields_len,
             &out_value->root);
     }
     else
@@ -1658,8 +1757,7 @@ static ssz_error_t compute_value_from_yaml(
     memset(out_value, 0, sizeof(*out_value));
 
     if ((type->kind == TYPE_UINT8) || (type->kind == TYPE_UINT16) || (type->kind == TYPE_UINT32) ||
-        (type->kind == TYPE_UINT64) || (type->kind == TYPE_UINT128) ||
-        (type->kind == TYPE_UINT256))
+        (type->kind == TYPE_UINT64) || (type->kind == TYPE_UINT128) || (type->kind == TYPE_UINT256))
     {
         return compute_uint_basic(type, node, out_value);
     }
@@ -1737,10 +1835,7 @@ static ssz_error_t validate_read_field(
     return validate_value_bytes(field_ctx->container->fields[member_id].type, data, data_len);
 }
 
-static ssz_error_t validate_value_bytes(
-    const value_type_t *type,
-    const uint8_t *bytes,
-    size_t len)
+static ssz_error_t validate_value_bytes(const value_type_t *type, const uint8_t *bytes, size_t len)
 {
     if (type == NULL)
     {
@@ -1794,7 +1889,7 @@ static ssz_error_t validate_value_bytes(
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        return ssz_deserialize_uint128(bytes, out);
+        return ssz_deserialize_uint128(bytes, len, out);
     }
 
     if (type->kind == TYPE_UINT256)
@@ -1804,7 +1899,7 @@ static ssz_error_t validate_value_bytes(
         {
             return SSZ_ERR_ENCODING_INVALID;
         }
-        return ssz_deserialize_uint256(bytes, out);
+        return ssz_deserialize_uint256(bytes, len, out);
     }
 
     if (type->kind == TYPE_BITVECTOR)
@@ -1894,8 +1989,8 @@ static ssz_error_t validate_value_bytes(
         if (elem_fixed)
         {
             size_t expected_len = 0u;
-            if (type->param > (uint64_t)SIZE_MAX || mul_overflow_size((size_t)type->param, elem_size,
-                    &expected_len))
+            if (type->param > (uint64_t)SIZE_MAX ||
+                mul_overflow_size((size_t)type->param, elem_size, &expected_len))
             {
                 return SSZ_ERR_OVERFLOW;
             }
@@ -1905,7 +2000,8 @@ static ssz_error_t validate_value_bytes(
             }
             for (size_t i = 0u; i < (size_t)type->param; i++)
             {
-                ssz_error_t err = validate_value_bytes(type->elem_type, bytes + i * elem_size, elem_size);
+                ssz_error_t err =
+                    validate_value_bytes(type->elem_type, bytes + i * elem_size, elem_size);
                 if (err != SSZ_SUCCESS)
                 {
                     return err;
@@ -1915,7 +2011,7 @@ static ssz_error_t validate_value_bytes(
         }
         else
         {
-            validate_elem_ctx_t ctx = { .elem_type = type->elem_type };
+            validate_elem_ctx_t ctx = {.elem_type = type->elem_type};
             ssz_member_codec_t codec = {
                 .ctx = &ctx,
                 .write = NULL,
@@ -1951,7 +2047,14 @@ static ssz_error_t validate_value_bytes(
 
             if (type->kind == TYPE_PROGRESSIVE_LIST)
             {
-                err = ssz_deserialize_list_fixed(bytes, len, SSZ_NO_LIMIT, elem_size, copy, len, &count);
+                err = ssz_deserialize_list_fixed(
+                    bytes,
+                    len,
+                    SSZ_NO_LIMIT,
+                    elem_size,
+                    copy,
+                    len,
+                    &count);
             }
             else
             {
@@ -1974,7 +2077,7 @@ static ssz_error_t validate_value_bytes(
         }
         else
         {
-            validate_elem_ctx_t ctx = { .elem_type = type->elem_type };
+            validate_elem_ctx_t ctx = {.elem_type = type->elem_type};
             ssz_member_codec_t codec = {
                 .ctx = &ctx,
                 .write = NULL,
@@ -1991,7 +2094,13 @@ static ssz_error_t validate_value_bytes(
 
             if (type->kind == TYPE_PROGRESSIVE_LIST)
             {
-                return ssz_deserialize_list_variable(bytes, len, SSZ_NO_LIMIT, min_size, &codec, &count);
+                return ssz_deserialize_list_variable(
+                    bytes,
+                    len,
+                    SSZ_NO_LIMIT,
+                    min_size,
+                    &codec,
+                    &count);
             }
             else
             {
@@ -2002,7 +2111,7 @@ static ssz_error_t validate_value_bytes(
 
     if (type->kind == TYPE_CONTAINER)
     {
-        validate_container_ctx_t ctx = { .container = type->container };
+        validate_container_ctx_t ctx = {.container = type->container};
         ssz_member_codec_t codec = {
             .ctx = &ctx,
             .write = NULL,
@@ -2040,7 +2149,12 @@ static ssz_error_t validate_value_bytes(
         }
         else
         {
-            err = ssz_deserialize_container(bytes, len, fixed_sizes, type->container->field_count, &codec);
+            err = ssz_deserialize_container(
+                bytes,
+                len,
+                fixed_sizes,
+                type->container->field_count,
+                &codec);
         }
         free(fixed_sizes);
         return err;
@@ -2077,9 +2191,9 @@ static bool parse_case_type_name(const char *case_name, char *out_name, size_t o
     return true;
 }
 
-static const value_type_t TYPE_UINT8_T = { .kind = TYPE_UINT8 };
-static const value_type_t TYPE_UINT16_T = { .kind = TYPE_UINT16 };
-static const value_type_t TYPE_UINT64_T = { .kind = TYPE_UINT64 };
+static const value_type_t TYPE_UINT8_T = {.kind = TYPE_UINT8};
+static const value_type_t TYPE_UINT16_T = {.kind = TYPE_UINT16};
+static const value_type_t TYPE_UINT64_T = {.kind = TYPE_UINT64};
 
 static const value_type_t TYPE_LIST_UINT16_1024 = {
     .kind = TYPE_LIST,
@@ -2300,7 +2414,10 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
     if (!parse_case_type_name(case_name, type_name, sizeof(type_name)))
     {
         report->valid_failed++;
-        spec_report_record_failure(report, case_name, "failed to parse container type from case name");
+        spec_report_record_failure(
+            report,
+            case_name,
+            "failed to parse container type from case name");
         return;
     }
 
@@ -2317,7 +2434,8 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
     value_path = spec_join_path(case_path, "value.yaml");
     meta_path = spec_join_path(case_path, "meta.yaml");
 
-    if ((case_path == NULL) || (serialized_path == NULL) || (value_path == NULL) || (meta_path == NULL))
+    if ((case_path == NULL) || (serialized_path == NULL) || (value_path == NULL) ||
+        (meta_path == NULL))
     {
         report->valid_failed++;
         spec_report_record_failure(report, case_name, "failed to allocate case paths");
@@ -2360,7 +2478,8 @@ static void run_valid_case(spec_report_t *report, const char *suite_dir, const c
         goto done;
     }
 
-    if ((computed.len != serialized_len) || (memcmp(computed.bytes, serialized, serialized_len) != 0))
+    if ((computed.len != serialized_len) ||
+        (memcmp(computed.bytes, serialized, serialized_len) != 0))
     {
         report->valid_failed++;
         spec_report_record_failure(report, case_path, "round-trip serialization mismatch");
@@ -2401,7 +2520,10 @@ static void run_invalid_case(spec_report_t *report, const char *suite_dir, const
     if (!parse_case_type_name(case_name, type_name, sizeof(type_name)))
     {
         report->invalid_failed++;
-        spec_report_record_failure(report, case_name, "failed to parse container type from case name");
+        spec_report_record_failure(
+            report,
+            case_name,
+            "failed to parse container type from case name");
         return;
     }
 

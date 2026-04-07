@@ -1,7 +1,8 @@
+#include "ssz_serialize.h"
+
 #include <string.h>
 
 #include "ssz_internal.h"
-#include "ssz_serialize.h"
 
 static ssz_error_t ssz_internal_prepare_output(
     size_t required,
@@ -91,13 +92,17 @@ ssz_error_t ssz_serialize_uint64(uint64_t value, uint8_t out[8])
     return err;
 }
 
-ssz_error_t ssz_serialize_uint128(const uint8_t value[16], uint8_t out[16])
+ssz_error_t ssz_serialize_uint128(const uint8_t *value, size_t value_len, uint8_t out[16])
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((value == NULL) || (out == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (value_len < 16u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else
     {
@@ -107,13 +112,17 @@ ssz_error_t ssz_serialize_uint128(const uint8_t value[16], uint8_t out[16])
     return err;
 }
 
-ssz_error_t ssz_serialize_uint256(const uint8_t value[32], uint8_t out[32])
+ssz_error_t ssz_serialize_uint256(const uint8_t *value, size_t value_len, uint8_t out[32])
 {
     ssz_error_t err = SSZ_SUCCESS;
 
     if ((value == NULL) || (out == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (value_len < 32u)
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else
     {
@@ -212,8 +221,9 @@ ssz_error_t ssz_serialize_bitlist(
     {
         err = SSZ_ERR_OVERFLOW;
     }
-    else if (!ssz_internal_u64_to_size(bit_len / 8u, &delimiter_byte) ||
-             ssz_internal_add_overflow_size(delimiter_byte, 1u, &required))
+    else if (
+        !ssz_internal_u64_to_size(bit_len / 8u, &delimiter_byte) ||
+        ssz_internal_add_overflow_size(delimiter_byte, 1u, &required))
     {
         err = SSZ_ERR_OVERFLOW;
     }
@@ -326,7 +336,10 @@ ssz_error_t ssz_serialize_vector_variable(
     {
         err = SSZ_ERR_OVERFLOW;
     }
-    else if (ssz_internal_mul_overflow_size((size_t)element_count, SSZ_BYTES_PER_LENGTH_OFFSET, &fixed_region))
+    else if (ssz_internal_mul_overflow_size(
+                 (size_t)element_count,
+                 SSZ_BYTES_PER_LENGTH_OFFSET,
+                 &fixed_region))
     {
         err = SSZ_ERR_OVERFLOW;
     }
@@ -371,13 +384,16 @@ ssz_error_t ssz_serialize_vector_variable(
                 err = codec->write(codec->ctx, i, NULL, 0u, &expected_len);
                 if (err == SSZ_SUCCESS)
                 {
-                    ssz_internal_write_u32_le(&out[(size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET], (uint32_t)cursor);
+                    ssz_internal_write_u32_le(
+                        &out[(size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET],
+                        (uint32_t)cursor);
                     err = codec->write(codec->ctx, i, &out[cursor], out_cap - cursor, &written);
                     if ((err == SSZ_SUCCESS) && (written != expected_len))
                     {
                         err = SSZ_ERR_TYPE_MISMATCH;
                     }
-                    if ((err == SSZ_SUCCESS) && ssz_internal_add_overflow_size(cursor, written, &cursor))
+                    if ((err == SSZ_SUCCESS) &&
+                        ssz_internal_add_overflow_size(cursor, written, &cursor))
                     {
                         err = SSZ_ERR_OVERFLOW;
                     }
@@ -461,7 +477,10 @@ ssz_error_t ssz_serialize_list_variable(
     {
         err = SSZ_ERR_OVERFLOW;
     }
-    else if (ssz_internal_mul_overflow_size((size_t)element_count, SSZ_BYTES_PER_LENGTH_OFFSET, &fixed_region))
+    else if (ssz_internal_mul_overflow_size(
+                 (size_t)element_count,
+                 SSZ_BYTES_PER_LENGTH_OFFSET,
+                 &fixed_region))
     {
         err = SSZ_ERR_OVERFLOW;
     }
@@ -487,7 +506,9 @@ ssz_error_t ssz_serialize_list_variable(
                 }
                 else
                 {
-                    ssz_internal_write_u32_le(&out[(size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET], (uint32_t)cursor);
+                    ssz_internal_write_u32_le(
+                        &out[(size_t)i * SSZ_BYTES_PER_LENGTH_OFFSET],
+                        (uint32_t)cursor);
 
                     if (cursor > out_cap)
                     {
@@ -498,7 +519,8 @@ ssz_error_t ssz_serialize_list_variable(
                         size_t written = 0u;
 
                         err = codec->write(codec->ctx, i, &out[cursor], out_cap - cursor, &written);
-                        if ((err == SSZ_SUCCESS) && ssz_internal_add_overflow_size(cursor, written, &cursor))
+                        if ((err == SSZ_SUCCESS) &&
+                            ssz_internal_add_overflow_size(cursor, written, &cursor))
                         {
                             err = SSZ_ERR_OVERFLOW;
                         }
@@ -617,9 +639,16 @@ ssz_error_t ssz_serialize_container(
                         }
                         else
                         {
-                            err = codec->write(codec->ctx, i, &out[variable_cursor], out_cap - variable_cursor, &written);
-                            if ((err == SSZ_SUCCESS) &&
-                                ssz_internal_add_overflow_size(variable_cursor, written, &variable_cursor))
+                            err = codec->write(
+                                codec->ctx,
+                                i,
+                                &out[variable_cursor],
+                                out_cap - variable_cursor,
+                                &written);
+                            if ((err == SSZ_SUCCESS) && ssz_internal_add_overflow_size(
+                                                            variable_cursor,
+                                                            written,
+                                                            &variable_cursor))
                             {
                                 err = SSZ_ERR_OVERFLOW;
                             }
@@ -783,14 +812,16 @@ ssz_error_t ssz_serialize_compatible_union(
 {
     size_t payload_len = 0u;
     size_t total = 1u;
-    ssz_error_t err = ssz_internal_validate_compatible_union_schema(allowed_selectors, allowed_selector_count);
+    ssz_error_t err =
+        ssz_internal_validate_compatible_union_schema(allowed_selectors, allowed_selector_count);
 
     if (err != SSZ_SUCCESS)
     {
         /* schema validation error already captured */
     }
-    else if ((selector == 0u) || (selector > 127u) ||
-             !ssz_internal_selector_allowed(selector, allowed_selectors, allowed_selector_count))
+    else if (
+        (selector == 0u) || (selector > 127u) ||
+        !ssz_internal_selector_allowed(selector, allowed_selectors, allowed_selector_count))
     {
         err = SSZ_ERR_SELECTOR_INVALID;
     }
