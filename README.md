@@ -66,12 +66,9 @@ Hardware-accelerated SHA-256 via [AWS-LC](https://github.com/aws/aws-lc) with ba
 
 - MISRA C:2012 compliant (checked in CI via cppcheck)
 - CERT C compliant (checked in CI via clang-tidy)
-- Frama-C Eva static analysis
-- CBMC formal verification harnesses
 - GCC `-fanalyzer` and CodeQL
-- AddressSanitizer, UndefinedBehaviorSanitizer
+- AddressSanitizer, UndefinedBehaviorSanitizer, MemorySanitizer, ThreadSanitizer
 - libFuzzer harnesses for all modules
-- ABI stability checks
 
 ## Getting Started
 
