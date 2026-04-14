@@ -302,7 +302,17 @@ else()
   message(STATUS "Spec fixtures not found at ${SSZ_SPEC_FIXTURES_DIR} — skipping spec tests")
 endif()
 
-if(EXISTS "${SSZ_STATIC_FIXTURES_DIR}" AND EXISTS "${SSZ_STATIC_SCHEMA_SOURCE}")
+# test_ssz_static needs the per-fork ssz_static fixture tree (mainnet/ or
+# minimal/) — generic/phase0 alone is not enough. Some environments (e.g.
+# GitHub-hosted Windows runners) cannot reliably download the full fixture
+# artifact, so they ship only the generic subset; gate registration on the
+# presence of actual static fixtures so those environments cleanly skip.
+set(SSZ_STATIC_FIXTURES_PRESENT FALSE)
+if(EXISTS "${SSZ_STATIC_FIXTURES_DIR}/mainnet" OR EXISTS "${SSZ_STATIC_FIXTURES_DIR}/minimal")
+  set(SSZ_STATIC_FIXTURES_PRESENT TRUE)
+endif()
+
+if(SSZ_STATIC_FIXTURES_PRESENT AND EXISTS "${SSZ_STATIC_SCHEMA_SOURCE}")
   message(STATUS "Static spec fixtures found at ${SSZ_STATIC_FIXTURES_DIR} — registering ssz_static test")
 
   add_executable(
@@ -325,7 +335,7 @@ else()
   if(NOT EXISTS "${SSZ_STATIC_SCHEMA_SOURCE}")
     message(STATUS "Static schema not found at ${SSZ_STATIC_SCHEMA_SOURCE} — skipping ssz_static test")
   else()
-    message(STATUS "Static spec fixtures not found at ${SSZ_STATIC_FIXTURES_DIR} — skipping ssz_static test")
+    message(STATUS "Static spec fixtures not found under ${SSZ_STATIC_FIXTURES_DIR} (mainnet/ or minimal/) — skipping ssz_static test")
   endif()
 endif()
 

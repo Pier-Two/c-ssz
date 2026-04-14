@@ -49,6 +49,13 @@ jobs:
           path: tests/fixtures/
           if-no-files-found: error
 
+      - name: Upload generic fixtures artifact (Windows-friendly subset)
+        uses: actions/upload-artifact@v4
+        with:
+          name: consensus-spec-fixtures-generic
+          path: tests/fixtures/general/
+          if-no-files-found: error
+
       - name: Upload schema artifact
         uses: actions/upload-artifact@v4
         with:
@@ -175,17 +182,16 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Download fixtures
+      # Windows runners repeatedly fail to download the full fixture artifact
+      # (all forks × both presets × tens of thousands of ssz_static cases),
+      # so we pull only the ssz_generic subset here. test_ssz_static is
+      # auto-skipped by CMake when the schema file is absent, keeping
+      # Windows coverage limited to the ssz_generic targets.
+      - name: Download fixtures (generic only)
         uses: actions/download-artifact@v4
         with:
-          name: consensus-spec-fixtures
-          path: tests/fixtures/
-
-      - name: Download schema
-        uses: actions/download-artifact@v4
-        with:
-          name: consensus-spec-schema
-          path: tests/spec/generated/
+          name: consensus-spec-fixtures-generic
+          path: tests/fixtures/general/
 
       - name: Configure
         run: cmake -S . -B build/windows-spec -DCMAKE_BUILD_TYPE=Debug
