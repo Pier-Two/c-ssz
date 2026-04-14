@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #include <string.h>
 
 #include "ssz_hash.h"
@@ -257,7 +256,6 @@ static ssz_error_t ssz_internal_validate_multiproof_indices(
     ssz_error_t err = SSZ_SUCCESS;
     ssz_gindex_t stack_sorted_indices[SSZ_INTERNAL_VALIDATE_STACK_CAP];
     ssz_gindex_t *sorted_indices = stack_sorted_indices;
-    bool allocated = false;
 
     if ((indices == NULL) && (index_count != 0u))
     {
@@ -267,24 +265,7 @@ static ssz_error_t ssz_internal_validate_multiproof_indices(
     {
         if (index_count > SSZ_INTERNAL_VALIDATE_STACK_CAP)
         {
-            size_t alloc_size = 0u;
-
-            if (ssz_internal_mul_overflow_size(index_count, sizeof(*sorted_indices), &alloc_size))
-            {
-                err = SSZ_ERR_OVERFLOW;
-            }
-            else
-            {
-                sorted_indices = (ssz_gindex_t *)malloc(alloc_size);
-                if (sorted_indices == NULL)
-                {
-                    err = SSZ_ERR_INVALID_ARGUMENT;
-                }
-                else
-                {
-                    allocated = true;
-                }
-            }
+            err = SSZ_ERR_BUFFER_TOO_SMALL;
         }
         else
         {
@@ -305,15 +286,6 @@ static ssz_error_t ssz_internal_validate_multiproof_indices(
     else
     {
         /* No indices to validate. */
-    }
-
-    if (allocated)
-    {
-        free(sorted_indices);
-    }
-    else
-    {
-        /* Intentionally empty. */
     }
 
     return err;
@@ -995,7 +967,6 @@ ssz_error_t ssz_calculate_multi_merkle_root(
             {
                 ssz_gindex_t *map_indices = &scratch_indices[helper_count];
                 size_t map_cap = scratch_cap - helper_count;
-                size_t map_count = 0u;
                 size_t required = 0u;
 
                 if (ssz_internal_add_overflow_size(leaf_count, proof_count, &required))
@@ -1008,6 +979,8 @@ ssz_error_t ssz_calculate_multi_merkle_root(
                 }
                 else
                 {
+                    size_t map_count = 0u;
+
                     for (size_t i = 0u; i < leaf_count; i++)
                     {
                         map_indices[map_count] = indices[i];
