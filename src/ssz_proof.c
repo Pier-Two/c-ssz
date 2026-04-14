@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 
 #include "ssz_hash.h"
@@ -18,6 +19,10 @@ static int ssz_internal_compare_gindex_asc(ssz_gindex_t lhs, ssz_gindex_t rhs)
     {
         result = 1;
     }
+    else
+    {
+        /* Intentionally empty. */
+    }
 
     return result;
 }
@@ -33,6 +38,10 @@ static int ssz_internal_compare_gindex_desc(ssz_gindex_t lhs, ssz_gindex_t rhs)
     else if (lhs < rhs)
     {
         result = 1;
+    }
+    else
+    {
+        /* Intentionally empty. */
     }
 
     return result;
@@ -70,6 +79,10 @@ static int ssz_internal_compare_gindex_prefix(ssz_gindex_t lhs, ssz_gindex_t rhs
     else if (lhs_bits > rhs_bits)
     {
         result = 1;
+    }
+    else
+    {
+        /* Intentionally empty. */
     }
 
     return result;
@@ -225,7 +238,7 @@ static ssz_error_t ssz_internal_validate_sorted_multiproof_indices(
         }
         else
         {
-            /* No overlap — nothing to do. */
+            /* Intentionally empty. */
         }
     }
 
@@ -236,7 +249,15 @@ static ssz_error_t ssz_internal_validate_multiproof_indices(
     const ssz_gindex_t *indices,
     size_t index_count)
 {
+    enum
+    {
+        SSZ_INTERNAL_VALIDATE_STACK_CAP = 64
+    };
+
     ssz_error_t err = SSZ_SUCCESS;
+    ssz_gindex_t stack_sorted_indices[SSZ_INTERNAL_VALIDATE_STACK_CAP];
+    ssz_gindex_t *sorted_indices = stack_sorted_indices;
+    bool allocated = false;
 
     if ((indices == NULL) && (index_count != 0u))
     {
@@ -244,11 +265,55 @@ static ssz_error_t ssz_internal_validate_multiproof_indices(
     }
     else if (index_count != 0u)
     {
-        ssz_gindex_t sorted_indices[index_count];
+        if (index_count > SSZ_INTERNAL_VALIDATE_STACK_CAP)
+        {
+            size_t alloc_size = 0u;
 
-        (void)memcpy(sorted_indices, indices, index_count * sizeof(*sorted_indices));
-        ssz_internal_sort_gindex_prefix(sorted_indices, index_count);
-        err = ssz_internal_validate_sorted_multiproof_indices(sorted_indices, index_count);
+            if (ssz_internal_mul_overflow_size(index_count, sizeof(*sorted_indices), &alloc_size))
+            {
+                err = SSZ_ERR_OVERFLOW;
+            }
+            else
+            {
+                sorted_indices = (ssz_gindex_t *)malloc(alloc_size);
+                if (sorted_indices == NULL)
+                {
+                    err = SSZ_ERR_INVALID_ARGUMENT;
+                }
+                else
+                {
+                    allocated = true;
+                }
+            }
+        }
+        else
+        {
+            /* Use the fixed-size stack buffer. */
+        }
+
+        if (err == SSZ_SUCCESS)
+        {
+            (void)memcpy(sorted_indices, indices, index_count * sizeof(*sorted_indices));
+            ssz_internal_sort_gindex_prefix(sorted_indices, index_count);
+            err = ssz_internal_validate_sorted_multiproof_indices(sorted_indices, index_count);
+        }
+        else
+        {
+            /* Intentionally empty. */
+        }
+    }
+    else
+    {
+        /* No indices to validate. */
+    }
+
+    if (allocated)
+    {
+        free(sorted_indices);
+    }
+    else
+    {
+        /* Intentionally empty. */
     }
 
     return err;
@@ -389,7 +454,9 @@ static void ssz_internal_swap_pairs(
     if (lhs != rhs)
     {
         ssz_gindex_t index_tmp = indices[lhs];
-        ssz_chunk_t node_tmp = nodes[lhs];
+        ssz_chunk_t node_tmp;
+
+        (void)memcpy(&node_tmp, &nodes[lhs], sizeof(node_tmp));
 
         indices[lhs] = indices[rhs];
         nodes[lhs] = nodes[rhs];
@@ -471,7 +538,9 @@ static ssz_error_t ssz_internal_reduce_multi_merkle_nodes(
     for (size_t i = 0u; (i < count) && (err == SSZ_SUCCESS); i++)
     {
         ssz_gindex_t current_index = indices[i];
-        ssz_chunk_t current_node = nodes[i];
+        ssz_chunk_t current_node;
+
+        (void)memcpy(&current_node, &nodes[i], sizeof(current_node));
 
         indices[stack_count] = current_index;
         nodes[stack_count] = current_node;
@@ -488,20 +557,21 @@ static ssz_error_t ssz_internal_reduce_multi_merkle_nodes(
             {
                 break;
             }
+            size_t left_pos = ((lhs_index & 1u) == 0u) ? lhs_pos : rhs_pos;
+            size_t right_pos = (left_pos == lhs_pos) ? rhs_pos : lhs_pos;
+            ssz_chunk_t parent_node;
+
+            err = ssz_hash_2to1(hash_fn, &nodes[left_pos], &nodes[right_pos], &parent_node);
+            if (err == SSZ_SUCCESS)
+            {
+                stack_count -= 2u;
+                indices[stack_count] = ssz_generalized_index_parent(lhs_index);
+                nodes[stack_count] = parent_node;
+                stack_count++;
+            }
             else
             {
-                size_t left_pos = ((lhs_index & 1u) == 0u) ? lhs_pos : rhs_pos;
-                size_t right_pos = (left_pos == lhs_pos) ? rhs_pos : lhs_pos;
-                ssz_chunk_t parent_node;
-
-                err = ssz_hash_2to1(hash_fn, &nodes[left_pos], &nodes[right_pos], &parent_node);
-                if (err == SSZ_SUCCESS)
-                {
-                    stack_count -= 2u;
-                    indices[stack_count] = ssz_generalized_index_parent(lhs_index);
-                    nodes[stack_count] = parent_node;
-                    stack_count++;
-                }
+                /* Intentionally empty. */
             }
         }
     }
@@ -928,35 +998,32 @@ ssz_error_t ssz_calculate_multi_merkle_root(
                 size_t map_count = 0u;
                 size_t required = 0u;
 
-                if (err == SSZ_SUCCESS)
+                if (ssz_internal_add_overflow_size(leaf_count, proof_count, &required))
                 {
-                    if (ssz_internal_add_overflow_size(leaf_count, proof_count, &required))
+                    err = SSZ_ERR_OVERFLOW;
+                }
+                else if (required > map_cap)
+                {
+                    err = SSZ_ERR_BUFFER_TOO_SMALL;
+                }
+                else
+                {
+                    for (size_t i = 0u; i < leaf_count; i++)
                     {
-                        err = SSZ_ERR_OVERFLOW;
+                        map_indices[map_count] = indices[i];
+                        scratch_nodes[map_count] = leaves[i];
+                        map_count++;
                     }
-                    else if (required > map_cap)
-                    {
-                        err = SSZ_ERR_BUFFER_TOO_SMALL;
-                    }
-                    else
-                    {
-                        for (size_t i = 0u; i < leaf_count; i++)
-                        {
-                            map_indices[map_count] = indices[i];
-                            scratch_nodes[map_count] = leaves[i];
-                            map_count++;
-                        }
 
-                        for (size_t i = 0u; i < proof_count; i++)
-                        {
-                            map_indices[map_count] = scratch_indices[i];
-                            scratch_nodes[map_count] = proof[i];
-                            map_count++;
-                        }
-
-                        err = ssz_internal_reduce_multi_merkle_nodes(
-                            map_indices, scratch_nodes, map_count, hash_fn, out_root);
+                    for (size_t i = 0u; i < proof_count; i++)
+                    {
+                        map_indices[map_count] = scratch_indices[i];
+                        scratch_nodes[map_count] = proof[i];
+                        map_count++;
                     }
+
+                    err = ssz_internal_reduce_multi_merkle_nodes(
+                        map_indices, scratch_nodes, map_count, hash_fn, out_root);
                 }
             }
         }
