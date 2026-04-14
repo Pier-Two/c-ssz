@@ -27,19 +27,35 @@ jobs:
       - name: Generate consensus-spec fixtures
         run: |
           set -euo pipefail
-          # Spec tests only consume ssz_generic fixtures.
-          rm -rf tests/fixtures
+          # Spec tests consume both ssz_generic and schema-driven ssz_static fixtures.
+          rm -rf tests/fixtures tests/spec/generated/ssz_static_schema_generated.h tests/spec/generated/ssz_static_schema_generated.c
           cd external/consensus-specs
           uv sync --all-extras
           uv run python -m pysetup.generate_specs --all-forks
           uv run --extra generator --no-editable --reinstall-package=eth-consensus-specs \
             python -m tests.generators.main --output ../../tests/fixtures --runners ssz_generic
+          uv run --extra generator --no-editable --reinstall-package=eth-consensus-specs \
+            python -m tests.generators.main --output ../../tests/fixtures --runners ssz_static
+          uv run python ../../tests/spec/generate_ssz_static_schema.py \
+            --fixtures-root ../../tests/fixtures \
+            --pyspec-root tests/core/pyspec \
+            --output-header ../../tests/spec/generated/ssz_static_schema_generated.h \
+            --output-source ../../tests/spec/generated/ssz_static_schema_generated.c
 
       - name: Upload fixtures artifact
         uses: actions/upload-artifact@v4
         with:
           name: consensus-spec-fixtures
           path: tests/fixtures/
+          if-no-files-found: error
+
+      - name: Upload schema artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: consensus-spec-schema
+          path: |
+            tests/spec/generated/ssz_static_schema_generated.h
+            tests/spec/generated/ssz_static_schema_generated.c
           if-no-files-found: error
 
   linux-spec-test:
@@ -64,6 +80,12 @@ jobs:
         with:
           name: consensus-spec-fixtures
           path: tests/fixtures/
+
+      - name: Download schema
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-schema
+          path: tests/spec/generated/
 
       - name: Install toolchain packages
         run: |
@@ -126,6 +148,12 @@ jobs:
           name: consensus-spec-fixtures
           path: tests/fixtures/
 
+      - name: Download schema
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-schema
+          path: tests/spec/generated/
+
       - name: Configure
         run: cmake -S . -B build/macos-spec -DCMAKE_BUILD_TYPE=Debug
 
@@ -152,6 +180,12 @@ jobs:
         with:
           name: consensus-spec-fixtures
           path: tests/fixtures/
+
+      - name: Download schema
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-schema
+          path: tests/spec/generated/
 
       - name: Configure
         run: cmake -S . -B build/windows-spec -DCMAKE_BUILD_TYPE=Debug
@@ -208,6 +242,12 @@ jobs:
           name: consensus-spec-fixtures
           path: tests/fixtures/
 
+      - name: Download schema
+        uses: actions/download-artifact@v4
+        with:
+          name: consensus-spec-schema
+          path: tests/spec/generated/
+
       - name: Install runtime packages
         run: |
           set -euo pipefail
@@ -230,7 +270,6 @@ jobs:
           mkdir -p build
           cat > build/asan-ubsan.ignore <<'EOF'
           src:*lib/mincrypt/sha256.c
-          src:*tests/test_ssz_static_beacon_state.c
           EOF
 
       - name: Configure

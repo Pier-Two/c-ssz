@@ -72,6 +72,11 @@ fixtures:
 	    python -m tests.generators.main --output ../../tests/fixtures --runners ssz_generic; \
 	  uv run --extra generator --no-editable --reinstall-package=eth-consensus-specs \
 	    python -m tests.generators.main --output ../../tests/fixtures --runners ssz_static; \
+	  uv run python ../../tests/spec/generate_ssz_static_schema.py \
+	    --fixtures-root ../../tests/fixtures \
+	    --pyspec-root tests/core/pyspec \
+	    --output-header ../../tests/spec/generated/ssz_static_schema_generated.h \
+	    --output-source ../../tests/spec/generated/ssz_static_schema_generated.c; \
 	else \
 	  echo "uv not found; using python3 + pip fallback"; \
 	  cd external/consensus-specs; \
@@ -82,6 +87,11 @@ fixtures:
 	  python -m pysetup.generate_specs --all-forks; \
 	  python -m tests.generators.main --output ../../tests/fixtures --runners ssz_generic; \
 	  python -m tests.generators.main --output ../../tests/fixtures --runners ssz_static; \
+	  python ../../tests/spec/generate_ssz_static_schema.py \
+	    --fixtures-root ../../tests/fixtures \
+	    --pyspec-root tests/core/pyspec \
+	    --output-header ../../tests/spec/generated/ssz_static_schema_generated.h \
+	    --output-source ../../tests/spec/generated/ssz_static_schema_generated.c; \
 	fi
 
 bench:
