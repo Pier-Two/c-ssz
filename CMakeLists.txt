@@ -196,21 +196,31 @@ target_link_libraries(test_merkle_cache_internal PRIVATE ${SSZ_PLATFORM_LIBS} ${
 add_test(NAME test_merkle_cache_internal COMMAND test_merkle_cache_internal)
 
 
-# --- Consensus-spec SSZ generic fixture tests ---
+# --- Consensus-spec spec-fixture tests ---
+set(SSZ_SPEC_COMMON_SOURCES
+  tests/spec/spec_common.c
+  tests/spec/snappy_decode.c
+  tests/spec/yaml_parser.c
+)
+
 set(SSZ_SPEC_FIXTURES_DIR
   "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/general/phase0/ssz_generic"
   CACHE PATH
   "Path to consensus-spec SSZ generic fixtures root"
 )
 
+set(SSZ_STATIC_FIXTURES_DIR
+  "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
+  CACHE PATH
+  "Path to consensus-spec fixtures root"
+)
+
+set(SSZ_STATIC_SCHEMA_SOURCE
+  "${CMAKE_CURRENT_SOURCE_DIR}/tests/spec/generated/ssz_static_schema_generated.c"
+)
+
 if(EXISTS "${SSZ_SPEC_FIXTURES_DIR}")
   message(STATUS "Spec fixtures found at ${SSZ_SPEC_FIXTURES_DIR} — registering spec tests")
-
-  set(SSZ_SPEC_COMMON_SOURCES
-    tests/spec/spec_common.c
-    tests/spec/snappy_decode.c
-    tests/spec/yaml_parser.c
-  )
 
   function(ssz_add_spec_test target_name fixture_handler source_file)
     file(TO_CMAKE_PATH "${SSZ_SPEC_FIXTURES_DIR}/${fixture_handler}" SPEC_TESTS_DIR)
@@ -290,6 +300,43 @@ if(EXISTS "${SSZ_SPEC_FIXTURES_DIR}")
   )
 else()
   message(STATUS "Spec fixtures not found at ${SSZ_SPEC_FIXTURES_DIR} — skipping spec tests")
+endif()
+
+# test_ssz_static needs the per-fork ssz_static fixture tree (mainnet/ or
+# minimal/) — generic/phase0 alone is not enough. Some environments (e.g.
+# GitHub-hosted Windows runners) cannot reliably download the full fixture
+# artifact, so they ship only the generic subset; gate registration on the
+# presence of actual static fixtures so those environments cleanly skip.
+set(SSZ_STATIC_FIXTURES_PRESENT FALSE)
+if(EXISTS "${SSZ_STATIC_FIXTURES_DIR}/mainnet" OR EXISTS "${SSZ_STATIC_FIXTURES_DIR}/minimal")
+  set(SSZ_STATIC_FIXTURES_PRESENT TRUE)
+endif()
+
+if(SSZ_STATIC_FIXTURES_PRESENT AND EXISTS "${SSZ_STATIC_SCHEMA_SOURCE}")
+  message(STATUS "Static spec fixtures found at ${SSZ_STATIC_FIXTURES_DIR} — registering ssz_static test")
+
+  add_executable(
+    test_ssz_static
+    tests/spec/test_ssz_static.c
+    tests/spec/ssz_static_runtime.c
+    ${SSZ_SPEC_COMMON_SOURCES}
+    ${SSZ_STATIC_SCHEMA_SOURCE}
+  )
+  target_include_directories(test_ssz_static PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/spec/generated
+  )
+  target_compile_definitions(test_ssz_static PRIVATE
+    SSZ_STATIC_FIXTURES_DIR="${SSZ_STATIC_FIXTURES_DIR}"
+  )
+  target_link_libraries(test_ssz_static PRIVATE ssz)
+  add_test(NAME test_ssz_static COMMAND test_ssz_static)
+else()
+  if(NOT EXISTS "${SSZ_STATIC_SCHEMA_SOURCE}")
+    message(STATUS "Static schema not found at ${SSZ_STATIC_SCHEMA_SOURCE} — skipping ssz_static test")
+  else()
+    message(STATUS "Static spec fixtures not found under ${SSZ_STATIC_FIXTURES_DIR} (mainnet/ or minimal/) — skipping ssz_static test")
+  endif()
 endif()
 
 endif() # SSZ_BUILD_TESTS
