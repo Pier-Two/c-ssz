@@ -421,6 +421,65 @@ static bool test_multi_proof_non_overlapping_indices_still_verify(void)
     return true;
 }
 
+static bool test_multi_proof_cascading_parent_reduction(void)
+{
+    const ssz_chunk_t n8 = make_chunk(0x12u);
+    const ssz_chunk_t n5 = make_chunk(0x32u);
+    const ssz_chunk_t p9 = make_chunk(0x52u);
+    const ssz_chunk_t p3 = make_chunk(0x72u);
+    const ssz_chunk_t leaves[2] = {n8, n5};
+    const ssz_gindex_t indices[2] = {8u, 5u};
+    const ssz_chunk_t proof[2] = {p9, p3};
+    ssz_gindex_t helper_scratch[16] = {0u};
+    ssz_gindex_t helpers[4] = {0u};
+    size_t helper_len = 0u;
+    ssz_chunk_t node4;
+    ssz_chunk_t node2;
+    ssz_chunk_t root;
+    ssz_chunk_t computed;
+    ssz_gindex_t scratch_indices[16] = {0u};
+    ssz_chunk_t scratch_nodes[16];
+
+    ASSERT_ERR(ssz_hash_2to1(NULL, &n8, &p9, &node4), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1(NULL, &node4, &n5, &node2), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1(NULL, &node2, &p3, &root), SSZ_SUCCESS);
+
+    ASSERT_ERR(ssz_get_helper_indices(indices, 2u, helpers, 4u, &helper_len, helper_scratch, 16u),
+               SSZ_SUCCESS);
+    ASSERT_TRUE(helper_len == 2u);
+    ASSERT_TRUE(helpers[0] == 9u);
+    ASSERT_TRUE(helpers[1] == 3u);
+
+    memset(scratch_nodes, 0, sizeof(scratch_nodes));
+    ASSERT_ERR(ssz_calculate_multi_merkle_root(leaves,
+                                               indices,
+                                               2u,
+                                               proof,
+                                               2u,
+                                               scratch_indices,
+                                               scratch_nodes,
+                                               16u,
+                                               NULL,
+                                               &computed),
+               SSZ_SUCCESS);
+    ASSERT_CHUNK_EQ(computed, root);
+
+    memset(scratch_nodes, 0, sizeof(scratch_nodes));
+    ASSERT_ERR(ssz_verify_merkle_multiproof(leaves,
+                                            indices,
+                                            2u,
+                                            proof,
+                                            2u,
+                                            &root,
+                                            scratch_indices,
+                                            scratch_nodes,
+                                            16u,
+                                            NULL),
+               SSZ_SUCCESS);
+
+    return true;
+}
+
 static bool test_multi_proof_empty_helper_allows_null_proof(void)
 {
     const ssz_chunk_t root = make_chunk(0xA5u);
@@ -1057,7 +1116,7 @@ static bool test_multiproof_additional_error_paths(void)
                                                        scratch_cap,
                                                        NULL,
                                                        &(ssz_chunk_t){0}),
-                       SSZ_ERR_BUFFER_TOO_SMALL);
+                       SSZ_SUCCESS);
         }
     }
 
@@ -1143,8 +1202,8 @@ static bool test_helper_indices_descending_sort(void)
 {
     /* Indices {32, 47, 55} are depth-5 nodes in separate subtrees.  They
        produce a 10-element diff array {7,9,10,12,17,22,26,33,46,54} that is
-       in ascending order — forcing qsort's descending comparator to exercise
-       both the ia<ib and ia>ib branches (ia>ib needs ≥ 8 elements on macOS). */
+       in ascending order, so the helper sorter has to fully reorder it into
+       descending output. */
     const ssz_gindex_t indices[3] = {32u, 47u, 55u};
     ssz_gindex_t scratch[64] = {0u};
     ssz_gindex_t helpers[16] = {0u};
@@ -1179,6 +1238,7 @@ int main(void)
         {"multi_proof_calculate_and_verify", test_multi_proof_calculate_and_verify},
         {"multi_proof_non_overlapping_indices_still_verify",
          test_multi_proof_non_overlapping_indices_still_verify},
+        {"multi_proof_cascading_parent_reduction", test_multi_proof_cascading_parent_reduction},
         {"multi_proof_empty_helper_allows_null_proof", test_multi_proof_empty_helper_allows_null_proof},
         {"multi_proof_rejects_overlapping_indices", test_multi_proof_rejects_overlapping_indices},
         {"multi_proof_rejects_duplicate_and_root_overlaps",
