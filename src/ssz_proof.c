@@ -504,10 +504,11 @@ static ssz_error_t ssz_internal_reduce_multi_merkle_round(
     bool *out_merged_any)
 {
     size_t write_pos = 0u;
+    size_t read_pos = 0u;
     bool merged_any = false;
     ssz_error_t err = SSZ_SUCCESS;
 
-    for (size_t read_pos = 0u; (read_pos < count) && (err == SSZ_SUCCESS);)
+    while ((read_pos < count) && (err == SSZ_SUCCESS))
     {
         if (((read_pos + 1u) < count) &&
             ssz_internal_gindex_are_siblings(indices[read_pos], indices[read_pos + 1u]))
@@ -593,6 +594,10 @@ static ssz_error_t ssz_internal_reduce_multi_merkle_nodes(
     else if (err == SSZ_SUCCESS)
     {
         *out_root = nodes[0];
+    }
+    else
+    {
+        /* Intentionally empty. */
     }
 
     return err;
