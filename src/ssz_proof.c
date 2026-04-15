@@ -495,6 +495,58 @@ static bool ssz_internal_gindex_are_siblings(ssz_gindex_t lhs, ssz_gindex_t rhs)
     return (lhs > 1u) && (rhs > 1u) && (ssz_generalized_index_sibling(lhs) == rhs);
 }
 
+static ssz_error_t ssz_internal_reduce_multi_merkle_round(
+    ssz_gindex_t *indices,
+    ssz_chunk_t *nodes,
+    size_t count,
+    const ssz_hash_fn_t *hash_fn,
+    size_t *out_count,
+    bool *out_merged_any)
+{
+    size_t write_pos = 0u;
+    bool merged_any = false;
+    ssz_error_t err = SSZ_SUCCESS;
+
+    for (size_t read_pos = 0u; (read_pos < count) && (err == SSZ_SUCCESS);)
+    {
+        if (((read_pos + 1u) < count) &&
+            ssz_internal_gindex_are_siblings(indices[read_pos], indices[read_pos + 1u]))
+        {
+            size_t lhs_pos = read_pos;
+            size_t rhs_pos = read_pos + 1u;
+            size_t left_pos = ((indices[lhs_pos] & 1u) == 0u) ? lhs_pos : rhs_pos;
+            size_t right_pos = (left_pos == lhs_pos) ? rhs_pos : lhs_pos;
+            ssz_chunk_t parent_node;
+
+            err = ssz_hash_2to1(hash_fn, &nodes[left_pos], &nodes[right_pos], &parent_node);
+            if (err == SSZ_SUCCESS)
+            {
+                indices[write_pos] = ssz_generalized_index_parent(indices[lhs_pos]);
+                nodes[write_pos] = parent_node;
+                write_pos++;
+                read_pos += 2u;
+                merged_any = true;
+            }
+            else
+            {
+                /* Intentionally empty. */
+            }
+        }
+        else
+        {
+            indices[write_pos] = indices[read_pos];
+            nodes[write_pos] = nodes[read_pos];
+            write_pos++;
+            read_pos++;
+        }
+    }
+
+    *out_count = write_pos;
+    *out_merged_any = merged_any;
+
+    return err;
+}
+
 static ssz_error_t ssz_internal_reduce_multi_merkle_nodes(
     ssz_gindex_t *indices,
     ssz_chunk_t *nodes,
@@ -502,62 +554,45 @@ static ssz_error_t ssz_internal_reduce_multi_merkle_nodes(
     const ssz_hash_fn_t *hash_fn,
     ssz_chunk_t *out_root)
 {
-    size_t stack_count = 0u;
+    size_t active_count = count;
     ssz_error_t err = SSZ_SUCCESS;
 
-    ssz_internal_sort_pairs_desc(indices, nodes, count);
-
-    for (size_t i = 0u; (i < count) && (err == SSZ_SUCCESS); i++)
+    if (active_count > 1u)
     {
-        ssz_gindex_t current_index = indices[i];
-        ssz_chunk_t current_node;
+        ssz_internal_sort_pairs_desc(indices, nodes, active_count);
+    }
 
-        (void)memcpy(&current_node, &nodes[i], sizeof(current_node));
+    while ((active_count > 1u) && (err == SSZ_SUCCESS))
+    {
+        size_t reduced_count = 0u;
+        bool merged_any = false;
 
-        indices[stack_count] = current_index;
-        nodes[stack_count] = current_node;
-        stack_count++;
-
-        while ((stack_count >= 2u) && (err == SSZ_SUCCESS))
+        err = ssz_internal_reduce_multi_merkle_round(
+            indices, nodes, active_count, hash_fn, &reduced_count, &merged_any);
+        if (err == SSZ_SUCCESS)
         {
-            size_t lhs_pos = stack_count - 2u;
-            size_t rhs_pos = stack_count - 1u;
-            ssz_gindex_t lhs_index = indices[lhs_pos];
-            ssz_gindex_t rhs_index = indices[rhs_pos];
-
-            if (!ssz_internal_gindex_are_siblings(lhs_index, rhs_index))
+            if (!merged_any)
             {
-                break;
-            }
-            size_t left_pos = ((lhs_index & 1u) == 0u) ? lhs_pos : rhs_pos;
-            size_t right_pos = (left_pos == lhs_pos) ? rhs_pos : lhs_pos;
-            ssz_chunk_t parent_node;
-
-            err = ssz_hash_2to1(hash_fn, &nodes[left_pos], &nodes[right_pos], &parent_node);
-            if (err == SSZ_SUCCESS)
-            {
-                stack_count -= 2u;
-                indices[stack_count] = ssz_generalized_index_parent(lhs_index);
-                nodes[stack_count] = parent_node;
-                stack_count++;
+                err = SSZ_ERR_PROOF_INVALID;
             }
             else
             {
-                /* Intentionally empty. */
+                active_count = reduced_count;
+                if (active_count > 1u)
+                {
+                    ssz_internal_sort_pairs_desc(indices, nodes, active_count);
+                }
             }
         }
     }
 
-    if (err == SSZ_SUCCESS)
+    if ((err == SSZ_SUCCESS) && ((active_count != 1u) || (indices[0] != 1u)))
     {
-        if ((stack_count != 1u) || (indices[0] != 1u))
-        {
-            err = SSZ_ERR_PROOF_INVALID;
-        }
-        else
-        {
-            *out_root = nodes[0];
-        }
+        err = SSZ_ERR_PROOF_INVALID;
+    }
+    else if (err == SSZ_SUCCESS)
+    {
+        *out_root = nodes[0];
     }
 
     return err;
