@@ -1050,7 +1050,7 @@ static bool test_deserialize_compatible_union_valid_invalid(void)
     return true;
 }
 
-static bool test_deserialize_progressive_direct_calls(void)
+static bool test_deserialize_direct_calls(void)
 {
     const size_t field_fixed_sizes[3] = {1u, 0u, 2u};
     const uint8_t container_encoded[9] = {
@@ -1940,7 +1940,7 @@ int main(void)
          test_deserialize_union_fixed_width_length_enforcement},
         {"deserialize_compatible_union_valid_invalid",
          test_deserialize_compatible_union_valid_invalid},
-        {"deserialize_progressive_direct_calls", test_deserialize_progressive_direct_calls},
+        {"deserialize_direct_calls", test_deserialize_direct_calls},
         {"deserialize_error_cases", test_deserialize_error_cases},
         {"deserialize_bitfield_error_paths", test_deserialize_bitfield_error_paths},
         {"deserialize_variable_sequence_error_paths",

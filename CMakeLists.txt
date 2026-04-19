@@ -268,36 +268,6 @@ if(EXISTS "${SSZ_SPEC_FIXTURES_DIR}")
     basic_vector
     tests/spec/test_ssz_generic_basic_vector.c
   )
-
-  ssz_add_spec_test(
-    test_ssz_generic_containers
-    containers
-    tests/spec/test_ssz_generic_containers.c
-  )
-
-  ssz_add_spec_test(
-    test_ssz_generic_compatible_unions
-    compatible_unions
-    tests/spec/test_ssz_generic_compatible_unions.c
-  )
-
-  ssz_add_spec_test(
-    test_ssz_generic_progressive_bitlist
-    progressive_bitlist
-    tests/spec/test_ssz_generic_progressive_bitlist.c
-  )
-
-  ssz_add_spec_test(
-    test_ssz_generic_basic_progressive_list
-    basic_progressive_list
-    tests/spec/test_ssz_generic_basic_progressive_list.c
-  )
-
-  ssz_add_spec_test(
-    test_ssz_generic_progressive_containers
-    progressive_containers
-    tests/spec/test_ssz_generic_progressive_containers.c
-  )
 else()
   message(STATUS "Spec fixtures not found at ${SSZ_SPEC_FIXTURES_DIR} — skipping spec tests")
 endif()

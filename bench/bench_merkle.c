@@ -252,20 +252,6 @@ UBENCH(merkle, merkleize)
     ubench_do_nothing((void *)&root);
 }
 
-UBENCH(merkle, merkleize_progressive)
-{
-    bench_init_merkle_data();
-    if (g_init_state != 1)
-    {
-        return;
-    }
-
-    ssz_chunk_t root;
-    BENCH_EXPECT_OK(ssz_merkleize_progressive(
-        &g_tree[MERKLE_LEAF_COUNT], MERKLE_LEAF_COUNT, &g_bench_merkle_scratch, NULL, &root));
-    ubench_do_nothing((void *)&root);
-}
-
 UBENCH(merkle, mix_in_length)
 {
     bench_init_merkle_data();

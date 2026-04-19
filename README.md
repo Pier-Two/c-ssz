@@ -31,7 +31,6 @@ See [`ssz_serialize.h`](include/ssz_serialize.h) and [`ssz_deserialize.h`](inclu
 Complete hash tree root computation for all SSZ types, including:
 
 - Standard `merkleize` with chunk limits
-- Progressive merkleization for `ProgressiveList`, `ProgressiveBitlist`, and `ProgressiveContainer` (EIP-7916, EIP-7495)
 - `mix_in_length`, `mix_in_selector`, `mix_in_active_fields`
 
 All merkleization functions use an iterative implementation with caller-provided scratch buffers. See [`ssz_merkle.h`](include/ssz_merkle.h).
