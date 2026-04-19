@@ -738,7 +738,7 @@ static bool test_serialize_compatible_union_valid_and_invalid_selectors(void)
     return true;
 }
 
-static bool test_serialize_progressive_direct_calls(void)
+static bool test_serialize_direct_calls(void)
 {
     const size_t field_fixed_sizes[3] = {1u, 0u, 2u};
     const uint8_t f0[] = {0x01u};
@@ -2359,7 +2359,7 @@ int main(void)
          test_serialize_union_none_normal_and_size_query},
         {"serialize_compatible_union_valid_and_invalid_selectors",
          test_serialize_compatible_union_valid_and_invalid_selectors},
-        {"serialize_progressive_direct_calls", test_serialize_progressive_direct_calls},
+        {"serialize_direct_calls", test_serialize_direct_calls},
         {"serialize_error_cases", test_serialize_error_cases},
         {"serialize_bitvector_and_bitlist_error_paths",
          test_serialize_bitvector_and_bitlist_error_paths},

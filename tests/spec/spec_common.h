@@ -64,45 +64,6 @@ static const ssz_merkle_scratch_t g_spec_merkle_scratch = {
         &g_spec_merkle_scratch,                                                                      \
         (hash_fn),                                                                                   \
         (out_root))
-#define ssz_merkleize_progressive(chunks, chunk_count, hash_fn, out_root)                           \
-    ssz_merkleize_progressive(                                                                       \
-        (chunks),                                                                                    \
-        (chunk_count),                                                                               \
-        &g_spec_merkle_scratch,                                                                      \
-        (hash_fn),                                                                                   \
-        (out_root))
-#define ssz_hash_tree_root_progressive_container(field_count, active_fields, active_fields_len, codec, hash_fn, out_root) \
-    ssz_hash_tree_root_progressive_container(                                                        \
-        (field_count),                                                                               \
-        (active_fields),                                                                             \
-        (active_fields_len),                                                                         \
-        (codec),                                                                                     \
-        &g_spec_merkle_scratch,                                                                      \
-        (hash_fn),                                                                                   \
-        (out_root))
-#define ssz_hash_tree_root_progressive_list_fixed(elements, element_count, element_size, hash_fn, out_root) \
-    ssz_hash_tree_root_progressive_list_fixed(                                                       \
-        (elements),                                                                                  \
-        (element_count),                                                                             \
-        (element_size),                                                                              \
-        &g_spec_merkle_scratch,                                                                      \
-        (hash_fn),                                                                                   \
-        (out_root))
-#define ssz_hash_tree_root_progressive_list_composite(element_count, codec, hash_fn, out_root)      \
-    ssz_hash_tree_root_progressive_list_composite(                                                   \
-        (element_count),                                                                             \
-        (codec),                                                                                     \
-        &g_spec_merkle_scratch,                                                                      \
-        (hash_fn),                                                                                   \
-        (out_root))
-#define ssz_hash_tree_root_progressive_bitlist(bits_le, bits_le_len, bit_len, hash_fn, out_root)   \
-    ssz_hash_tree_root_progressive_bitlist(                                                          \
-        (bits_le),                                                                                   \
-        (bits_le_len),                                                                               \
-        (bit_len),                                                                                   \
-        &g_spec_merkle_scratch,                                                                      \
-        (hash_fn),                                                                                   \
-        (out_root))
 
 typedef struct
 {

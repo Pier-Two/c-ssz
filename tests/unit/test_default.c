@@ -258,8 +258,8 @@ static bool test_default_sequence_helpers(void)
     uint64_t bit_len = 3u;
     uint8_t vector_fixed[7] = {0xCCu, 0xCCu, 0xCCu, 0xCCu, 0xCCu, 0xCCu, 0xCCu};
     uint64_t list_count = 9u;
-    uint64_t progressive_count = 7u;
-    uint64_t progressive_bit_len = 5u;
+    uint64_t second_list_count = 7u;
+    uint64_t second_bit_len = 5u;
 
     ASSERT_ERR(ssz_default_bitvector(bitvector, sizeof(bitvector), 10u), SSZ_SUCCESS);
     ASSERT_MEM_EQ(bitvector, ((const uint8_t[4]){0x00u, 0x00u, 0xAAu, 0xAAu}), sizeof(bitvector));
@@ -273,11 +273,11 @@ static bool test_default_sequence_helpers(void)
                   sizeof(vector_fixed));
 
     ASSERT_ERR(ssz_default_list(&list_count), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_default_list(&progressive_count), SSZ_SUCCESS);
-    ASSERT_ERR(ssz_default_bitlist(&progressive_bit_len), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_default_list(&second_list_count), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_default_bitlist(&second_bit_len), SSZ_SUCCESS);
     ASSERT_TRUE(list_count == 0u);
-    ASSERT_TRUE(progressive_count == 0u);
-    ASSERT_TRUE(progressive_bit_len == 0u);
+    ASSERT_TRUE(second_list_count == 0u);
+    ASSERT_TRUE(second_bit_len == 0u);
 
     ASSERT_ERR(ssz_default_bitvector(bitvector, sizeof(bitvector), 0u), SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_default_bitvector(NULL, 0u, 8u), SSZ_ERR_BUFFER_TOO_SMALL);
@@ -346,7 +346,7 @@ static bool test_default_composite_helpers(void)
     ssz_member_codec_t container_codec = make_stateful_codec(&container_ctx);
     const size_t field_fixed_sizes[] = {1u, 0u, 3u};
 
-    stateful_entry_t progressive_entries[] = {
+    stateful_entry_t sparse_entries[] = {
         {
             .id = 0u,
             .current = {0xD0u},
@@ -362,11 +362,11 @@ static bool test_default_composite_helpers(void)
             .default_len = 1u,
         },
     };
-    stateful_codec_ctx_t progressive_ctx = {
-        .entries = progressive_entries,
-        .entry_count = sizeof(progressive_entries) / sizeof(progressive_entries[0]),
+    stateful_codec_ctx_t sparse_ctx = {
+        .entries = sparse_entries,
+        .entry_count = sizeof(sparse_entries) / sizeof(sparse_entries[0]),
     };
-    ssz_member_codec_t progressive_codec = make_stateful_codec(&progressive_ctx);
+    ssz_member_codec_t sparse_codec = make_stateful_codec(&sparse_ctx);
 
     ASSERT_ERR(ssz_default_vector_composite(2u, &vector_codec), SSZ_SUCCESS);
     ASSERT_TRUE(vector_entries[0].default_calls == 1u);
@@ -384,17 +384,17 @@ static bool test_default_composite_helpers(void)
             container_entries[i].default_len);
     }
 
-    ASSERT_ERR(ssz_default_container((const size_t[]){1u, 0u}, 2u, &progressive_codec), SSZ_SUCCESS);
-    ASSERT_TRUE(progressive_entries[0].default_calls == 1u);
-    ASSERT_TRUE(progressive_entries[1].default_calls == 1u);
+    ASSERT_ERR(ssz_default_container((const size_t[]){1u, 0u}, 2u, &sparse_codec), SSZ_SUCCESS);
+    ASSERT_TRUE(sparse_entries[0].default_calls == 1u);
+    ASSERT_TRUE(sparse_entries[1].default_calls == 1u);
     ASSERT_MEM_EQ(
-        progressive_entries[0].current,
-        progressive_entries[0].default_bytes,
-        progressive_entries[0].default_len);
+        sparse_entries[0].current,
+        sparse_entries[0].default_bytes,
+        sparse_entries[0].default_len);
     ASSERT_MEM_EQ(
-        progressive_entries[1].current,
-        progressive_entries[1].default_bytes,
-        progressive_entries[1].default_len);
+        sparse_entries[1].current,
+        sparse_entries[1].default_bytes,
+        sparse_entries[1].default_len);
 
     ASSERT_ERR(ssz_default_vector_composite(0u, &vector_codec), SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(

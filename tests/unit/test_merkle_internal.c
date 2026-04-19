@@ -609,7 +609,7 @@ static bool test_internal_fast_merkleize_paths(void)
     return true;
 }
 
-static bool test_internal_subtree_progressive_and_public_overflows(void)
+static bool test_internal_subtree_and_public_overflows(void)
 {
     ssz_chunk_t out_root;
     const ssz_chunk_t *zero_hashes = ssz_hash_default_zero_hashes();
@@ -688,27 +688,6 @@ static bool test_internal_subtree_progressive_and_public_overflows(void)
                 SSZ_ERR_HASH_FAILURE);
 
     reset_hooks();
-    IASSERT_ERR(ssz_internal_merkleize_progressive_reader_iter(NULL, 0u, 0u, 1u, NULL, NULL, &out_root),
-                SSZ_ERR_INVALID_ARGUMENT);
-    IASSERT_ERR(ssz_internal_merkleize_progressive_reader_iter(
-                    &sequence_source,
-                    UINT64_MAX,
-                    1u,
-                    2u,
-                    &scratch,
-                    NULL,
-                    &out_root),
-                SSZ_ERR_OVERFLOW);
-    IASSERT_ERR(ssz_internal_merkleize_progressive_reader_iter(&sequence_source,
-                                                               0u,
-                                                               1u,
-                                                               (UINT64_MAX / 4u) + 1u,
-                                                               &scratch,
-                                                               NULL,
-                                                               &out_root),
-                SSZ_ERR_OVERFLOW);
-
-    reset_hooks();
     g_hooks.u64_to_size_fail_at = 1u;
     IASSERT_ERR(ssz_hash_tree_root_vector_fixed(&one_byte, 1u, 1u, NULL, &out_root), SSZ_ERR_OVERFLOW);
 
@@ -724,19 +703,6 @@ static bool test_internal_subtree_progressive_and_public_overflows(void)
     reset_hooks();
     g_hooks.u64_to_size_fail_at = 1u;
     IASSERT_ERR(ssz_hash_tree_root_list_roots(&root, 1u, SSZ_NO_LIMIT, NULL, &out_root), SSZ_ERR_OVERFLOW);
-
-    reset_hooks();
-    g_hooks.u64_to_size_fail_at = 1u;
-    IASSERT_ERR(ssz_hash_tree_root_progressive_list_fixed(&one_byte, 1u, 1u, NULL, &out_root),
-                SSZ_ERR_OVERFLOW);
-
-    reset_hooks();
-    g_hooks.add_overflow_size_fail_at = 1u;
-    IASSERT_ERR(ssz_hash_tree_root_progressive_bitlist(&one_byte, 1u, 1u, NULL, &out_root), SSZ_ERR_OVERFLOW);
-
-    reset_hooks();
-    g_hooks.u64_to_size_fail_at = 1u;
-    IASSERT_ERR(ssz_hash_tree_root_progressive_list_roots(&root, 1u, NULL, &out_root), SSZ_ERR_OVERFLOW);
 
     return true;
 }
@@ -836,7 +802,7 @@ int main(void)
     const internal_test_case_t tests[] = {
         {"internal_alloc_and_leaf_readers", test_internal_alloc_and_leaf_readers},
         {"internal_fast_merkleize_paths", test_internal_fast_merkleize_paths},
-        {"internal_subtree_progressive_and_public_overflows", test_internal_subtree_progressive_and_public_overflows},
+        {"internal_subtree_and_public_overflows", test_internal_subtree_and_public_overflows},
         {"internal_reader_custom_hash_fallback_paths", test_internal_reader_custom_hash_fallback_paths},
         {"internal_subtree_empty_range_returns_zero_hash", test_internal_subtree_empty_range_returns_zero_hash},
         {"internal_subtree_single_leaf_reads_source", test_internal_subtree_single_leaf_reads_source},
