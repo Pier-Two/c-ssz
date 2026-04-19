@@ -62,6 +62,23 @@ static ssz_chunk_t make_chunk(uint8_t seed)
     return chunk;
 }
 
+static ssz_error_t build_merkle_tree_8(const ssz_chunk_t leaves[8], ssz_chunk_t tree[16])
+{
+    ssz_error_t err = SSZ_SUCCESS;
+
+    for (size_t i = 0u; i < 8u; i++)
+    {
+        tree[8u + i] = leaves[i];
+    }
+
+    for (size_t i = 7u; (i > 0u) && (err == SSZ_SUCCESS); i--)
+    {
+        err = ssz_hash_2to1(NULL, &tree[i * 2u], &tree[(i * 2u) + 1u], &tree[i]);
+    }
+
+    return err;
+}
+
 typedef struct
 {
     ssz_error_t hash_err;
@@ -476,6 +493,119 @@ static bool test_multi_proof_cascading_parent_reduction(void)
                                             16u,
                                             NULL),
                SSZ_SUCCESS);
+
+    return true;
+}
+
+static bool test_multi_proof_spec_valid_reducer_regressions(void)
+{
+    const ssz_chunk_t leaves8[8] = {
+        make_chunk(0x05u),
+        make_chunk(0x25u),
+        make_chunk(0x45u),
+        make_chunk(0x65u),
+        make_chunk(0x85u),
+        make_chunk(0xA5u),
+        make_chunk(0xC5u),
+        make_chunk(0xE5u),
+    };
+    ssz_chunk_t tree[16];
+
+    memset(tree, 0, sizeof(tree));
+    ASSERT_ERR(build_merkle_tree_8(leaves8, tree), SSZ_SUCCESS);
+
+    {
+        const ssz_chunk_t leaves[2] = {tree[8], tree[12]};
+        const ssz_gindex_t indices[2] = {8u, 12u};
+        const ssz_chunk_t proof[4] = {tree[13], tree[9], tree[7], tree[5]};
+        ssz_gindex_t helper_scratch[32] = {0u};
+        ssz_gindex_t helpers[8] = {0u};
+        size_t helper_len = 0u;
+        ssz_gindex_t scratch_indices[16] = {0u};
+        ssz_chunk_t scratch_nodes[16];
+        ssz_chunk_t computed;
+
+        ASSERT_ERR(ssz_get_helper_indices(indices, 2u, helpers, 8u, &helper_len, helper_scratch, 32u),
+                   SSZ_SUCCESS);
+        ASSERT_TRUE(helper_len == 4u);
+        ASSERT_TRUE(helpers[0] == 13u);
+        ASSERT_TRUE(helpers[1] == 9u);
+        ASSERT_TRUE(helpers[2] == 7u);
+        ASSERT_TRUE(helpers[3] == 5u);
+
+        memset(scratch_nodes, 0, sizeof(scratch_nodes));
+        ASSERT_ERR(ssz_calculate_multi_merkle_root(leaves,
+                                                   indices,
+                                                   2u,
+                                                   proof,
+                                                   helper_len,
+                                                   scratch_indices,
+                                                   scratch_nodes,
+                                                   16u,
+                                                   NULL,
+                                                   &computed),
+                   SSZ_SUCCESS);
+        ASSERT_CHUNK_EQ(computed, tree[1]);
+
+        memset(scratch_nodes, 0, sizeof(scratch_nodes));
+        ASSERT_ERR(ssz_verify_merkle_multiproof(leaves,
+                                                indices,
+                                                2u,
+                                                proof,
+                                                helper_len,
+                                                &tree[1],
+                                                scratch_indices,
+                                                scratch_nodes,
+                                                16u,
+                                                NULL),
+                   SSZ_SUCCESS);
+    }
+
+    {
+        const ssz_chunk_t leaves[2] = {tree[6], tree[8]};
+        const ssz_gindex_t indices[2] = {6u, 8u};
+        const ssz_chunk_t proof[3] = {tree[9], tree[7], tree[5]};
+        ssz_gindex_t helper_scratch[32] = {0u};
+        ssz_gindex_t helpers[8] = {0u};
+        size_t helper_len = 0u;
+        ssz_gindex_t scratch_indices[16] = {0u};
+        ssz_chunk_t scratch_nodes[16];
+        ssz_chunk_t computed;
+
+        ASSERT_ERR(ssz_get_helper_indices(indices, 2u, helpers, 8u, &helper_len, helper_scratch, 32u),
+                   SSZ_SUCCESS);
+        ASSERT_TRUE(helper_len == 3u);
+        ASSERT_TRUE(helpers[0] == 9u);
+        ASSERT_TRUE(helpers[1] == 7u);
+        ASSERT_TRUE(helpers[2] == 5u);
+
+        memset(scratch_nodes, 0, sizeof(scratch_nodes));
+        ASSERT_ERR(ssz_calculate_multi_merkle_root(leaves,
+                                                   indices,
+                                                   2u,
+                                                   proof,
+                                                   helper_len,
+                                                   scratch_indices,
+                                                   scratch_nodes,
+                                                   16u,
+                                                   NULL,
+                                                   &computed),
+                   SSZ_SUCCESS);
+        ASSERT_CHUNK_EQ(computed, tree[1]);
+
+        memset(scratch_nodes, 0, sizeof(scratch_nodes));
+        ASSERT_ERR(ssz_verify_merkle_multiproof(leaves,
+                                                indices,
+                                                2u,
+                                                proof,
+                                                helper_len,
+                                                &tree[1],
+                                                scratch_indices,
+                                                scratch_nodes,
+                                                16u,
+                                                NULL),
+                   SSZ_SUCCESS);
+    }
 
     return true;
 }
@@ -1239,6 +1369,8 @@ int main(void)
         {"multi_proof_non_overlapping_indices_still_verify",
          test_multi_proof_non_overlapping_indices_still_verify},
         {"multi_proof_cascading_parent_reduction", test_multi_proof_cascading_parent_reduction},
+        {"multi_proof_spec_valid_reducer_regressions",
+         test_multi_proof_spec_valid_reducer_regressions},
         {"multi_proof_empty_helper_allows_null_proof", test_multi_proof_empty_helper_allows_null_proof},
         {"multi_proof_rejects_overlapping_indices", test_multi_proof_rejects_overlapping_indices},
         {"multi_proof_rejects_duplicate_and_root_overlaps",
