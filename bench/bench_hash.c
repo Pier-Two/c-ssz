@@ -88,7 +88,6 @@ static uint8_t g_sha256_input[HASH_SHA256_INPUT_BYTES];
 
 static ssz_chunk_t g_vector_roots[HASH_COMPOSITE_VECTOR_COUNT];
 static ssz_chunk_t g_list_roots[HASH_COMPOSITE_LIST_COUNT];
-static uint8_t g_progressive_active_fields[1] = {0xFFu};
 
 static bench_root_ctx_t g_vector_composite_ctx;
 static bench_root_ctx_t g_list_composite_ctx;
@@ -205,34 +204,6 @@ static void bench_init_hash_data(void)
     err = ssz_hash_tree_root_vector_composite(
         HASH_CONTAINER_FIELD_COUNT,
         &g_container_codec,
-        &g_bench_hash_scratch,
-        NULL,
-        &sanity_root);
-    if (err != SSZ_SUCCESS)
-    {
-        g_init_state = -1;
-        return;
-    }
-
-    err = ssz_hash_tree_root_progressive_container(
-        HASH_CONTAINER_FIELD_COUNT,
-        g_progressive_active_fields,
-        sizeof(g_progressive_active_fields),
-        &g_container_codec,
-        &g_bench_hash_scratch,
-        NULL,
-        &sanity_root);
-    if (err != SSZ_SUCCESS)
-    {
-        g_init_state = -1;
-        return;
-    }
-
-    err = ssz_hash_tree_root_progressive_container_roots(
-        g_vector_roots,
-        HASH_CONTAINER_FIELD_COUNT,
-        g_progressive_active_fields,
-        sizeof(g_progressive_active_fields),
         &g_bench_hash_scratch,
         NULL,
         &sanity_root);
@@ -585,120 +556,6 @@ UBENCH(hash, tree_root_bitlist_8190)
         sizeof(g_bitlist_bits),
         HASH_BITLIST_BIT_LEN,
         HASH_BITLIST_BIT_MAX,
-        &g_bench_hash_scratch,
-        NULL,
-        &root));
-    ubench_do_nothing((void *)&root);
-}
-
-UBENCH(hash, tree_root_progressive_container_8_fields)
-{
-    bench_init_hash_data();
-    if (g_init_state != 1)
-    {
-        return;
-    }
-
-    ssz_chunk_t root;
-    BENCH_EXPECT_OK(ssz_hash_tree_root_progressive_container(
-        HASH_CONTAINER_FIELD_COUNT,
-        g_progressive_active_fields,
-        sizeof(g_progressive_active_fields),
-        &g_container_codec,
-        &g_bench_hash_scratch,
-        NULL,
-        &root));
-    ubench_do_nothing((void *)&root);
-}
-
-UBENCH(hash, tree_root_progressive_container_roots_8)
-{
-    bench_init_hash_data();
-    if (g_init_state != 1)
-    {
-        return;
-    }
-
-    ssz_chunk_t root;
-    BENCH_EXPECT_OK(ssz_hash_tree_root_progressive_container_roots(
-        g_vector_roots,
-        HASH_CONTAINER_FIELD_COUNT,
-        g_progressive_active_fields,
-        sizeof(g_progressive_active_fields),
-        &g_bench_hash_scratch,
-        NULL,
-        &root));
-    ubench_do_nothing((void *)&root);
-}
-
-UBENCH(hash, tree_root_progressive_list_fixed_128x32)
-{
-    bench_init_hash_data();
-    if (g_init_state != 1)
-    {
-        return;
-    }
-
-    ssz_chunk_t root;
-    BENCH_EXPECT_OK(ssz_hash_tree_root_progressive_list_fixed(
-        g_list_fixed_data,
-        HASH_LIST_SMALL_COUNT,
-        HASH_ELEMENT_SIZE,
-        &g_bench_hash_scratch,
-        NULL,
-        &root));
-    ubench_do_nothing((void *)&root);
-}
-
-UBENCH(hash, tree_root_progressive_list_composite_256)
-{
-    bench_init_hash_data();
-    if (g_init_state != 1)
-    {
-        return;
-    }
-
-    ssz_chunk_t root;
-    BENCH_EXPECT_OK(ssz_hash_tree_root_progressive_list_composite(
-        HASH_COMPOSITE_LIST_COUNT,
-        &g_list_composite_codec,
-        &g_bench_hash_scratch,
-        NULL,
-        &root));
-    ubench_do_nothing((void *)&root);
-}
-
-UBENCH(hash, tree_root_progressive_list_roots_256)
-{
-    bench_init_hash_data();
-    if (g_init_state != 1)
-    {
-        return;
-    }
-
-    ssz_chunk_t root;
-    BENCH_EXPECT_OK(ssz_hash_tree_root_progressive_list_roots(
-        g_list_roots,
-        HASH_COMPOSITE_LIST_COUNT,
-        &g_bench_hash_scratch,
-        NULL,
-        &root));
-    ubench_do_nothing((void *)&root);
-}
-
-UBENCH(hash, tree_root_progressive_bitlist_8190)
-{
-    bench_init_hash_data();
-    if (g_init_state != 1)
-    {
-        return;
-    }
-
-    ssz_chunk_t root;
-    BENCH_EXPECT_OK(ssz_hash_tree_root_progressive_bitlist(
-        g_bitlist_bits,
-        sizeof(g_bitlist_bits),
-        HASH_BITLIST_BIT_LEN,
         &g_bench_hash_scratch,
         NULL,
         &root));
