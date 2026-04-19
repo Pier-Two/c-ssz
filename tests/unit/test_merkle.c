@@ -851,6 +851,68 @@ static bool test_progressive_hash_tree_root_variants(void)
         SSZ_SUCCESS);
     ASSERT_CHUNK_EQ(progressive_container_root, progressive_container_roots_root);
 
+    {
+        const root_entry_t gapped_container_entries[] = {
+            {0u, make_chunk(0x51u)},
+            {1u, make_chunk(0x91u)},
+        };
+        const root_map_ctx_t gapped_container_ctx = {
+            .entries = gapped_container_entries,
+            .entry_count = sizeof(gapped_container_entries) / sizeof(gapped_container_entries[0]),
+        };
+        const ssz_member_codec_t gapped_container_codec = {
+            .ctx = (void *)&gapped_container_ctx,
+            .write = NULL,
+            .read = NULL,
+            .root = root_map_root,
+        };
+        const ssz_chunk_t gapped_container_roots[2] = {
+            gapped_container_entries[0].root,
+            gapped_container_entries[1].root,
+        };
+        const uint8_t gapped_active_fields[] = {0x05u};
+        ssz_chunk_t sparse_roots[3];
+        ssz_chunk_t expected_gapped_data;
+        ssz_chunk_t expected_gapped_root;
+
+        memset(sparse_roots, 0, sizeof(sparse_roots));
+        sparse_roots[0] = gapped_container_roots[0];
+        sparse_roots[2] = gapped_container_roots[1];
+
+        ASSERT_ERR(
+            ssz_merkleize_progressive(sparse_roots, 3u, NULL, &expected_gapped_data),
+            SSZ_SUCCESS);
+        ASSERT_ERR(
+            ssz_mix_in_active_fields(
+                &expected_gapped_data,
+                gapped_active_fields,
+                sizeof(gapped_active_fields),
+                NULL,
+                &expected_gapped_root),
+            SSZ_SUCCESS);
+
+        ASSERT_ERR(
+            ssz_hash_tree_root_progressive_container(
+                2u,
+                gapped_active_fields,
+                sizeof(gapped_active_fields),
+                &gapped_container_codec,
+                NULL,
+                &progressive_container_root),
+            SSZ_SUCCESS);
+        ASSERT_ERR(
+            ssz_hash_tree_root_progressive_container_roots(
+                gapped_container_roots,
+                2u,
+                gapped_active_fields,
+                sizeof(gapped_active_fields),
+                NULL,
+                &progressive_container_roots_root),
+            SSZ_SUCCESS);
+        ASSERT_CHUNK_EQ(progressive_container_root, expected_gapped_root);
+        ASSERT_CHUNK_EQ(progressive_container_roots_root, expected_gapped_root);
+    }
+
     uint8_t list_fixed_elements[40] = {0u};
     for (size_t i = 0u; i < sizeof(list_fixed_elements); i++)
     {

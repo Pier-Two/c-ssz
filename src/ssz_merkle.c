@@ -24,6 +24,15 @@ typedef struct
     uint64_t count;
 } ssz_internal_codec_reader_ctx_t;
 
+typedef struct ssz_internal_leaf_source_s ssz_internal_leaf_source_t;
+
+typedef struct
+{
+    const ssz_internal_leaf_source_t *source;
+    const uint8_t *active_fields;
+    size_t active_fields_len;
+} ssz_internal_progressive_container_reader_ctx_t;
+
 typedef ssz_error_t (
     *ssz_internal_custom_leaf_reader_t)(const void *ctx, uint64_t index, ssz_chunk_t *out_leaf);
 
@@ -35,7 +44,7 @@ typedef enum
     SSZ_INTERNAL_LEAF_SOURCE_CODEC
 } ssz_internal_leaf_source_kind_t;
 
-typedef struct
+struct ssz_internal_leaf_source_s
 {
     ssz_internal_leaf_source_kind_t kind;
     ssz_internal_chunk_reader_ctx_t chunk_reader;
@@ -43,7 +52,7 @@ typedef struct
     ssz_internal_codec_reader_ctx_t codec_reader;
     ssz_internal_custom_leaf_reader_t custom_reader;
     const void *custom_ctx;
-} ssz_internal_leaf_source_t;
+};
 
 #define SSZ_INTERNAL_FAST_MERKLE_MAX_LEAVES  SSZ_MERKLE_SCRATCH_MAX_CHUNKS
 #define SSZ_INTERNAL_STACK_MERKLE_MAX_LEAVES 64u
@@ -211,6 +220,115 @@ static ssz_error_t ssz_internal_read_leaf(
     }
 
     return err;
+}
+
+static bool ssz_internal_active_field_bit_is_set(
+    const uint8_t *active_fields,
+    size_t active_fields_len,
+    uint64_t index)
+{
+    uint64_t byte_index = index / 8u;
+    uint8_t bit_mask = (uint8_t)(1u << (index % 8u));
+
+    if ((active_fields == NULL) || (byte_index >= active_fields_len))
+    {
+        return false;
+    }
+
+    return (active_fields[byte_index] & bit_mask) != 0u;
+}
+
+static ssz_error_t ssz_internal_progressive_container_slot_count(
+    const uint8_t *active_fields,
+    size_t active_fields_len,
+    uint64_t *out_slot_count)
+{
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if (out_slot_count == NULL)
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if ((active_fields == NULL) || (active_fields_len == 0u))
+    {
+        err = SSZ_ERR_SCHEMA_INVALID;
+    }
+    else
+    {
+        size_t byte_index = active_fields_len - 1u;
+        uint8_t byte = active_fields[byte_index];
+        uint64_t slot_count = 0u;
+        uint8_t bit_index = 0u;
+
+        while ((byte & 0x80u) == 0u)
+        {
+            byte <<= 1u;
+            bit_index++;
+        }
+
+        if (ssz_internal_mul_overflow_u64((uint64_t)byte_index, 8u, &slot_count) ||
+            ssz_internal_add_overflow_u64(slot_count, (uint64_t)(8u - bit_index), &slot_count))
+        {
+            err = SSZ_ERR_OVERFLOW;
+        }
+        else
+        {
+            *out_slot_count = slot_count;
+        }
+    }
+
+    return err;
+}
+
+static ssz_error_t ssz_internal_progressive_container_read_leaf(
+    const void *ctx,
+    uint64_t index,
+    ssz_chunk_t *out_leaf)
+{
+    const ssz_internal_progressive_container_reader_ctx_t *reader =
+        (const ssz_internal_progressive_container_reader_ctx_t *)ctx;
+    uint64_t source_index = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if ((reader == NULL) || (reader->source == NULL) || (out_leaf == NULL))
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (!ssz_internal_active_field_bit_is_set(reader->active_fields, reader->active_fields_len, index))
+    {
+        (void)memset(out_leaf->bytes, 0, SSZ_BYTES_PER_CHUNK);
+    }
+    else
+    {
+        for (uint64_t i = 0u; i < index; i++)
+        {
+            if (ssz_internal_active_field_bit_is_set(reader->active_fields, reader->active_fields_len, i))
+            {
+                if (ssz_internal_add_overflow_u64(source_index, 1u, &source_index))
+                {
+                    err = SSZ_ERR_OVERFLOW;
+                    break;
+                }
+            }
+        }
+
+        if (err == SSZ_SUCCESS)
+        {
+            err = ssz_internal_read_leaf(reader->source, source_index, out_leaf);
+        }
+    }
+
+    return err;
+}
+
+static void ssz_internal_init_progressive_container_source(
+    ssz_internal_leaf_source_t *source,
+    const ssz_internal_progressive_container_reader_ctx_t *reader)
+{
+    (void)memset(source, 0, sizeof(*source));
+    source->kind = SSZ_INTERNAL_LEAF_SOURCE_CUSTOM;
+    source->custom_reader = ssz_internal_progressive_container_read_leaf;
+    source->custom_ctx = reader;
 }
 
 static ssz_error_t ssz_internal_validate_leaf_range(
@@ -2035,6 +2153,9 @@ ssz_error_t ssz_hash_tree_root_progressive_container(
 {
     ssz_chunk_t data_root;
     ssz_internal_leaf_source_t source;
+    ssz_internal_leaf_source_t sparse_source;
+    ssz_internal_progressive_container_reader_ctx_t reader;
+    uint64_t slot_count = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
     if (out_root == NULL)
@@ -2051,15 +2172,26 @@ ssz_error_t ssz_hash_tree_root_progressive_container(
         if (err == SSZ_SUCCESS)
         {
             ssz_internal_init_codec_source(&source, codec, field_count);
+            reader.source = &source;
+            reader.active_fields = active_fields;
+            reader.active_fields_len = active_fields_len;
+            ssz_internal_init_progressive_container_source(&sparse_source, &reader);
 
-            err = ssz_internal_merkleize_progressive_reader_iter(
-                &source,
-                0u,
-                field_count,
-                1u,
-                scratch,
-                hash_fn,
-                &data_root);
+            err = ssz_internal_progressive_container_slot_count(
+                active_fields,
+                active_fields_len,
+                &slot_count);
+            if (err == SSZ_SUCCESS)
+            {
+                err = ssz_internal_merkleize_progressive_reader_iter(
+                    &sparse_source,
+                    0u,
+                    slot_count,
+                    1u,
+                    scratch,
+                    hash_fn,
+                    &data_root);
+            }
             if (err == SSZ_SUCCESS)
             {
                 err = ssz_mix_in_active_fields(
@@ -2247,6 +2379,10 @@ ssz_error_t ssz_hash_tree_root_progressive_container_roots(
     ssz_chunk_t *out_root)
 {
     ssz_chunk_t data_root;
+    ssz_internal_leaf_source_t source;
+    ssz_internal_leaf_source_t sparse_source;
+    ssz_internal_progressive_container_reader_ctx_t reader;
+    uint64_t slot_count = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
     if (out_root == NULL)
@@ -2258,7 +2394,27 @@ ssz_error_t ssz_hash_tree_root_progressive_container_roots(
         err = ssz_internal_validate_active_fields(active_fields, active_fields_len, count);
         if (err == SSZ_SUCCESS)
         {
-            err = ssz_merkleize_progressive(roots, count, scratch, hash_fn, &data_root);
+            ssz_internal_init_chunk_source(&source, roots, count);
+            reader.source = &source;
+            reader.active_fields = active_fields;
+            reader.active_fields_len = active_fields_len;
+            ssz_internal_init_progressive_container_source(&sparse_source, &reader);
+
+            err = ssz_internal_progressive_container_slot_count(
+                active_fields,
+                active_fields_len,
+                &slot_count);
+            if (err == SSZ_SUCCESS)
+            {
+                err = ssz_internal_merkleize_progressive_reader_iter(
+                    &sparse_source,
+                    0u,
+                    slot_count,
+                    1u,
+                    scratch,
+                    hash_fn,
+                    &data_root);
+            }
             if (err == SSZ_SUCCESS)
             {
                 err = ssz_mix_in_active_fields(
