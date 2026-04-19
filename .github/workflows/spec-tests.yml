@@ -188,10 +188,58 @@ jobs:
       # auto-skipped by CMake when the schema file is absent, keeping
       # Windows coverage limited to the ssz_generic targets.
       - name: Download fixtures (generic only)
-        uses: actions/download-artifact@v4
-        with:
-          name: consensus-spec-fixtures-generic
-          path: tests/fixtures/general/
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $artifactName = 'consensus-spec-fixtures-generic'
+          $targetDir = Join-Path $PWD 'tests/fixtures/general'
+          $maxAttempts = 8
+          $delaySeconds = 10
+
+          if (Test-Path $targetDir) {
+            Remove-Item $targetDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            $downloadDir = Join-Path $env:RUNNER_TEMP "$artifactName-$attempt"
+
+            if (Test-Path $downloadDir) {
+              Remove-Item $downloadDir -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
+
+            Write-Host "Downloading $artifactName (attempt $attempt/$maxAttempts)..."
+            & gh run download "${{ github.run_id }}" `
+              --repo "$env:GITHUB_REPOSITORY" `
+              --name $artifactName `
+              --dir $downloadDir
+            $exitCode = $LASTEXITCODE
+
+            if ($exitCode -eq 0) {
+              $artifactRoot = Join-Path $downloadDir $artifactName
+              if (-not (Test-Path $artifactRoot)) {
+                $artifactRoot = $downloadDir
+              }
+
+              Copy-Item -Path (Join-Path $artifactRoot '*') -Destination $targetDir -Recurse -Force
+              Remove-Item $downloadDir -Recurse -Force
+              Write-Host "Downloaded $artifactName to $targetDir"
+              break
+            }
+
+            if ($attempt -eq $maxAttempts) {
+              throw "Failed to download artifact '$artifactName' after $maxAttempts attempts."
+            }
+
+            $sleepSeconds = [Math]::Min($delaySeconds, 120)
+            Write-Warning "gh run download failed with exit code $exitCode. Retrying in $sleepSeconds seconds..."
+            Start-Sleep -Seconds $sleepSeconds
+            $delaySeconds = [Math]::Min($delaySeconds * 2, 120)
+          }
 
       - name: Configure
         run: cmake -S . -B build/windows-spec -DCMAKE_BUILD_TYPE=Debug
