@@ -134,26 +134,6 @@ static inline bool ssz_internal_bits_to_bytes(uint64_t bit_count, size_t *out_by
     return converted;
 }
 
-static inline size_t ssz_internal_count_bits_u8(uint8_t value)
-{
-    size_t count = 0u;
-    uint8_t remaining = value;
-
-    while (remaining != 0u)
-    {
-        if ((remaining & 1u) != 0u)
-        {
-            count++;
-        }
-        else
-        {
-            /* intentionally empty */
-        }
-        remaining >>= 1u;
-    }
-    return count;
-}
-
 static inline bool ssz_internal_get_bit_le(const uint8_t *bits_le, uint64_t bit_index)
 {
     size_t byte_index = (size_t)(bit_index / 8u);
