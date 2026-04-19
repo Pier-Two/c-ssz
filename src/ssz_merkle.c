@@ -41,7 +41,8 @@ typedef enum
     SSZ_INTERNAL_LEAF_SOURCE_CUSTOM = 0,
     SSZ_INTERNAL_LEAF_SOURCE_CHUNKS,
     SSZ_INTERNAL_LEAF_SOURCE_BYTES,
-    SSZ_INTERNAL_LEAF_SOURCE_CODEC
+    SSZ_INTERNAL_LEAF_SOURCE_CODEC,
+    SSZ_INTERNAL_LEAF_SOURCE_PROGRESSIVE_CONTAINER
 } ssz_internal_leaf_source_kind_t;
 
 struct ssz_internal_leaf_source_s
@@ -52,6 +53,7 @@ struct ssz_internal_leaf_source_s
     ssz_internal_codec_reader_ctx_t codec_reader;
     ssz_internal_custom_leaf_reader_t custom_reader;
     const void *custom_ctx;
+    ssz_internal_progressive_container_reader_ctx_t progressive_container_reader;
 };
 
 #define SSZ_INTERNAL_FAST_MERKLE_MAX_LEAVES  SSZ_MERKLE_SCRATCH_MAX_CHUNKS
@@ -179,6 +181,11 @@ static ssz_error_t ssz_internal_get_scratch_chunks(
     return err;
 }
 
+static ssz_error_t ssz_internal_read_progressive_container_leaf(
+    const ssz_internal_progressive_container_reader_ctx_t *reader,
+    uint64_t index,
+    ssz_chunk_t *out_leaf);
+
 static ssz_error_t ssz_internal_read_leaf(
     const ssz_internal_leaf_source_t *source,
     uint64_t index,
@@ -213,6 +220,10 @@ static ssz_error_t ssz_internal_read_leaf(
                 err = source->custom_reader(source->custom_ctx, index, out_leaf);
             }
             break;
+        case SSZ_INTERNAL_LEAF_SOURCE_PROGRESSIVE_CONTAINER:
+            err = ssz_internal_read_progressive_container_leaf(
+                &source->progressive_container_reader, index, out_leaf);
+            break;
         default:
             err = SSZ_ERR_INVALID_ARGUMENT;
             break;
@@ -229,13 +240,14 @@ static bool ssz_internal_active_field_bit_is_set(
 {
     uint64_t byte_index = index / 8u;
     uint8_t bit_mask = (uint8_t)(1u << (index % 8u));
+    bool is_set = false;
 
-    if ((active_fields == NULL) || (byte_index >= active_fields_len))
+    if ((active_fields != NULL) && (byte_index < active_fields_len))
     {
-        return false;
+        is_set = (active_fields[byte_index] & bit_mask) != 0u;
     }
 
-    return (active_fields[byte_index] & bit_mask) != 0u;
+    return is_set;
 }
 
 static ssz_error_t ssz_internal_progressive_container_slot_count(
@@ -258,7 +270,8 @@ static ssz_error_t ssz_internal_progressive_container_slot_count(
         size_t byte_index = active_fields_len - 1u;
         uint8_t byte = active_fields[byte_index];
         uint64_t slot_count = 0u;
-        uint8_t bit_index = 0u;
+        uint64_t bit_index = 0u;
+        uint64_t bits_in_last_byte = 0u;
 
         while ((byte & 0x80u) == 0u)
         {
@@ -266,8 +279,10 @@ static ssz_error_t ssz_internal_progressive_container_slot_count(
             bit_index++;
         }
 
+        bits_in_last_byte = 8u - bit_index;
+
         if (ssz_internal_mul_overflow_u64((uint64_t)byte_index, 8u, &slot_count) ||
-            ssz_internal_add_overflow_u64(slot_count, (uint64_t)(8u - bit_index), &slot_count))
+            ssz_internal_add_overflow_u64(slot_count, bits_in_last_byte, &slot_count))
         {
             err = SSZ_ERR_OVERFLOW;
         }
@@ -280,13 +295,11 @@ static ssz_error_t ssz_internal_progressive_container_slot_count(
     return err;
 }
 
-static ssz_error_t ssz_internal_progressive_container_read_leaf(
-    const void *ctx,
+static ssz_error_t ssz_internal_read_progressive_container_leaf(
+    const ssz_internal_progressive_container_reader_ctx_t *reader,
     uint64_t index,
     ssz_chunk_t *out_leaf)
 {
-    const ssz_internal_progressive_container_reader_ctx_t *reader =
-        (const ssz_internal_progressive_container_reader_ctx_t *)ctx;
     uint64_t source_index = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
@@ -314,7 +327,20 @@ static ssz_error_t ssz_internal_progressive_container_read_leaf(
 
         if (err == SSZ_SUCCESS)
         {
-            err = ssz_internal_read_leaf(reader->source, source_index, out_leaf);
+            switch (reader->source->kind)
+            {
+            case SSZ_INTERNAL_LEAF_SOURCE_CHUNKS:
+                err = ssz_internal_read_chunk_leaf(
+                    &reader->source->chunk_reader, source_index, out_leaf);
+                break;
+            case SSZ_INTERNAL_LEAF_SOURCE_CODEC:
+                err = ssz_internal_read_codec_leaf(
+                    &reader->source->codec_reader, source_index, out_leaf);
+                break;
+            default:
+                err = SSZ_ERR_INVALID_ARGUMENT;
+                break;
+            }
         }
     }
 
@@ -323,12 +349,15 @@ static ssz_error_t ssz_internal_progressive_container_read_leaf(
 
 static void ssz_internal_init_progressive_container_source(
     ssz_internal_leaf_source_t *source,
-    const ssz_internal_progressive_container_reader_ctx_t *reader)
+    const ssz_internal_leaf_source_t *inner_source,
+    const uint8_t *active_fields,
+    size_t active_fields_len)
 {
     (void)memset(source, 0, sizeof(*source));
-    source->kind = SSZ_INTERNAL_LEAF_SOURCE_CUSTOM;
-    source->custom_reader = ssz_internal_progressive_container_read_leaf;
-    source->custom_ctx = reader;
+    source->kind = SSZ_INTERNAL_LEAF_SOURCE_PROGRESSIVE_CONTAINER;
+    source->progressive_container_reader.source = inner_source;
+    source->progressive_container_reader.active_fields = active_fields;
+    source->progressive_container_reader.active_fields_len = active_fields_len;
 }
 
 static ssz_error_t ssz_internal_validate_leaf_range(
@@ -364,6 +393,8 @@ static ssz_error_t ssz_internal_validate_leaf_range(
             }
             break;
         case SSZ_INTERNAL_LEAF_SOURCE_CUSTOM:
+            break;
+        case SSZ_INTERNAL_LEAF_SOURCE_PROGRESSIVE_CONTAINER:
             break;
         default:
             err = SSZ_ERR_INVALID_ARGUMENT;
@@ -2154,7 +2185,6 @@ ssz_error_t ssz_hash_tree_root_progressive_container(
     ssz_chunk_t data_root;
     ssz_internal_leaf_source_t source;
     ssz_internal_leaf_source_t sparse_source;
-    ssz_internal_progressive_container_reader_ctx_t reader;
     uint64_t slot_count = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
@@ -2172,10 +2202,8 @@ ssz_error_t ssz_hash_tree_root_progressive_container(
         if (err == SSZ_SUCCESS)
         {
             ssz_internal_init_codec_source(&source, codec, field_count);
-            reader.source = &source;
-            reader.active_fields = active_fields;
-            reader.active_fields_len = active_fields_len;
-            ssz_internal_init_progressive_container_source(&sparse_source, &reader);
+            ssz_internal_init_progressive_container_source(
+                &sparse_source, &source, active_fields, active_fields_len);
 
             err = ssz_internal_progressive_container_slot_count(
                 active_fields,
@@ -2381,7 +2409,6 @@ ssz_error_t ssz_hash_tree_root_progressive_container_roots(
     ssz_chunk_t data_root;
     ssz_internal_leaf_source_t source;
     ssz_internal_leaf_source_t sparse_source;
-    ssz_internal_progressive_container_reader_ctx_t reader;
     uint64_t slot_count = 0u;
     ssz_error_t err = SSZ_SUCCESS;
 
@@ -2395,10 +2422,8 @@ ssz_error_t ssz_hash_tree_root_progressive_container_roots(
         if (err == SSZ_SUCCESS)
         {
             ssz_internal_init_chunk_source(&source, roots, count);
-            reader.source = &source;
-            reader.active_fields = active_fields;
-            reader.active_fields_len = active_fields_len;
-            ssz_internal_init_progressive_container_source(&sparse_source, &reader);
+            ssz_internal_init_progressive_container_source(
+                &sparse_source, &source, active_fields, active_fields_len);
 
             err = ssz_internal_progressive_container_slot_count(
                 active_fields,
