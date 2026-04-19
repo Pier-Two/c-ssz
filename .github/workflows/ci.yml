@@ -39,11 +39,11 @@ jobs:
 
       - name: Test (Windows)
         if: runner.os == 'Windows'
-        run: ctest --test-dir build --output-on-failure -C Debug
+        run: ctest --test-dir build --output-on-failure -C Debug --parallel $env:NUMBER_OF_PROCESSORS
 
       - name: Test (non-Windows)
         if: runner.os != 'Windows'
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --parallel "$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)"
 
   build-and-test-32bit:
     name: build-and-test-32bit
@@ -68,7 +68,7 @@ jobs:
         run: cmake --build build
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --parallel "$(nproc)"
 
   sanitizers:
     name: sanitizers (${{ matrix.os }})
@@ -96,7 +96,7 @@ jobs:
         env:
           ASAN_OPTIONS: detect_leaks=0
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --parallel "$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)"
 
   static-analysis:
     name: static-analysis (clang-tidy + cppcheck)

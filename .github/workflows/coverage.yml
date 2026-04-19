@@ -35,7 +35,7 @@ jobs:
         run: lcov --zerocounters --directory build/coverage
 
       - name: Test
-        run: ctest --test-dir build/coverage --output-on-failure
+        run: ctest --test-dir build/coverage --output-on-failure --parallel "$(nproc)"
 
       - name: Generate coverage data
         run: lcov --capture --directory build/coverage --output-file build/coverage/coverage.info --ignore-errors mismatch
@@ -100,7 +100,7 @@ jobs:
         run: lcov --zerocounters --directory build/coverage-32
 
       - name: Test
-        run: ctest --test-dir build/coverage-32 --output-on-failure
+        run: ctest --test-dir build/coverage-32 --output-on-failure --parallel "$(nproc)"
 
       - name: Generate coverage data
         run: lcov --capture --directory build/coverage-32 --output-file build/coverage-32/coverage.info --ignore-errors mismatch

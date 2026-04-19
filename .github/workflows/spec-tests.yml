@@ -21,10 +21,30 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Compute fixtures cache key
+        id: cache_key
+        run: |
+          set -euo pipefail
+          specs_sha=$(git -C external/consensus-specs rev-parse HEAD)
+          script_hash=$(sha256sum tests/spec/generate_ssz_static_schema.py | awk '{print $1}')
+          echo "key=fixtures-v1-${specs_sha}-${script_hash}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore fixtures cache
+        id: fixtures_cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            tests/fixtures
+            tests/spec/generated/ssz_static_schema_generated.h
+            tests/spec/generated/ssz_static_schema_generated.c
+          key: ${{ steps.cache_key.outputs.key }}
+
       - name: Setup uv
+        if: steps.fixtures_cache.outputs.cache-hit != 'true'
         uses: astral-sh/setup-uv@v5
 
       - name: Generate consensus-spec fixtures
+        if: steps.fixtures_cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           # Spec tests consume both ssz_generic and schema-driven ssz_static fixtures.
@@ -135,7 +155,7 @@ jobs:
       - name: Test
         run: |
           set -euo pipefail
-          ctest --test-dir "build/linux-${{ matrix.compiler }}-${{ matrix.arch }}" --output-on-failure
+          ctest --test-dir "build/linux-${{ matrix.compiler }}-${{ matrix.arch }}" --output-on-failure --parallel "$(nproc)"
 
   macos-spec-test:
     name: macOS Spec
@@ -168,7 +188,7 @@ jobs:
         run: cmake --build build/macos-spec --parallel
 
       - name: Test
-        run: ctest --test-dir build/macos-spec --output-on-failure
+        run: ctest --test-dir build/macos-spec --output-on-failure --parallel "$(sysctl -n hw.logicalcpu)"
 
   windows-spec:
     name: Windows Spec
@@ -200,7 +220,7 @@ jobs:
         run: cmake --build build/windows-spec --config Debug
 
       - name: Test
-        run: ctest --test-dir build/windows-spec -C Debug --output-on-failure
+        run: ctest --test-dir build/windows-spec -C Debug --output-on-failure --parallel $env:NUMBER_OF_PROCESSORS
 
   sanitizer-suite:
     name: Sanitizer Suite (${{ matrix.name }})
@@ -304,8 +324,8 @@ jobs:
         env:
           ASAN_OPTIONS: ${{ matrix.asan_options }}
           UBSAN_OPTIONS: ${{ matrix.ubsan_options }}
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --parallel "$(nproc)"
 
       - name: Test under valgrind
         if: matrix.name == 'valgrind'
-        run: valgrind --error-exitcode=1 --leak-check=full ctest --test-dir build --output-on-failure
+        run: valgrind --error-exitcode=1 --leak-check=full ctest --test-dir build --output-on-failure --parallel "$(nproc)"
