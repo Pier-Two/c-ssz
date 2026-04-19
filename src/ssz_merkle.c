@@ -517,17 +517,24 @@ static ssz_error_t ssz_internal_merkleize_reader_fast(
 
             if ((ret == SSZ_SUCCESS) && initialized_levels)
             {
-                while ((width > 1u) && (ret == SSZ_SUCCESS))
+                if (level_storage == NULL)
                 {
-                    size_t pair_count = width >> 1u;
-
-                    ret = ssz_hash_2to1_batch_inplace(hash_fn, level_storage, pair_count);
-                    width = pair_count;
+                    ret = SSZ_ERR_HASH_FAILURE;
                 }
-
-                if (ret == SSZ_SUCCESS)
+                else
                 {
-                    *out_root = level_storage[0];
+                    while ((width > 1u) && (ret == SSZ_SUCCESS))
+                    {
+                        size_t pair_count = width >> 1u;
+
+                        ret = ssz_hash_2to1_batch_inplace(hash_fn, level_storage, pair_count);
+                        width = pair_count;
+                    }
+
+                    if (ret == SSZ_SUCCESS)
+                    {
+                        *out_root = level_storage[0];
+                    }
                 }
             }
         }
