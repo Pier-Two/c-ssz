@@ -203,6 +203,7 @@ static void fuzz_cover_proof_errors(void)
             .has_mix_in_length = false,
             .elem_type = &leaf_type,
             .field_types = NULL,
+            .element_count_or_limit = UINT64_MAX,
         };
         (void)ssz_get_generalized_index(&mul_overflow_type, overflow_path, 1u, &out_index);
     }
@@ -375,6 +376,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
                 .has_mix_in_length = (fuzz_take_u8(&input) & 1u) != 0u,
                 .elem_type = &leaf_type,
                 .field_types = NULL,
+                .element_count_or_limit = fuzz_take_u64_bounded(&input, 64u),
             };
             const ssz_gindex_type_t *field_types[4] = {
                 &leaf_type,
