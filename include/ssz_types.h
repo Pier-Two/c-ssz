@@ -67,6 +67,7 @@ struct ssz_gindex_type
     bool has_mix_in_length;
     const ssz_gindex_type_t *elem_type;
     const ssz_gindex_type_t *const *field_types;
+    uint64_t element_count_or_limit;
 };
 
 typedef struct

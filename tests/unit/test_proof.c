@@ -193,6 +193,7 @@ static bool test_get_generalized_index_paths(void)
         .has_mix_in_length = false,
         .elem_type = &leaf,
         .field_types = NULL,
+        .element_count_or_limit = 8u,
     };
 
     static const ssz_gindex_type_t *const field_types[3] = {
@@ -953,6 +954,7 @@ static bool test_get_generalized_index_error_paths(void)
         .has_mix_in_length = false,
         .elem_type = &leaf,
         .field_types = NULL,
+        .element_count_or_limit = UINT64_MAX,
     };
     ASSERT_ERR(ssz_get_generalized_index(&packed_overflow,
                                          (const ssz_path_step_t[]){(UINT64_MAX / 8u) + 1u},
@@ -967,6 +969,7 @@ static bool test_get_generalized_index_error_paths(void)
         .has_mix_in_length = false,
         .elem_type = &leaf,
         .field_types = NULL,
+        .element_count_or_limit = 8u,
     };
     ASSERT_ERR(ssz_get_generalized_index(&packed_oob, (const ssz_path_step_t[]){4u}, 1u, &out),
                SSZ_ERR_GINDEX_INVALID);
@@ -1033,6 +1036,92 @@ static bool test_get_generalized_index_error_paths(void)
                                          2u,
                                          &out),
                SSZ_ERR_OVERFLOW);
+
+    return true;
+}
+
+static bool test_get_generalized_index_packed_oob_rejects_padding(void)
+{
+    static const ssz_gindex_type_t leaf = {
+        .kind = SSZ_GINDEX_LEAF,
+        .chunk_count = 1u,
+        .item_length = 32u,
+        .has_mix_in_length = false,
+        .elem_type = NULL,
+        .field_types = NULL,
+    };
+
+    static const ssz_gindex_type_t vector_uint8_31 = {
+        .kind = SSZ_GINDEX_ELEMENTS,
+        .chunk_count = 1u,
+        .item_length = 1u,
+        .has_mix_in_length = false,
+        .elem_type = &leaf,
+        .field_types = NULL,
+        .element_count_or_limit = 31u,
+    };
+
+    static const ssz_gindex_type_t list_uint8_31 = {
+        .kind = SSZ_GINDEX_ELEMENTS,
+        .chunk_count = 1u,
+        .item_length = 1u,
+        .has_mix_in_length = true,
+        .elem_type = &leaf,
+        .field_types = NULL,
+        .element_count_or_limit = 31u,
+    };
+
+    static const ssz_gindex_type_t vector_uint16_15 = {
+        .kind = SSZ_GINDEX_ELEMENTS,
+        .chunk_count = 1u,
+        .item_length = 2u,
+        .has_mix_in_length = false,
+        .elem_type = &leaf,
+        .field_types = NULL,
+        .element_count_or_limit = 15u,
+    };
+
+    static const ssz_gindex_type_t vector_uint32_7 = {
+        .kind = SSZ_GINDEX_ELEMENTS,
+        .chunk_count = 1u,
+        .item_length = 4u,
+        .has_mix_in_length = false,
+        .elem_type = &leaf,
+        .field_types = NULL,
+        .element_count_or_limit = 7u,
+    };
+
+    static const ssz_gindex_type_t packed_missing_bound = {
+        .kind = SSZ_GINDEX_ELEMENTS,
+        .chunk_count = 1u,
+        .item_length = 1u,
+        .has_mix_in_length = false,
+        .elem_type = &leaf,
+        .field_types = NULL,
+    };
+
+    ssz_gindex_t out = 0u;
+
+    ASSERT_ERR(ssz_get_generalized_index(&vector_uint8_31, (const ssz_path_step_t[]){30u}, 1u, &out),
+               SSZ_SUCCESS);
+    ASSERT_ERR(ssz_get_generalized_index(&vector_uint8_31, (const ssz_path_step_t[]){31u}, 1u, &out),
+               SSZ_ERR_GINDEX_INVALID);
+
+    ASSERT_ERR(ssz_get_generalized_index(&list_uint8_31, (const ssz_path_step_t[]){30u}, 1u, &out),
+               SSZ_SUCCESS);
+    ASSERT_ERR(ssz_get_generalized_index(&list_uint8_31, (const ssz_path_step_t[]){31u}, 1u, &out),
+               SSZ_ERR_GINDEX_INVALID);
+
+    ASSERT_ERR(ssz_get_generalized_index(&vector_uint16_15, (const ssz_path_step_t[]){15u}, 1u, &out),
+               SSZ_ERR_GINDEX_INVALID);
+    ASSERT_ERR(ssz_get_generalized_index(&vector_uint32_7, (const ssz_path_step_t[]){7u}, 1u, &out),
+               SSZ_ERR_GINDEX_INVALID);
+
+    ASSERT_ERR(ssz_get_generalized_index(&packed_missing_bound,
+                                         (const ssz_path_step_t[]){0u},
+                                         1u,
+                                         &out),
+               SSZ_ERR_SCHEMA_INVALID);
 
     return true;
 }
@@ -1377,6 +1466,8 @@ int main(void)
          test_multi_proof_rejects_duplicate_and_root_overlaps},
         {"proof_error_cases", test_proof_error_cases},
         {"get_generalized_index_error_paths", test_get_generalized_index_error_paths},
+        {"get_generalized_index_packed_oob_rejects_padding",
+         test_get_generalized_index_packed_oob_rejects_padding},
         {"indices_and_helper_error_paths", test_indices_and_helper_error_paths},
         {"proof_hash_and_verify_error_paths", test_proof_hash_and_verify_error_paths},
         {"multiproof_additional_error_paths", test_multiproof_additional_error_paths},

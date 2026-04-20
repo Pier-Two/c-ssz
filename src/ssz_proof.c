@@ -694,6 +694,14 @@ ssz_error_t ssz_get_generalized_index(
                         pos = path[i];
                     }
                 }
+                else if (current->element_count_or_limit == 0u)
+                {
+                    err = SSZ_ERR_SCHEMA_INVALID;
+                }
+                else if (path[i] >= current->element_count_or_limit)
+                {
+                    err = SSZ_ERR_GINDEX_INVALID;
+                }
                 else
                 {
                     uint64_t start_bytes = 0u;
