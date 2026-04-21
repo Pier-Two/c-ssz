@@ -29,7 +29,7 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
     {
         err = SSZ_ERR_OVERFLOW;
     }
-    else if ((fixed_region > in_len) || (fixed_region > UINT32_MAX))
+    else if ((in_len > UINT32_MAX) || (fixed_region > in_len) || (fixed_region > UINT32_MAX))
     {
         err = SSZ_ERR_OFFSET_INVALID;
     }
@@ -543,6 +543,10 @@ ssz_error_t ssz_deserialize_list_variable(
     {
         err = SSZ_ERR_OFFSET_INVALID;
     }
+    else if (in_len > UINT32_MAX)
+    {
+        err = SSZ_ERR_OFFSET_INVALID;
+    }
     else
     {
         uint32_t first_offset = ssz_internal_read_u32_le(in);
@@ -616,7 +620,7 @@ ssz_error_t ssz_deserialize_container(
                 break;
             }
         }
-        if ((err == SSZ_SUCCESS) && (fixed_region > in_len))
+        if ((err == SSZ_SUCCESS) && ((in_len > UINT32_MAX) || (fixed_region > in_len)))
         {
             err = SSZ_ERR_OFFSET_INVALID;
         }
