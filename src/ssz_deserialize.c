@@ -748,8 +748,9 @@ ssz_error_t ssz_deserialize_container(
                     size_t start = (size_t)ssz_internal_read_u32_le(&in[cursor]);
                     size_t end = in_len;
                     size_t look_cursor = next_cursor;
+                    bool scan_done = false;
 
-                    for (uint32_t j = i + 1u; j < field_count; j++)
+                    for (uint32_t j = i + 1u; (j < field_count) && !scan_done; j++)
                     {
                         if (field_fixed_sizes[j] == 0u)
                         {
@@ -765,14 +766,18 @@ ssz_error_t ssz_deserialize_container(
                             {
                                 end = (size_t)ssz_internal_read_u32_le(&in[look_cursor]);
                             }
-                            break;
+                            scan_done = true;
                         }
-                        if (ssz_internal_add_overflow_size(
-                                look_cursor, field_fixed_sizes[j], &look_cursor) ||
-                            (look_cursor > fixed_region))
+                        else if (ssz_internal_add_overflow_size(
+                                     look_cursor, field_fixed_sizes[j], &look_cursor) ||
+                                 (look_cursor > fixed_region))
                         {
                             err = SSZ_ERR_OFFSET_INVALID;
-                            break;
+                            scan_done = true;
+                        }
+                        else
+                        {
+                            /* intentionally empty */
                         }
                     }
 
