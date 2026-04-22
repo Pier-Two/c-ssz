@@ -5,6 +5,12 @@
 
 #include "ssz.h"
 
+#define CONTAINER_SCHEMA(field_fixed_sizes_value, field_count_value)                              \
+    (&(const ssz_container_schema_t){                                                             \
+        .field_fixed_sizes = (field_fixed_sizes_value),                                           \
+        .field_count = (field_count_value),                                                       \
+    })
+
 typedef bool (*test_fn_t)(void);
 
 typedef struct
@@ -374,7 +380,8 @@ static bool test_default_composite_helpers(void)
     ASSERT_MEM_EQ(vector_entries[0].current, vector_entries[0].default_bytes, vector_entries[0].default_len);
     ASSERT_MEM_EQ(vector_entries[1].current, vector_entries[1].default_bytes, vector_entries[1].default_len);
 
-    ASSERT_ERR(ssz_default_container(field_fixed_sizes, 3u, &container_codec), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_default_container(CONTAINER_SCHEMA(field_fixed_sizes, 3u), &container_codec),
+               SSZ_SUCCESS);
     for (size_t i = 0u; i < container_ctx.entry_count; i++)
     {
         ASSERT_TRUE(container_entries[i].default_calls == 1u);
@@ -384,7 +391,8 @@ static bool test_default_composite_helpers(void)
             container_entries[i].default_len);
     }
 
-    ASSERT_ERR(ssz_default_container((const size_t[]){1u, 0u}, 2u, &sparse_codec), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_default_container(CONTAINER_SCHEMA(((const size_t[]){1u, 0u}), 2u), &sparse_codec),
+               SSZ_SUCCESS);
     ASSERT_TRUE(sparse_entries[0].default_calls == 1u);
     ASSERT_TRUE(sparse_entries[1].default_calls == 1u);
     ASSERT_MEM_EQ(
@@ -402,11 +410,11 @@ static bool test_default_composite_helpers(void)
             1u,
             &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL}),
         SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(ssz_default_container(NULL, 1u, &container_codec), SSZ_ERR_SCHEMA_INVALID);
-    ASSERT_ERR(ssz_default_container(field_fixed_sizes, 0u, &container_codec), SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(ssz_default_container(NULL, &container_codec), SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(ssz_default_container(CONTAINER_SCHEMA(field_fixed_sizes, 0u), &container_codec),
+               SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_default_container(
-                   (const size_t[]){1u},
-                   1u,
+                   CONTAINER_SCHEMA(((const size_t[]){1u}), 1u),
                    &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL}),
                SSZ_ERR_INVALID_ARGUMENT);
 
@@ -670,11 +678,19 @@ static bool test_is_zero_composite_helpers(void)
 
     ASSERT_ERR(
         ssz_is_zero_container(
-            (const size_t[]){1u, 0u}, 2u, &container_codec, scratch, sizeof(scratch), &is_zero),
+            CONTAINER_SCHEMA(((const size_t[]){1u, 0u}), 2u),
+            &container_codec,
+            scratch,
+            sizeof(scratch),
+            &is_zero),
         SSZ_SUCCESS);
     ASSERT_TRUE(is_zero);
     ASSERT_ERR(ssz_is_zero_container(
-                   (const size_t[]){1u, 0u}, 2u, &container_codec, scratch, sizeof(scratch), &is_zero),
+                   CONTAINER_SCHEMA(((const size_t[]){1u, 0u}), 2u),
+                   &container_codec,
+                   scratch,
+                   sizeof(scratch),
+                   &is_zero),
                SSZ_SUCCESS);
     ASSERT_TRUE(is_zero);
 
@@ -686,12 +702,10 @@ static bool test_is_zero_composite_helpers(void)
             sizeof(scratch),
             &is_zero),
         SSZ_ERR_INVALID_ARGUMENT);
-    ASSERT_ERR(
-        ssz_is_zero_container(NULL, 1u, &container_codec, scratch, sizeof(scratch), &is_zero),
-        SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(ssz_is_zero_container(NULL, &container_codec, scratch, sizeof(scratch), &is_zero),
+               SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(ssz_is_zero_container(
-                   (const size_t[]){1u},
-                   1u,
+                   CONTAINER_SCHEMA(((const size_t[]){1u}), 1u),
                    &(ssz_member_codec_t){.ctx = NULL, .write = NULL, .read = NULL, .root = NULL},
                    scratch,
                    sizeof(scratch),

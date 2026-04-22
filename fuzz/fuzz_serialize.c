@@ -3,6 +3,12 @@
 
 #include "ssz.h"
 
+#define CONTAINER_SCHEMA(field_fixed_sizes_value, field_count_value)                              \
+    (&(const ssz_container_schema_t){                                                             \
+        .field_fixed_sizes = (field_fixed_sizes_value),                                           \
+        .field_count = (field_count_value),                                                       \
+    })
+
 typedef struct
 {
     const uint8_t *ptr;
@@ -492,81 +498,70 @@ static void fuzz_cover_serialize_errors(void)
         const size_t field_fixed_sizes_var[1] = {0u};
         const size_t field_fixed_sizes_fixed2[1] = {2u};
         const size_t field_fixed_sizes_fixed3[1] = {3u};
-        (void)ssz_serialize_container(field_fixed_sizes_var, 1u, NULL, out, sizeof(out), &out_len);
+        (void)ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes_var, 1u), NULL, out, sizeof(out), &out_len);
         (void)ssz_serialize_container(
-            field_fixed_sizes_bad,
-            2u,
+            CONTAINER_SCHEMA(field_fixed_sizes_bad, 2u),
             &codec_ok,
             out,
             sizeof(out),
             &out_len);
         (void)ssz_serialize_container(
-            field_fixed_sizes_var,
-            1u,
+            CONTAINER_SCHEMA(field_fixed_sizes_var, 1u),
             &codec_size_err,
             out,
             sizeof(out),
             &out_len);
         (void)ssz_serialize_container(
-            field_fixed_sizes_var,
-            1u,
+            CONTAINER_SCHEMA(field_fixed_sizes_var, 1u),
             &codec_size_max,
             out,
             sizeof(out),
             &out_len);
         (void)ssz_serialize_container(
-            field_fixed_sizes_fixed3,
-            1u,
+            CONTAINER_SCHEMA(field_fixed_sizes_fixed3, 1u),
             &codec_ok,
             out,
             sizeof(out),
             &out_len);
         (void)ssz_serialize_container(
-            field_fixed_sizes_var,
-            1u,
+            CONTAINER_SCHEMA(field_fixed_sizes_var, 1u),
             &codec_u32_max,
             out,
             sizeof(out),
             &out_len);
-        (void)ssz_serialize_container(field_fixed_sizes_var, 1u, &codec_ok, out, 0u, &out_len);
+        (void)ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes_var, 1u), &codec_ok, out, 0u, &out_len);
         (void)ssz_serialize_container(
-            field_fixed_sizes_var,
-            1u,
+            CONTAINER_SCHEMA(field_fixed_sizes_var, 1u),
             &codec_second_size_err,
             out,
             sizeof(out),
             &out_len);
         (void)ssz_serialize_container(
-            field_fixed_sizes_var,
-            1u,
+            CONTAINER_SCHEMA(field_fixed_sizes_var, 1u),
             &codec_write_err,
             out,
             sizeof(out),
             &out_len);
         (void)ssz_serialize_container(
-            field_fixed_sizes_var,
-            1u,
+            CONTAINER_SCHEMA(field_fixed_sizes_var, 1u),
             &codec_short_write,
             out,
             sizeof(out),
             &out_len);
         (void)ssz_serialize_container(
-            field_fixed_sizes_var,
-            1u,
+            CONTAINER_SCHEMA(field_fixed_sizes_var, 1u),
             &codec_cursor_overflow,
             out,
             sizeof(out),
             &out_len);
         (void)ssz_serialize_container(
-            field_fixed_sizes_fixed2,
-            1u,
+            CONTAINER_SCHEMA(field_fixed_sizes_fixed2, 1u),
             &codec_write_err,
             out,
             sizeof(out),
             &out_len);
         (void)ssz_serialize_container(
-            field_fixed_sizes_fixed2,
-            1u,
+            CONTAINER_SCHEMA(field_fixed_sizes_fixed2, 1u),
             &codec_short_write,
             out,
             sizeof(out),
@@ -982,18 +977,16 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         uint8_t out[512] = {0u};
         size_t out_len = 0u;
 
-        (void)ssz_serialize_container(field_fixed_sizes, field_count, &codec, NULL, 0u, &out_len);
+        (void)ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, field_count), &codec, NULL, 0u, &out_len);
         (void)ssz_serialize_container(
-            field_fixed_sizes,
-            field_count,
+            CONTAINER_SCHEMA(field_fixed_sizes, field_count),
             &codec,
             out,
             sizeof(out),
             &out_len);
-        (void)
-            ssz_serialize_container(field_fixed_sizes, field_count, &codec, out, sizeof(out), NULL);
-        (void)ssz_serialize_container(NULL, field_count, &codec, out, sizeof(out), &out_len);
-        (void)ssz_serialize_container(field_fixed_sizes, 0u, &codec, out, sizeof(out), &out_len);
+        (void)ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, field_count), &codec, out, sizeof(out), NULL);
+        (void)ssz_serialize_container(NULL, &codec, out, sizeof(out), &out_len);
+        (void)ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 0u), &codec, out, sizeof(out), &out_len);
         break;
     }
 

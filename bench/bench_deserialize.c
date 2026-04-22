@@ -232,6 +232,8 @@ static const size_t g_container_field_fixed_sizes[DESER_CONTAINER_FIELD_COUNT] =
     0u,
     0u,
 };
+static const ssz_container_schema_t g_container_schema =
+    SSZ_CONTAINER_SCHEMA_FROM_ARRAY(g_container_field_fixed_sizes);
 
 static uint8_t g_container_field0[48];
 static uint8_t g_container_field1[32];
@@ -470,8 +472,7 @@ static void bench_init_deserialize_data(void)
     };
 
     err = ssz_serialize_container(
-        g_container_field_fixed_sizes,
-        DESER_CONTAINER_FIELD_COUNT,
+        &g_container_schema,
         &g_container_write_codec,
         g_container_encoded,
         sizeof(g_container_encoded),
@@ -830,8 +831,7 @@ UBENCH(deserialize, container_validator_like_mixed)
         BENCH_EXPECT_OK(ssz_deserialize_container(
             g_container_encoded,
             g_container_encoded_len,
-            g_container_field_fixed_sizes,
-            DESER_CONTAINER_FIELD_COUNT,
+            &g_container_schema,
             &g_container_read_codec));
     }
 

@@ -5,6 +5,12 @@
 
 #include "ssz.h"
 
+#define CONTAINER_SCHEMA(field_fixed_sizes_value, field_count_value)                              \
+    (&(const ssz_container_schema_t){                                                             \
+        .field_fixed_sizes = (field_fixed_sizes_value),                                           \
+        .field_count = (field_count_value),                                                       \
+    })
+
 typedef bool (*test_fn_t)(void);
 
 typedef struct
@@ -204,6 +210,12 @@ typedef struct
     size_t *sizes;
 } schema_mutating_read_ctx_t;
 
+typedef struct
+{
+    size_t *sizes;
+    bool second_seen;
+} schema_wrap_read_ctx_t;
+
 /* Callback that mutates field_fixed_sizes[1] on the first read, so the loop
    advances cursor by less than the precomputed fixed_region. */
 static ssz_error_t schema_mutating_read(
@@ -219,6 +231,35 @@ static ssz_error_t schema_mutating_read(
     {
         m->sizes[1] = 1u;
     }
+    return SSZ_SUCCESS;
+}
+
+/* Callback that mutates a later fixed field size to SIZE_MAX. The hardened
+   container code must reject the wrapped cursor advance before invoking the
+   later field callback. */
+static ssz_error_t schema_wrap_fixed_read(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
+{
+    schema_wrap_read_ctx_t *m = (schema_wrap_read_ctx_t *)ctx;
+    (void)data;
+    (void)data_len;
+
+    if (m == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (member_id == 0u)
+    {
+        m->sizes[1] = SIZE_MAX;
+    }
+    else if (member_id == 1u)
+    {
+        m->second_seen = true;
+    }
+
     return SSZ_SUCCESS;
 }
 
@@ -272,6 +313,28 @@ static ssz_error_t schema_inflate_look_cursor_read(
     {
         m->sizes[2] = 9999u;
     }
+    return SSZ_SUCCESS;
+}
+
+static ssz_error_t schema_wrap_look_cursor_read(
+    void *ctx,
+    uint64_t member_id,
+    const uint8_t *data,
+    size_t data_len)
+{
+    schema_mutating_read_ctx_t *m = (schema_mutating_read_ctx_t *)ctx;
+    (void)data;
+    (void)data_len;
+
+    if (m == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (member_id == 0u)
+    {
+        m->sizes[2] = SIZE_MAX;
+    }
+
     return SSZ_SUCCESS;
 }
 
@@ -839,7 +902,8 @@ static bool test_deserialize_container_mixed_fields(void)
     };
 
     ASSERT_ERR(
-        ssz_deserialize_container(encoded, sizeof(encoded), field_fixed_sizes, 3u, &codec),
+        ssz_deserialize_container(
+            encoded, sizeof(encoded), CONTAINER_SCHEMA(field_fixed_sizes, 3u), &codec),
         SSZ_SUCCESS);
     ASSERT_TRUE(all_read_entries_seen(&read_ctx));
 
@@ -857,8 +921,7 @@ static bool test_deserialize_container_mixed_fields(void)
         ssz_deserialize_container(
             out_of_bounds_offset,
             sizeof(out_of_bounds_offset),
-            field_fixed_sizes,
-            3u,
+            CONTAINER_SCHEMA(field_fixed_sizes, 3u),
             &codec),
         SSZ_ERR_OFFSET_INVALID);
 
@@ -877,8 +940,7 @@ static bool test_deserialize_container_mixed_fields(void)
         ssz_deserialize_container(
             non_monotonic_offsets,
             sizeof(non_monotonic_offsets),
-            variable_sizes,
-            2u,
+            CONTAINER_SCHEMA(variable_sizes, 2u),
             &codec),
         SSZ_ERR_OFFSET_INVALID);
 
@@ -1084,8 +1146,7 @@ static bool test_deserialize_direct_calls(void)
         ssz_deserialize_container(
             container_encoded,
             sizeof(container_encoded),
-            field_fixed_sizes,
-            3u,
+            CONTAINER_SCHEMA(field_fixed_sizes, 3u),
             &container_codec),
         SSZ_SUCCESS);
     ASSERT_TRUE(all_read_entries_seen(&container_ctx));
@@ -1515,19 +1576,18 @@ static bool test_deserialize_collection_error_paths(void)
 static bool test_deserialize_container_additional_error_paths(void)
 {
     ASSERT_ERR(
-        ssz_deserialize_container((const uint8_t[1]){0x00u}, 1u, NULL, 1u, NULL),
+        ssz_deserialize_container((const uint8_t[1]){0x00u}, 1u, NULL, NULL),
         SSZ_ERR_SCHEMA_INVALID);
 
     const size_t one_fixed[1] = {1u};
     ASSERT_ERR(
-        ssz_deserialize_container((const uint8_t[1]){0x00u}, 1u, one_fixed, 1u, NULL),
+        ssz_deserialize_container((const uint8_t[1]){0x00u}, 1u, CONTAINER_SCHEMA(one_fixed, 1u), NULL),
         SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(
         ssz_deserialize_container(
             NULL,
             1u,
-            one_fixed,
-            1u,
+            CONTAINER_SCHEMA(one_fixed, 1u),
             &(ssz_member_codec_t){.ctx = NULL,
                                   .write = NULL,
                                   .read = fail_if_called_read,
@@ -1539,8 +1599,7 @@ static bool test_deserialize_container_additional_error_paths(void)
         ssz_deserialize_container(
             (const uint8_t[1]){0x00u},
             1u,
-            overflow_fixed_region,
-            2u,
+            CONTAINER_SCHEMA(overflow_fixed_region, 2u),
             &(ssz_member_codec_t){.ctx = NULL,
                                   .write = NULL,
                                   .read = fail_if_called_read,
@@ -1552,8 +1611,7 @@ static bool test_deserialize_container_additional_error_paths(void)
         ssz_deserialize_container(
             (const uint8_t[4]){0x00u, 0x00u, 0x00u, 0x00u},
             4u,
-            two_fixed,
-            2u,
+            CONTAINER_SCHEMA(two_fixed, 2u),
             &(ssz_member_codec_t){.ctx = NULL,
                                   .write = NULL,
                                   .read = fail_if_called_read,
@@ -1572,8 +1630,7 @@ static bool test_deserialize_container_additional_error_paths(void)
                 0xBBu,
             },
             6u,
-            variable_then_fixed,
-            2u,
+            CONTAINER_SCHEMA(variable_then_fixed, 2u),
             &(ssz_member_codec_t){.ctx = NULL,
                                   .write = NULL,
                                   .read = fail_if_called_read,
@@ -1591,8 +1648,7 @@ static bool test_deserialize_container_additional_error_paths(void)
         ssz_deserialize_container(
             (const uint8_t[1]){0xAAu},
             1u,
-            one_fixed,
-            1u,
+            CONTAINER_SCHEMA(one_fixed, 1u),
             &fixed_read_fail_codec),
         SSZ_ERR_TYPE_MISMATCH);
 
@@ -1607,8 +1663,7 @@ static bool test_deserialize_container_additional_error_paths(void)
         ssz_deserialize_container(
             (const uint8_t[2]){0xAAu, 0xBBu},
             2u,
-            one_fixed,
-            1u,
+            CONTAINER_SCHEMA(one_fixed, 1u),
             &fixed_ok_codec),
         SSZ_ERR_OFFSET_INVALID);
 
@@ -1640,13 +1695,12 @@ static bool test_deserialize_container_additional_error_paths(void)
                 0x00u,
                 0x00u,
                 0x00u,
-                0xB0u,
-                0xC0u,
-            },
-            11u,
-            mixed_with_two_variables,
-            3u,
-            &expect_codec),
+            0xB0u,
+            0xC0u,
+        },
+        11u,
+        CONTAINER_SCHEMA(mixed_with_two_variables, 3u),
+        &expect_codec),
         SSZ_SUCCESS);
     ASSERT_TRUE(all_read_entries_seen(&read_ctx));
 
@@ -1669,13 +1723,12 @@ static bool test_deserialize_container_additional_error_paths(void)
                 0x00u,
                 0x00u,
                 0x00u,
-                0xB0u,
-                0xC0u,
-            },
-            11u,
-            mixed_with_two_variables,
-            3u,
-            &variable_read_fail_codec),
+            0xB0u,
+            0xC0u,
+        },
+        11u,
+        CONTAINER_SCHEMA(mixed_with_two_variables, 3u),
+        &variable_read_fail_codec),
         SSZ_ERR_TYPE_MISMATCH);
 
     /* Test: callback mutates field_fixed_sizes during read, causing cursor != fixed_region.
@@ -1693,10 +1746,31 @@ static bool test_deserialize_container_additional_error_paths(void)
             ssz_deserialize_container(
                 (const uint8_t[4]){0xAAu, 0xBBu, 0xCCu, 0xDDu},
                 4u,
-                mutating_sizes,
-                2u,
+                CONTAINER_SCHEMA(mutating_sizes, 2u),
                 &mut_codec),
             SSZ_ERR_OFFSET_INVALID);
+    }
+
+    {
+        size_t wrap_sizes[2] = {1u, 1u};
+        schema_wrap_read_ctx_t wrap_ctx = {
+            .sizes = wrap_sizes,
+            .second_seen = false,
+        };
+        ssz_member_codec_t wrap_codec = {
+            .ctx = &wrap_ctx,
+            .write = NULL,
+            .read = schema_wrap_fixed_read,
+            .root = NULL,
+        };
+        ASSERT_ERR(
+            ssz_deserialize_container(
+                (const uint8_t[2]){0xAAu, 0xBBu},
+                2u,
+                CONTAINER_SCHEMA(wrap_sizes, 2u),
+                &wrap_codec),
+            SSZ_ERR_OFFSET_INVALID);
+        ASSERT_TRUE(!wrap_ctx.second_seen);
     }
 
     /* Test: second-pass guard (cursor + fixed_size) > fixed_region.
@@ -1723,8 +1797,7 @@ static bool test_deserialize_container_additional_error_paths(void)
             ssz_deserialize_container(
                 payload,
                 sizeof(payload),
-                inflate_sizes,
-                3u,
+                CONTAINER_SCHEMA(inflate_sizes, 3u),
                 &inflate_codec),
             SSZ_ERR_OFFSET_INVALID);
     }
@@ -1752,9 +1825,34 @@ static bool test_deserialize_container_additional_error_paths(void)
             ssz_deserialize_container(
                 payload,
                 sizeof(payload),
-                zero_sizes,
-                2u,
+                CONTAINER_SCHEMA(zero_sizes, 2u),
                 &zero_codec),
+            SSZ_ERR_OFFSET_INVALID);
+    }
+
+    {
+        const uint8_t payload[] = {
+            0x0Cu, 0x00u, 0x00u, 0x00u,
+            0xFFu, 0xFFu,
+            0xEEu, 0xEEu,
+            0x0Du, 0x00u, 0x00u, 0x00u,
+            0xAAu,
+            0xBBu,
+        };
+        size_t wrap_look_sizes[4] = {0u, 2u, 2u, 0u};
+        schema_mutating_read_ctx_t wrap_look_ctx = {.sizes = wrap_look_sizes};
+        ssz_member_codec_t wrap_look_codec = {
+            .ctx = &wrap_look_ctx,
+            .write = NULL,
+            .read = schema_wrap_look_cursor_read,
+            .root = NULL,
+        };
+        ASSERT_ERR(
+            ssz_deserialize_container(
+                payload,
+                sizeof(payload),
+                CONTAINER_SCHEMA(wrap_look_sizes, 4u),
+                &wrap_look_codec),
             SSZ_ERR_OFFSET_INVALID);
     }
 
@@ -1779,8 +1877,7 @@ static bool test_deserialize_container_additional_error_paths(void)
             ssz_deserialize_container(
                 payload,
                 sizeof(payload),
-                look_sizes,
-                4u,
+                CONTAINER_SCHEMA(look_sizes, 4u),
                 &look_codec),
             SSZ_ERR_OFFSET_INVALID);
     }
@@ -1806,8 +1903,7 @@ static bool test_deserialize_container_additional_error_paths(void)
             ssz_deserialize_container(
                 payload,
                 sizeof(payload),
-                end_sizes,
-                3u,
+                CONTAINER_SCHEMA(end_sizes, 3u),
                 &end_codec),
             SSZ_ERR_OFFSET_INVALID);
     }

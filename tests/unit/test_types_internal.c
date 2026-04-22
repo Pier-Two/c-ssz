@@ -10,6 +10,12 @@
    gcov attributes coverage to src/ssz_types.c, not a path through tests/. */
 #include "ssz_types.c"
 
+#define CONTAINER_SCHEMA(field_fixed_sizes_value, field_count_value)                              \
+    (&(const ssz_container_schema_t){                                                             \
+        .field_fixed_sizes = (field_fixed_sizes_value),                                           \
+        .field_count = (field_count_value),                                                       \
+    })
+
 typedef bool (*test_fn_t)(void);
 
 typedef struct
@@ -446,7 +452,8 @@ static bool test_container_error_and_early_return_paths(void)
         };
         ssz_member_codec_t codec = make_codec(&ctx);
 
-        ASSERT_ERR(ssz_default_container(field_fixed_sizes, 3u, &codec), SSZ_ERR_HASH_FAILURE);
+        ASSERT_ERR(ssz_default_container(CONTAINER_SCHEMA(field_fixed_sizes, 3u), &codec),
+                   SSZ_ERR_HASH_FAILURE);
         ASSERT_SIZE_EQ(entries[0].default_calls, 1u);
         ASSERT_SIZE_EQ(entries[1].default_calls, 1u);
         ASSERT_SIZE_EQ(entries[2].default_calls, 0u);
@@ -486,7 +493,7 @@ static bool test_container_error_and_early_return_paths(void)
 
         ASSERT_ERR(
             ssz_is_zero_container(
-                field_fixed_sizes, 3u, &codec, scratch, sizeof(scratch), &is_zero),
+                CONTAINER_SCHEMA(field_fixed_sizes, 3u), &codec, scratch, sizeof(scratch), &is_zero),
             SSZ_ERR_SELECTOR_INVALID);
         ASSERT_SIZE_EQ(entries[0].write_calls, 4u);
         ASSERT_SIZE_EQ(entries[0].default_calls, 1u);
@@ -525,7 +532,11 @@ static bool test_container_error_and_early_return_paths(void)
         is_zero = true;
         ASSERT_ERR(
             ssz_is_zero_container(
-                (const size_t[]){1u, 1u}, 2u, &codec, scratch, sizeof(scratch), &is_zero),
+                CONTAINER_SCHEMA(((const size_t[]){1u, 1u}), 2u),
+                &codec,
+                scratch,
+                sizeof(scratch),
+                &is_zero),
             SSZ_SUCCESS);
         ASSERT_FALSE(is_zero);
         ASSERT_SIZE_EQ(entries[0].write_calls, 4u);
