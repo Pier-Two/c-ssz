@@ -3,6 +3,12 @@
 
 #include "ssz.h"
 
+#define CONTAINER_SCHEMA(field_fixed_sizes_value, field_count_value)                              \
+    (&(const ssz_container_schema_t){                                                             \
+        .field_fixed_sizes = (field_fixed_sizes_value),                                           \
+        .field_count = (field_count_value),                                                       \
+    })
+
 typedef struct
 {
     const uint8_t *ptr;
@@ -328,39 +334,34 @@ static void fuzz_cover_deserialize_errors(void)
         ssz_deserialize_list_variable(in, 4u, SSZ_NO_LIMIT, 0u, &codec_no_read, &out_element_count);
     (void)ssz_deserialize_list_variable(NULL, 4u, SSZ_NO_LIMIT, 0u, &codec, &out_element_count);
 
-    (void)ssz_deserialize_container(in, 0u, NULL, 1u, &codec);
-    (void)ssz_deserialize_container(NULL, 1u, (size_t[1]){1u}, 1u, &codec);
-    (void)ssz_deserialize_container(in, 1u, (size_t[1]){1u}, 1u, &codec_no_read);
-    (void)ssz_deserialize_container(in, 1u, (size_t[2]){SIZE_MAX, 1u}, 2u, &codec);
+    (void)ssz_deserialize_container(in, 0u, NULL, &codec);
+    (void)ssz_deserialize_container(NULL, 1u, CONTAINER_SCHEMA(((size_t[1]){1u}), 1u), &codec);
+    (void)ssz_deserialize_container(in, 1u, CONTAINER_SCHEMA(((size_t[1]){1u}), 1u), &codec_no_read);
+    (void)ssz_deserialize_container(in, 1u, CONTAINER_SCHEMA(((size_t[2]){SIZE_MAX, 1u}), 2u), &codec);
     (void)ssz_deserialize_container(
         container_fixed_overflow,
         sizeof(container_fixed_overflow),
-        container_fixed_overflow_sizes,
-        2u,
+        CONTAINER_SCHEMA(container_fixed_overflow_sizes, 2u),
         &codec_mutate_fixed_overflow);
     (void)ssz_deserialize_container(
         container_cursor_mismatch,
         sizeof(container_cursor_mismatch),
-        container_cursor_mismatch_sizes,
-        2u,
+        CONTAINER_SCHEMA(container_cursor_mismatch_sizes, 2u),
         &codec_mutate_cursor_mismatch);
     (void)ssz_deserialize_container(
         container_offset_oob,
         sizeof(container_offset_oob),
-        (size_t[2]){0u, 0u},
-        2u,
+        CONTAINER_SCHEMA(((size_t[2]){0u, 0u}), 2u),
         &codec);
     (void)ssz_deserialize_container(
         container_offset_order,
         sizeof(container_offset_order),
-        (size_t[2]){0u, 0u},
-        2u,
+        CONTAINER_SCHEMA(((size_t[2]){0u, 0u}), 2u),
         &codec);
     (void)ssz_deserialize_container(
         container_last_var,
         sizeof(container_last_var),
-        (size_t[3]){0u, 0u, 4u},
-        3u,
+        CONTAINER_SCHEMA(((size_t[3]){0u, 0u, 4u}), 3u),
         &codec_mutate);
 
     /* Container with {variable, fixed, variable} layout exercises
@@ -388,8 +389,8 @@ static void fuzz_cover_deserialize_errors(void)
             0x03u,
             0x04u, /* field 2 payload */
         };
-        (void)
-            ssz_deserialize_container(vfv_in, sizeof(vfv_in), (size_t[3]){0u, 2u, 0u}, 3u, &codec);
+        (void)ssz_deserialize_container(
+            vfv_in, sizeof(vfv_in), CONTAINER_SCHEMA(((size_t[3]){0u, 2u, 0u}), 3u), &codec);
     }
 
     (void)ssz_deserialize_union(in, 1u, 2u, false, &codec, NULL);
@@ -672,8 +673,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         (void)ssz_deserialize_container(
             input.ptr,
             input.remaining,
-            field_fixed_sizes,
-            field_count,
+            CONTAINER_SCHEMA(field_fixed_sizes, field_count),
             &codec);
         break;
     }

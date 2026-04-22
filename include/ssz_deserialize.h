@@ -70,8 +70,7 @@ extern "C"
     ssz_error_t ssz_deserialize_container(
         const uint8_t *in,
         size_t in_len,
-        const size_t *field_fixed_sizes,
-        uint32_t field_count,
+        const ssz_container_schema_t *schema,
         ssz_member_codec_t *codec);
 
     ssz_error_t ssz_deserialize_union(

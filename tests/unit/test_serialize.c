@@ -5,6 +5,12 @@
 
 #include "ssz.h"
 
+#define CONTAINER_SCHEMA(field_fixed_sizes_value, field_count_value)                              \
+    (&(const ssz_container_schema_t){                                                             \
+        .field_fixed_sizes = (field_fixed_sizes_value),                                           \
+        .field_count = (field_count_value),                                                       \
+    })
+
 typedef bool (*test_fn_t)(void);
 
 typedef struct
@@ -182,6 +188,55 @@ static ssz_member_codec_t make_scripted_codec(scripted_write_ctx_t *ctx)
         .root = NULL,
     };
     return codec;
+}
+
+typedef struct
+{
+    size_t *sizes;
+    bool second_seen;
+} schema_wrap_write_ctx_t;
+
+static ssz_error_t schema_wrap_fixed_write(
+    const void *ctx,
+    uint64_t member_id,
+    uint8_t *out,
+    size_t out_cap,
+    size_t *out_written)
+{
+    schema_wrap_write_ctx_t *m = (schema_wrap_write_ctx_t *)ctx;
+
+    if ((m == NULL) || (out_written == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+
+    if (member_id == 0u)
+    {
+        if ((out == NULL) || (out_cap < 1u))
+        {
+            return SSZ_ERR_BUFFER_TOO_SMALL;
+        }
+
+        out[0] = 0xAAu;
+        *out_written = 1u;
+        m->sizes[1] = SIZE_MAX;
+        return SSZ_SUCCESS;
+    }
+
+    if (member_id == 1u)
+    {
+        m->second_seen = true;
+        if ((out == NULL) || (out_cap < 4u))
+        {
+            return SSZ_ERR_BUFFER_TOO_SMALL;
+        }
+
+        memset(out, 0xBB, 4u);
+        *out_written = 4u;
+        return SSZ_SUCCESS;
+    }
+
+    return SSZ_ERR_INVALID_ARGUMENT;
 }
 
 static bool test_serialize_basic_types_and_aliases(void)
@@ -591,12 +646,13 @@ static bool test_serialize_container_mixed_fields_and_size_query(void)
     size_t out_len = 0u;
 
     ASSERT_ERR(
-        ssz_serialize_container(field_fixed_sizes, 3u, &codec, NULL, 0u, &out_len),
+        ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 3u), &codec, NULL, 0u, &out_len),
         SSZ_SUCCESS);
     ASSERT_TRUE(out_len == 10u);
 
     ASSERT_ERR(
-        ssz_serialize_container(field_fixed_sizes, 3u, &codec, out, sizeof(out), &out_len),
+        ssz_serialize_container(
+            CONTAINER_SCHEMA(field_fixed_sizes, 3u), &codec, out, sizeof(out), &out_len),
         SSZ_SUCCESS);
     ASSERT_TRUE(out_len == 10u);
     ASSERT_MEM_EQ(
@@ -787,8 +843,7 @@ static bool test_serialize_direct_calls(void)
 
     ASSERT_ERR(
         ssz_serialize_container(
-            field_fixed_sizes,
-            3u,
+            CONTAINER_SCHEMA(field_fixed_sizes, 3u),
             &container_codec,
             out_a,
             sizeof(out_a),
@@ -796,8 +851,7 @@ static bool test_serialize_direct_calls(void)
         SSZ_SUCCESS);
     ASSERT_ERR(
         ssz_serialize_container(
-            field_fixed_sizes,
-            3u,
+            CONTAINER_SCHEMA(field_fixed_sizes, 3u),
             &container_codec,
             out_b,
             sizeof(out_b),
@@ -1593,20 +1647,19 @@ static bool test_serialize_container_error_paths(void)
     const size_t one_variable[1] = {0u};
 
     ASSERT_ERR(
-        ssz_serialize_container(NULL, 1u, NULL, out, sizeof(out), &out_len),
+        ssz_serialize_container(NULL, NULL, out, sizeof(out), &out_len),
         SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(
-        ssz_serialize_container(one_variable, 0u, NULL, out, sizeof(out), &out_len),
+        ssz_serialize_container(CONTAINER_SCHEMA(one_variable, 0u), NULL, out, sizeof(out), &out_len),
         SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(
-        ssz_serialize_container(one_variable, 1u, NULL, out, sizeof(out), &out_len),
+        ssz_serialize_container(CONTAINER_SCHEMA(one_variable, 1u), NULL, out, sizeof(out), &out_len),
         SSZ_ERR_INVALID_ARGUMENT);
 
     const size_t overflow_fixed_region[2] = {SIZE_MAX, 1u};
     ASSERT_ERR(
         ssz_serialize_container(
-            overflow_fixed_region,
-            2u,
+            CONTAINER_SCHEMA(overflow_fixed_region, 2u),
             &(ssz_member_codec_t){.ctx = NULL,
                                   .write = fail_if_called_write,
                                   .read = NULL,
@@ -1628,7 +1681,8 @@ static bool test_serialize_container_error_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(one_variable, 1u, &codec, out, sizeof(out), &out_len),
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(one_variable, 1u), &codec, out, sizeof(out), &out_len),
             SSZ_ERR_TYPE_MISMATCH);
     }
 
@@ -1644,7 +1698,8 @@ static bool test_serialize_container_error_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(one_variable, 1u, &codec, out, sizeof(out), &out_len),
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(one_variable, 1u), &codec, out, sizeof(out), &out_len),
             SSZ_ERR_OVERFLOW);
     }
 
@@ -1661,7 +1716,8 @@ static bool test_serialize_container_error_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(fixed_sizes, 1u, &codec, out, sizeof(out), &out_len),
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(fixed_sizes, 1u), &codec, out, sizeof(out), &out_len),
             SSZ_ERR_TYPE_MISMATCH);
     }
 
@@ -1677,7 +1733,8 @@ static bool test_serialize_container_error_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(one_variable, 1u, &codec, out, sizeof(out), &out_len),
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(one_variable, 1u), &codec, out, sizeof(out), &out_len),
             SSZ_ERR_OVERFLOW);
     }
 
@@ -1693,7 +1750,8 @@ static bool test_serialize_container_error_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(one_variable, 1u, &codec, out, sizeof(out), NULL),
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(one_variable, 1u), &codec, out, sizeof(out), NULL),
             SSZ_ERR_INVALID_ARGUMENT);
     }
 
@@ -1709,7 +1767,8 @@ static bool test_serialize_container_error_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(one_variable, 1u, &codec, out, sizeof(out), &out_len),
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(one_variable, 1u), &codec, out, sizeof(out), &out_len),
             SSZ_SUCCESS);
     }
 
@@ -1725,7 +1784,8 @@ static bool test_serialize_container_error_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(one_variable, 1u, &codec, out, sizeof(out), &out_len),
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(one_variable, 1u), &codec, out, sizeof(out), &out_len),
             SSZ_SUCCESS);
     }
 
@@ -1741,7 +1801,8 @@ static bool test_serialize_container_error_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(one_variable, 1u, &codec, out, sizeof(out), &out_len),
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(one_variable, 1u), &codec, out, sizeof(out), &out_len),
             SSZ_SUCCESS);
     }
 
@@ -1757,7 +1818,8 @@ static bool test_serialize_container_error_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(one_variable, 1u, &codec, out, sizeof(out), &out_len),
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(one_variable, 1u), &codec, out, sizeof(out), &out_len),
             SSZ_SUCCESS);
     }
 
@@ -1774,7 +1836,8 @@ static bool test_serialize_container_error_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(fixed_sizes, 1u, &codec, out, sizeof(out), &out_len),
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(fixed_sizes, 1u), &codec, out, sizeof(out), &out_len),
             SSZ_SUCCESS);
     }
 
@@ -1791,7 +1854,8 @@ static bool test_serialize_container_error_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(fixed_sizes, 1u, &codec, out, sizeof(out), &out_len),
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(fixed_sizes, 1u), &codec, out, sizeof(out), &out_len),
             SSZ_SUCCESS);
     }
 
@@ -1807,7 +1871,8 @@ static bool test_serialize_container_error_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(one_variable, 1u, &codec, out, sizeof(out), &out_len),
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(one_variable, 1u), &codec, out, sizeof(out), &out_len),
             SSZ_SUCCESS);
     }
 
@@ -1823,8 +1888,7 @@ static bool test_serialize_container_out_buffer_edge_paths(void)
         const size_t field_fixed_sizes[2] = {0u, 1u};
         ASSERT_ERR(
             ssz_serialize_container(
-                field_fixed_sizes,
-                2u,
+                CONTAINER_SCHEMA(field_fixed_sizes, 2u),
                 &(ssz_member_codec_t){.ctx = NULL,
                                       .write = fail_if_called_write,
                                       .read = NULL,
@@ -1840,8 +1904,7 @@ static bool test_serialize_container_out_buffer_edge_paths(void)
         const size_t field_fixed_sizes[2] = {(size_t)UINT32_MAX, 1u};
         ASSERT_ERR(
             ssz_serialize_container(
-                field_fixed_sizes,
-                2u,
+                CONTAINER_SCHEMA(field_fixed_sizes, 2u),
                 &(ssz_member_codec_t){.ctx = NULL,
                                       .write = fail_if_called_write,
                                       .read = NULL,
@@ -1866,7 +1929,7 @@ static bool test_serialize_container_out_buffer_edge_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(field_fixed_sizes, 2u, &codec, out, 8u, &out_len),
+            ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 2u), &codec, out, 8u, &out_len),
             SSZ_ERR_BUFFER_TOO_SMALL);
     }
 
@@ -1884,7 +1947,7 @@ static bool test_serialize_container_out_buffer_edge_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(field_fixed_sizes, 2u, &codec, out, 8u, &out_len),
+            ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 2u), &codec, out, 8u, &out_len),
             SSZ_ERR_OVERFLOW);
     }
 #endif
@@ -1902,7 +1965,7 @@ static bool test_serialize_container_out_buffer_edge_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(field_fixed_sizes, 1u, &codec, out, 4u, &out_len),
+            ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 1u), &codec, out, 4u, &out_len),
             SSZ_ERR_TYPE_MISMATCH);
     }
 
@@ -1919,7 +1982,7 @@ static bool test_serialize_container_out_buffer_edge_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(field_fixed_sizes, 1u, &codec, out, 4u, &out_len),
+            ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 1u), &codec, out, 4u, &out_len),
             SSZ_ERR_OVERFLOW);
     }
 
@@ -1936,7 +1999,7 @@ static bool test_serialize_container_out_buffer_edge_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(field_fixed_sizes, 1u, &codec, out, 1u, &out_len),
+            ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 1u), &codec, out, 1u, &out_len),
             SSZ_ERR_TYPE_MISMATCH);
     }
 
@@ -1953,8 +2016,29 @@ static bool test_serialize_container_out_buffer_edge_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(field_fixed_sizes, 1u, &codec, out, 2u, &out_len),
+            ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 1u), &codec, out, 2u, &out_len),
             SSZ_ERR_TYPE_MISMATCH);
+    }
+
+    {
+        uint8_t guarded_out[6] = {0u, 0u, 0x11u, 0x22u, 0x33u, 0x44u};
+        size_t wrap_sizes[2] = {1u, 1u};
+        schema_wrap_write_ctx_t wrap_ctx = {
+            .sizes = wrap_sizes,
+            .second_seen = false,
+        };
+        ssz_member_codec_t wrap_codec = {
+            .ctx = &wrap_ctx,
+            .write = schema_wrap_fixed_write,
+            .read = NULL,
+            .root = NULL,
+        };
+        ASSERT_ERR(
+            ssz_serialize_container(
+                CONTAINER_SCHEMA(wrap_sizes, 2u), &wrap_codec, guarded_out, 2u, &out_len),
+            SSZ_ERR_OVERFLOW);
+        ASSERT_TRUE(!wrap_ctx.second_seen);
+        ASSERT_MEM_EQ(&guarded_out[2], ((const uint8_t[4]){0x11u, 0x22u, 0x33u, 0x44u}), 4u);
     }
 
 #if SIZE_MAX > UINT32_MAX
@@ -1971,7 +2055,7 @@ static bool test_serialize_container_out_buffer_edge_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(field_fixed_sizes, 1u, &codec, out, 4u, &out_len),
+            ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 1u), &codec, out, 4u, &out_len),
             SSZ_ERR_OVERFLOW);
     }
 #endif
@@ -1996,7 +2080,7 @@ static bool test_serialize_container_size_query_edge_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(field_fixed_sizes, 1u, &codec, NULL, 0u, &out_len),
+            ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 1u), &codec, NULL, 0u, &out_len),
             SSZ_ERR_TYPE_MISMATCH);
     }
 
@@ -2013,7 +2097,7 @@ static bool test_serialize_container_size_query_edge_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(field_fixed_sizes, 1u, &codec, NULL, 0u, &out_len),
+            ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 1u), &codec, NULL, 0u, &out_len),
             SSZ_ERR_OVERFLOW);
     }
 
@@ -2030,7 +2114,7 @@ static bool test_serialize_container_size_query_edge_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(field_fixed_sizes, 1u, &codec, NULL, 0u, &out_len),
+            ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 1u), &codec, NULL, 0u, &out_len),
             SSZ_ERR_TYPE_MISMATCH);
     }
 
@@ -2048,7 +2132,7 @@ static bool test_serialize_container_size_query_edge_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(field_fixed_sizes, 1u, &codec, NULL, 0u, &out_len),
+            ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 1u), &codec, NULL, 0u, &out_len),
             SSZ_ERR_OVERFLOW);
     }
 #endif
@@ -2066,7 +2150,7 @@ static bool test_serialize_container_size_query_edge_paths(void)
         };
         ssz_member_codec_t codec = make_scripted_codec(&ctx);
         ASSERT_ERR(
-            ssz_serialize_container(field_fixed_sizes, 1u, &codec, NULL, 0u, NULL),
+            ssz_serialize_container(CONTAINER_SCHEMA(field_fixed_sizes, 1u), &codec, NULL, 0u, NULL),
             SSZ_ERR_INVALID_ARGUMENT);
     }
 

@@ -88,6 +88,8 @@ static const size_t g_exec_header_field_fixed_sizes[ARENA_EXEC_HEADER_FIELD_COUN
     8u,
     8u,
 };
+static const ssz_container_schema_t g_exec_header_schema =
+    SSZ_CONTAINER_SCHEMA_FROM_ARRAY(g_exec_header_field_fixed_sizes);
 
 static bench_execution_payload_header_t g_exec_headers[ARENA_EXEC_HEADER_COUNT];
 static bench_exec_header_list_write_ctx_t g_exec_header_list_write_ctx;
@@ -246,11 +248,8 @@ static ssz_error_t bench_exec_header_list_member_read(
 
     read_ctx->sink->byte_acc += member_id;
 
-    return ssz_deserialize_container(data,
-                                     data_len,
-                                     g_exec_header_field_fixed_sizes,
-                                     ARENA_EXEC_HEADER_FIELD_COUNT,
-                                     &read_ctx->container_read_codec);
+    return ssz_deserialize_container(
+        data, data_len, &g_exec_header_schema, &read_ctx->container_read_codec);
 }
 
 static ssz_error_t bench_hash_tree_root_fixed_bytes(

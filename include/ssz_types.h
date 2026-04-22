@@ -99,8 +99,40 @@ typedef struct
     ssz_error_t (*root)(const void *ctx, uint64_t member_id, ssz_chunk_t *out_root);
 } ssz_member_codec_t;
 
+/*
+ * Container schema metadata.
+ *
+ * `field_fixed_sizes` must point to storage that remains valid and immutable
+ * for the duration of any operation that uses the schema. Recommended usage is
+ * `static const` storage.
+ */
+typedef struct
+{
+    const size_t *field_fixed_sizes;
+    uint32_t field_count;
+} ssz_container_schema_t;
+
+#define SSZ_CONTAINER_SCHEMA_FROM_ARRAY(field_fixed_sizes_array)                                   \
+    {                                                                                              \
+        .field_fixed_sizes = (field_fixed_sizes_array),                                            \
+        .field_count = (uint32_t)(sizeof(field_fixed_sizes_array) /                                \
+                                  sizeof((field_fixed_sizes_array)[0]))                            \
+    }
+
 typedef uint64_t ssz_path_step_t;
 #define SSZ_PATH_STEP_LENGTH UINT64_MAX
+
+static inline ssz_container_schema_t ssz_container_schema_init(
+    const size_t *field_fixed_sizes,
+    uint32_t field_count)
+{
+    ssz_container_schema_t schema = {
+        .field_fixed_sizes = field_fixed_sizes,
+        .field_count = field_count,
+    };
+
+    return schema;
+}
 
 static inline bool ssz_types_internal_mul_overflow_size(size_t a, size_t b, size_t *out)
 {
@@ -416,10 +448,7 @@ static inline ssz_error_t ssz_default_list(uint64_t *out_element_count)
     return err;
 }
 
-ssz_error_t ssz_default_container(
-    const size_t *field_fixed_sizes,
-    uint32_t field_count,
-    ssz_member_codec_t *codec);
+ssz_error_t ssz_default_container(const ssz_container_schema_t *schema, ssz_member_codec_t *codec);
 
 ssz_error_t ssz_default_union(
     uint32_t option_count,
@@ -666,8 +695,7 @@ static inline ssz_error_t ssz_is_zero_list(uint64_t element_count, bool *out_is_
 }
 
 ssz_error_t ssz_is_zero_container(
-    const size_t *field_fixed_sizes,
-    uint32_t field_count,
+    const ssz_container_schema_t *schema,
     ssz_member_codec_t *codec,
     uint8_t *scratch,
     size_t scratch_len,

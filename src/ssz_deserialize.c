@@ -590,16 +590,17 @@ ssz_error_t ssz_deserialize_list_variable(
 ssz_error_t ssz_deserialize_container(
     const uint8_t *in,
     size_t in_len,
-    const size_t *field_fixed_sizes,
-    uint32_t field_count,
+    const ssz_container_schema_t *schema,
     ssz_member_codec_t *codec)
 {
+    const size_t *field_fixed_sizes = NULL;
+    uint32_t field_count = 0u;
     size_t fixed_region = 0u;
     ssz_error_t err = SSZ_SUCCESS;
     size_t cursor = 0u;
     bool saw_variable = false;
 
-    if ((field_fixed_sizes == NULL) || (field_count == 0u))
+    if ((schema == NULL) || (schema->field_fixed_sizes == NULL) || (schema->field_count == 0u))
     {
         err = SSZ_ERR_SCHEMA_INVALID;
     }
@@ -609,6 +610,8 @@ ssz_error_t ssz_deserialize_container(
     }
     else
     {
+        field_fixed_sizes = schema->field_fixed_sizes;
+        field_count = schema->field_count;
         for (uint32_t i = 0u; i < field_count; i++)
         {
             size_t fixed_size = field_fixed_sizes[i];
@@ -628,7 +631,7 @@ ssz_error_t ssz_deserialize_container(
 
     if (err == SSZ_SUCCESS)
     {
-        uint32_t prev_offset;
+        uint32_t prev_offset = 0u;
 
         for (uint32_t i = 0u; (i < field_count) && (err == SSZ_SUCCESS); i++)
         {
@@ -636,41 +639,54 @@ ssz_error_t ssz_deserialize_container(
 
             if (fixed_size == 0u)
             {
-                uint32_t offset = ssz_internal_read_u32_le(&in[cursor]);
+                size_t next_cursor = 0u;
 
-                if ((size_t)offset > in_len)
-                {
-                    err = SSZ_ERR_OFFSET_INVALID;
-                }
-                else if (!saw_variable)
-                {
-                    if ((size_t)offset != fixed_region)
-                    {
-                        err = SSZ_ERR_OFFSET_INVALID;
-                    }
-                    else
-                    {
-                        saw_variable = true;
-                    }
-                }
-                else if (offset < prev_offset)
+                if (ssz_internal_add_overflow_size(cursor, SSZ_BYTES_PER_LENGTH_OFFSET, &next_cursor) ||
+                    (next_cursor > fixed_region))
                 {
                     err = SSZ_ERR_OFFSET_INVALID;
                 }
                 else
                 {
-                    /* intentionally empty */
-                }
+                    uint32_t offset = ssz_internal_read_u32_le(&in[cursor]);
 
-                if (err == SSZ_SUCCESS)
-                {
-                    prev_offset = offset;
-                    cursor += SSZ_BYTES_PER_LENGTH_OFFSET;
+                    if ((size_t)offset > in_len)
+                    {
+                        err = SSZ_ERR_OFFSET_INVALID;
+                    }
+                    else if (!saw_variable)
+                    {
+                        if ((size_t)offset != fixed_region)
+                        {
+                            err = SSZ_ERR_OFFSET_INVALID;
+                        }
+                        else
+                        {
+                            saw_variable = true;
+                        }
+                    }
+                    else if (offset < prev_offset)
+                    {
+                        err = SSZ_ERR_OFFSET_INVALID;
+                    }
+                    else
+                    {
+                        /* intentionally empty */
+                    }
+
+                    if (err == SSZ_SUCCESS)
+                    {
+                        prev_offset = offset;
+                        cursor = next_cursor;
+                    }
                 }
             }
             else
             {
-                if ((cursor + fixed_size) > fixed_region)
+                size_t next_cursor = 0u;
+
+                if (ssz_internal_add_overflow_size(cursor, fixed_size, &next_cursor) ||
+                    (next_cursor > fixed_region))
                 {
                     err = SSZ_ERR_OFFSET_INVALID;
                 }
@@ -679,7 +695,7 @@ ssz_error_t ssz_deserialize_container(
                     err = codec->read(codec->ctx, i, &in[cursor], fixed_size);
                     if (err == SSZ_SUCCESS)
                     {
-                        cursor += fixed_size;
+                        cursor = next_cursor;
                     }
                 }
             }
@@ -706,18 +722,24 @@ ssz_error_t ssz_deserialize_container(
 
             if (fixed_size != 0u)
             {
-                if ((cursor + fixed_size) > fixed_region)
+                size_t next_cursor = 0u;
+
+                if (ssz_internal_add_overflow_size(cursor, fixed_size, &next_cursor) ||
+                    (next_cursor > fixed_region))
                 {
                     err = SSZ_ERR_OFFSET_INVALID;
                 }
                 else
                 {
-                    cursor += fixed_size;
+                    cursor = next_cursor;
                 }
             }
             else
             {
-                if ((cursor + SSZ_BYTES_PER_LENGTH_OFFSET) > fixed_region)
+                size_t next_cursor = 0u;
+
+                if (ssz_internal_add_overflow_size(cursor, SSZ_BYTES_PER_LENGTH_OFFSET, &next_cursor) ||
+                    (next_cursor > fixed_region))
                 {
                     err = SSZ_ERR_OFFSET_INVALID;
                 }
@@ -725,13 +747,18 @@ ssz_error_t ssz_deserialize_container(
                 {
                     size_t start = (size_t)ssz_internal_read_u32_le(&in[cursor]);
                     size_t end = in_len;
-                    size_t look_cursor = cursor + SSZ_BYTES_PER_LENGTH_OFFSET;
+                    size_t look_cursor = next_cursor;
+                    bool scan_done = false;
 
-                    for (uint32_t j = i + 1u; j < field_count; j++)
+                    for (uint32_t j = i + 1u; (j < field_count) && !scan_done; j++)
                     {
                         if (field_fixed_sizes[j] == 0u)
                         {
-                            if ((look_cursor + SSZ_BYTES_PER_LENGTH_OFFSET) > fixed_region)
+                            size_t next_look_cursor = 0u;
+
+                            if (ssz_internal_add_overflow_size(
+                                    look_cursor, SSZ_BYTES_PER_LENGTH_OFFSET, &next_look_cursor) ||
+                                (next_look_cursor > fixed_region))
                             {
                                 err = SSZ_ERR_OFFSET_INVALID;
                             }
@@ -739,9 +766,19 @@ ssz_error_t ssz_deserialize_container(
                             {
                                 end = (size_t)ssz_internal_read_u32_le(&in[look_cursor]);
                             }
-                            break;
+                            scan_done = true;
                         }
-                        look_cursor += field_fixed_sizes[j];
+                        else if (ssz_internal_add_overflow_size(
+                                     look_cursor, field_fixed_sizes[j], &look_cursor) ||
+                                 (look_cursor > fixed_region))
+                        {
+                            err = SSZ_ERR_OFFSET_INVALID;
+                            scan_done = true;
+                        }
+                        else
+                        {
+                            /* intentionally empty */
+                        }
                     }
 
                     if ((err == SSZ_SUCCESS) && (end < start))
@@ -753,7 +790,7 @@ ssz_error_t ssz_deserialize_container(
                         err = codec->read(codec->ctx, i, &in[start], end - start);
                         if (err == SSZ_SUCCESS)
                         {
-                            cursor += SSZ_BYTES_PER_LENGTH_OFFSET;
+                            cursor = next_cursor;
                         }
                     }
                 }

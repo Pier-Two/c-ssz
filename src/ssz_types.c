@@ -201,20 +201,17 @@ static ssz_error_t ssz_types_internal_default_members(uint64_t member_count, ssz
     return err;
 }
 
-ssz_error_t ssz_default_container(
-    const size_t *field_fixed_sizes,
-    uint32_t field_count,
-    ssz_member_codec_t *codec)
+ssz_error_t ssz_default_container(const ssz_container_schema_t *schema, ssz_member_codec_t *codec)
 {
     ssz_error_t err = SSZ_SUCCESS;
 
-    if ((field_fixed_sizes == NULL) || (field_count == 0u))
+    if ((schema == NULL) || (schema->field_fixed_sizes == NULL) || (schema->field_count == 0u))
     {
         err = SSZ_ERR_SCHEMA_INVALID;
     }
     else
     {
-        err = ssz_types_internal_default_members((uint64_t)field_count, codec);
+        err = ssz_types_internal_default_members((uint64_t)schema->field_count, codec);
     }
 
     return err;
@@ -289,8 +286,7 @@ ssz_error_t ssz_is_zero_vector_composite(
 }
 
 ssz_error_t ssz_is_zero_container(
-    const size_t *field_fixed_sizes,
-    uint32_t field_count,
+    const ssz_container_schema_t *schema,
     ssz_member_codec_t *codec,
     uint8_t *scratch,
     size_t scratch_len,
@@ -303,13 +299,13 @@ ssz_error_t ssz_is_zero_container(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if ((field_fixed_sizes == NULL) || (field_count == 0u))
+    else if ((schema == NULL) || (schema->field_fixed_sizes == NULL) || (schema->field_count == 0u))
     {
         err = SSZ_ERR_SCHEMA_INVALID;
     }
     else
     {
-        for (uint32_t i = 0u; (i < field_count) && (err == SSZ_SUCCESS) && is_zero; i++)
+        for (uint32_t i = 0u; (i < schema->field_count) && (err == SSZ_SUCCESS) && is_zero; i++)
         {
             bool member_is_zero = false;
 

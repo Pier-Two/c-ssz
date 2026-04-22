@@ -1538,6 +1538,7 @@ static ssz_error_t ssz_static_validate_container(
     ssz_error_t err = SSZ_SUCCESS;
     ssz_chunk_t *roots = NULL;
     size_t *fixed_sizes = NULL;
+    ssz_container_schema_t schema = {0};
     ssz_static_container_ctx_t ctx;
     ssz_member_codec_t codec;
     const uint8_t *input = ssz_static_input_bytes(bytes, byte_len);
@@ -1575,13 +1576,9 @@ static ssz_error_t ssz_static_validate_container(
             size_t fixed_size = g_ssz_static_schema_fields[type->field_index + i].fixed_size;
             fixed_sizes[i] = (fixed_size == SSZ_STATIC_SCHEMA_DYNAMIC_SIZE) ? 0u : fixed_size;
         }
+        schema = ssz_container_schema_init(fixed_sizes, type->field_count);
 
-        err = ssz_deserialize_container(
-            input,
-            byte_len,
-            fixed_sizes,
-            type->field_count,
-            &codec);
+        err = ssz_deserialize_container(input, byte_len, &schema, &codec);
         if (err == SSZ_SUCCESS)
         {
             err = ssz_hash_tree_root_vector_roots(
@@ -2042,6 +2039,7 @@ static ssz_error_t ssz_static_compute_container_value(
     ssz_error_t err = SSZ_SUCCESS;
     ssz_static_computed_value_t *children = NULL;
     size_t *fixed_sizes = NULL;
+    ssz_container_schema_t schema = {0};
     ssz_static_decode_container_ctx_t decode_ctx;
     ssz_static_computed_array_ctx_t computed_ctx = {0};
     ssz_member_codec_t decode_codec = {0};
@@ -2072,6 +2070,7 @@ static ssz_error_t ssz_static_compute_container_value(
             size_t fixed_size = g_ssz_static_schema_fields[type->field_index + i].fixed_size;
             fixed_sizes[i] = (fixed_size == SSZ_STATIC_SCHEMA_DYNAMIC_SIZE) ? 0u : fixed_size;
         }
+        schema = ssz_container_schema_init(fixed_sizes, type->field_count);
 
         decode_ctx.type = type;
         decode_ctx.values = children;
@@ -2081,7 +2080,7 @@ static ssz_error_t ssz_static_compute_container_value(
         decode_codec.read = ssz_static_capture_container_value;
         decode_codec.root = NULL;
 
-        err = ssz_deserialize_container(input, byte_len, fixed_sizes, type->field_count, &decode_codec);
+        err = ssz_deserialize_container(input, byte_len, &schema, &decode_codec);
     }
 
     if (err == SSZ_SUCCESS)
@@ -2096,7 +2095,7 @@ static ssz_error_t ssz_static_compute_container_value(
         err = ssz_hash_tree_root_vector_composite(type->field_count, &codec, ssz_hash_default(), &out_value->root);
         if (err == SSZ_SUCCESS)
         {
-            err = ssz_serialize_container(fixed_sizes, type->field_count, &codec, NULL, 0u, &out_len);
+            err = ssz_serialize_container(&schema, &codec, NULL, 0u, &out_len);
         }
         if (err == SSZ_SUCCESS)
         {
@@ -2108,8 +2107,7 @@ static ssz_error_t ssz_static_compute_container_value(
             else
             {
                 err = ssz_serialize_container(
-                    fixed_sizes,
-                    type->field_count,
+                    &schema,
                     &codec,
                     serialized,
                     out_len,

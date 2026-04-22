@@ -24,6 +24,7 @@ Full support for all SSZ types defined in the specification:
 | `union` | ✅ | ✅ |
 | `compatible union` (EIP-8016) | ✅ | ✅ |
 
+Container operations use [`ssz_container_schema_t`](include/ssz_types.h) to describe field layouts.
 See [`ssz_serialize.h`](include/ssz_serialize.h) and [`ssz_deserialize.h`](include/ssz_deserialize.h).
 
 ### Merkleization

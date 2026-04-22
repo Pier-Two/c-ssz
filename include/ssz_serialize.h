@@ -70,8 +70,7 @@ extern "C"
         size_t *out_len);
 
     ssz_error_t ssz_serialize_container(
-        const size_t *field_fixed_sizes,
-        uint32_t field_count,
+        const ssz_container_schema_t *schema,
         const ssz_member_codec_t *codec,
         uint8_t *out,
         size_t out_cap,
