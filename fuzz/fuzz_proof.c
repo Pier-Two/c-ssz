@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "ssz.h"
 
@@ -74,6 +75,14 @@ static ssz_chunk_t fuzz_take_chunk(fuzz_input_t *input)
     return chunk;
 }
 
+static ssz_chunk_t *fuzz_misaligned_chunk_ptr(void *storage)
+{
+    uintptr_t base = (uintptr_t)storage;
+    uintptr_t aligned = (base + (uintptr_t)(SSZ_CHUNK_ALIGNMENT - 1u)) &
+                        ~((uintptr_t)SSZ_CHUNK_ALIGNMENT - 1u);
+    return (ssz_chunk_t *)(void *)(aligned + 1u);
+}
+
 static ssz_error_t fuzz_custom_hash(
     const void *ctx,
     const uint8_t *data,
@@ -128,6 +137,9 @@ static void fuzz_cover_proof_errors(void)
     ssz_gindex_t scratch_indices[128] = {0u};
     ssz_chunk_t scratch_nodes[128] = {{{0u}}};
     ssz_chunk_t bad_expected_root = {{0u}};
+    uint8_t misaligned_leaf_raw[sizeof(ssz_chunk_t) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t misaligned_expected_raw[sizeof(ssz_chunk_t) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t misaligned_scratch_raw[(sizeof(ssz_chunk_t) * 2u) + SSZ_CHUNK_ALIGNMENT] = {0u};
     bad_expected_root.bytes[0] = 0xFFu;
 
     ssz_hash_fn_t hash_err_2to1 = {
@@ -340,6 +352,38 @@ static void fuzz_cover_proof_errors(void)
                                        scratch_nodes,
                                        16u,
                                        ssz_hash_default());
+
+    if (SSZ_CHUNK_ALIGNMENT > 1u)
+    {
+        (void)memcpy((void *)fuzz_misaligned_chunk_ptr(misaligned_leaf_raw), &leaf, sizeof(leaf));
+        (void)memcpy((void *)fuzz_misaligned_chunk_ptr(misaligned_expected_raw),
+                     &bad_expected_root,
+                     sizeof(bad_expected_root));
+        (void)ssz_calculate_merkle_root((const ssz_chunk_t *)(const void *)
+                                            fuzz_misaligned_chunk_ptr(misaligned_leaf_raw),
+                                        proof_nodes,
+                                        1u,
+                                        2u,
+                                        ssz_hash_default(),
+                                        &out_root);
+        (void)ssz_verify_merkle_proof(&leaf,
+                                      proof_nodes,
+                                      1u,
+                                      2u,
+                                      (const ssz_chunk_t *)(const void *)
+                                          fuzz_misaligned_chunk_ptr(misaligned_expected_raw),
+                                      ssz_hash_default());
+        (void)ssz_calculate_multi_merkle_root(&leaf,
+                                              indices_one,
+                                              1u,
+                                              NULL,
+                                              0u,
+                                              scratch_indices,
+                                              fuzz_misaligned_chunk_ptr(misaligned_scratch_raw),
+                                              2u,
+                                              ssz_hash_default(),
+                                              &out_root);
+    }
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)

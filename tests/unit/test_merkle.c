@@ -195,6 +195,14 @@ static ssz_chunk_t make_chunk(uint8_t seed)
     return chunk;
 }
 
+static ssz_chunk_t *misaligned_chunk_ptr(void *storage)
+{
+    uintptr_t base = (uintptr_t)storage;
+    uintptr_t aligned = (base + (uintptr_t)(SSZ_CHUNK_ALIGNMENT - 1u)) &
+                        ~((uintptr_t)SSZ_CHUNK_ALIGNMENT - 1u);
+    return (ssz_chunk_t *)(void *)(aligned + 1u);
+}
+
 static ssz_chunk_t zero_chunk(void)
 {
     ssz_chunk_t chunk;
@@ -1245,6 +1253,44 @@ static bool test_merkle_fixed_width_exact_and_invalid_lengths(void)
     return true;
 }
 
+static bool test_merkle_alignment_error_paths(void)
+{
+    const ssz_chunk_t chunk = make_chunk(0x41u);
+    ssz_chunk_t out = zero_chunk();
+    uint8_t out_raw[sizeof(ssz_chunk_t) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t chunks_raw[sizeof(ssz_chunk_t) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t scratch_raw[(sizeof(ssz_chunk_t) * 2u) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t length[SSZ_BYTES_PER_CHUNK] = {0u};
+    const ssz_merkle_scratch_t misaligned_scratch = {
+        .chunks = misaligned_chunk_ptr(scratch_raw),
+        .chunk_count = 2u,
+    };
+
+    ASSERT_TRUE(SSZ_CHUNK_ALIGNMENT > 1u);
+
+    (void)memcpy((void *)misaligned_chunk_ptr(chunks_raw), &chunk, sizeof(chunk));
+    (void)memcpy((void *)misaligned_chunk_ptr(out_raw), &chunk, sizeof(chunk));
+
+    ASSERT_ERR(ssz_hash_tree_root_uint64(7u, misaligned_chunk_ptr(out_raw)), SSZ_ERR_ALIGNMENT_INVALID);
+    ASSERT_ERR(ssz_merkleize(
+                   (const ssz_chunk_t *)(const void *)misaligned_chunk_ptr(chunks_raw),
+                   1u,
+                   SSZ_NO_LIMIT,
+                   NULL,
+                   &out),
+               SSZ_ERR_ALIGNMENT_INVALID);
+    ASSERT_ERR((ssz_merkleize)(&chunk, 1u, SSZ_NO_LIMIT, &misaligned_scratch, NULL, &out),
+               SSZ_ERR_ALIGNMENT_INVALID);
+    ASSERT_ERR(ssz_mix_in_length((const ssz_chunk_t *)(const void *)misaligned_chunk_ptr(chunks_raw),
+                                 length,
+                                 sizeof(length),
+                                 NULL,
+                                 &out),
+               SSZ_ERR_ALIGNMENT_INVALID);
+
+    return true;
+}
+
 int main(void)
 {
     const test_case_t tests[] = {
@@ -1263,6 +1309,7 @@ int main(void)
         {"merkle_additional_error_paths", test_merkle_additional_error_paths},
         {"merkle_fixed_width_exact_and_invalid_lengths",
          test_merkle_fixed_width_exact_and_invalid_lengths},
+        {"merkle_alignment_error_paths", test_merkle_alignment_error_paths},
         {"merkle_failure_propagation_paths", test_merkle_failure_propagation_paths},
         {"bytes_reader_batch_path_large_vector", test_bytes_reader_batch_path_large_vector},
     };

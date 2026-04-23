@@ -934,6 +934,12 @@ ssz_error_t ssz_calculate_merkle_root(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
+    else if (!ssz_internal_pointer_is_aligned(leaf, SSZ_CHUNK_ALIGNMENT) ||
+             ((proof_len != 0u) && !ssz_internal_pointer_is_aligned(proof, SSZ_CHUNK_ALIGNMENT)) ||
+             !ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    {
+        err = SSZ_ERR_ALIGNMENT_INVALID;
+    }
     else if (index == 0u)
     {
         err = SSZ_ERR_GINDEX_INVALID;
@@ -992,6 +998,13 @@ ssz_error_t ssz_calculate_multi_merkle_root(
         (scratch_indices == NULL) || (scratch_nodes == NULL) || (out_root == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (!ssz_internal_pointer_is_aligned(leaves, SSZ_CHUNK_ALIGNMENT) ||
+             ((proof_count != 0u) && !ssz_internal_pointer_is_aligned(proof, SSZ_CHUNK_ALIGNMENT)) ||
+             !ssz_internal_pointer_is_aligned(scratch_nodes, SSZ_CHUNK_ALIGNMENT) ||
+             !ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    {
+        err = SSZ_ERR_ALIGNMENT_INVALID;
     }
     else
     {
@@ -1068,6 +1081,10 @@ ssz_error_t ssz_verify_merkle_proof(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
+    else if (!ssz_internal_pointer_is_aligned(expected_root, SSZ_CHUNK_ALIGNMENT))
+    {
+        err = SSZ_ERR_ALIGNMENT_INVALID;
+    }
     else
     {
         err = ssz_calculate_merkle_root(leaf, proof, proof_len, index, hash_fn, &computed_root);
@@ -1099,6 +1116,10 @@ ssz_error_t ssz_verify_merkle_multiproof(
     if (expected_root == NULL)
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (!ssz_internal_pointer_is_aligned(expected_root, SSZ_CHUNK_ALIGNMENT))
+    {
+        err = SSZ_ERR_ALIGNMENT_INVALID;
     }
     else
     {

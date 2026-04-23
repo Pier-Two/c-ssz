@@ -67,6 +67,10 @@ static ssz_error_t ssz_internal_sha256_64_batch_default(
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
+    if (!ssz_internal_pointer_is_aligned(out, SSZ_CHUNK_ALIGNMENT))
+    {
+        return SSZ_ERR_ALIGNMENT_INVALID;
+    }
 
     if (SHA256_Init(&base) != 1)
     {
@@ -218,6 +222,10 @@ ssz_error_t ssz_hash_2to1_batch_raw(
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
+    if (!ssz_internal_pointer_is_aligned(out, SSZ_CHUNK_ALIGNMENT))
+    {
+        return SSZ_ERR_ALIGNMENT_INVALID;
+    }
     if ((pair_count != 0u) && (pairs64 == NULL))
     {
         return SSZ_ERR_INVALID_ARGUMENT;
@@ -252,18 +260,20 @@ ssz_error_t ssz_hash_2to1_batch_inplace(
     size_t pair_count)
 {
     const ssz_hash_fn_t *resolved = ssz_internal_resolve_hash_fn(hash_fn);
+    ssz_error_t err = SSZ_SUCCESS;
 
     if ((resolved == NULL) || (resolved->hash == NULL))
-    {
-        return SSZ_ERR_INVALID_ARGUMENT;
-    }
-    if ((pair_count != 0u) && (nodes == NULL))
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
     if (pair_count > (SIZE_MAX / 2u))
     {
         return SSZ_ERR_OVERFLOW;
+    }
+    err = ssz_internal_validate_chunk_array(nodes, pair_count * 2u);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
     }
 
     if (resolved == &ssz_internal_default_hash_fn)
@@ -295,16 +305,32 @@ ssz_error_t ssz_hash_2to1(
     ssz_chunk_t *out)
 {
     const ssz_hash_fn_t *resolved = ssz_internal_resolve_hash_fn(hash_fn);
+    ssz_error_t err = SSZ_SUCCESS;
 
     if ((resolved == NULL) || (left == NULL) || (right == NULL) || (out == NULL) ||
         (resolved->hash == NULL))
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
+    err = ssz_internal_validate_chunk_pointer(left);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+    err = ssz_internal_validate_chunk_pointer(right);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
+    err = ssz_internal_validate_chunk_pointer(out);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
 
     if (resolved->hash_2to1 != NULL)
     {
-        ssz_error_t err = resolved->hash_2to1(resolved->ctx, left, right, out);
+        err = resolved->hash_2to1(resolved->ctx, left, right, out);
         return ssz_internal_normalize_hash_error(err);
     }
 
@@ -348,23 +374,30 @@ ssz_error_t ssz_hash_2to1_batch(
     ssz_chunk_t *out)
 {
     const ssz_hash_fn_t *resolved = ssz_internal_resolve_hash_fn(hash_fn);
+    ssz_error_t err = SSZ_SUCCESS;
 
     if ((resolved == NULL) || (out == NULL) || (resolved->hash == NULL))
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
-    if ((pair_count != 0u) && (pairs == NULL))
+    err = ssz_internal_validate_chunk_array(out, pair_count);
+    if (err != SSZ_SUCCESS)
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        return err;
     }
     if (pair_count > (SIZE_MAX / 2u))
     {
         return SSZ_ERR_OVERFLOW;
     }
+    err = ssz_internal_validate_chunk_array(pairs, pair_count * 2u);
+    if (err != SSZ_SUCCESS)
+    {
+        return err;
+    }
 
     if (resolved->hash_2to1_batch != NULL)
     {
-        ssz_error_t err = resolved->hash_2to1_batch(resolved->ctx, pairs, pair_count, out);
+        err = resolved->hash_2to1_batch(resolved->ctx, pairs, pair_count, out);
         return ssz_internal_normalize_hash_error(err);
     }
 
@@ -392,7 +425,7 @@ ssz_error_t ssz_hash_2to1_batch(
 
     for (size_t i = 0u; i < pair_count; i++)
     {
-        ssz_error_t err = ssz_hash_2to1(resolved, &pairs[i * 2u], &pairs[i * 2u + 1u], &out[i]);
+        err = ssz_hash_2to1(resolved, &pairs[i * 2u], &pairs[i * 2u + 1u], &out[i]);
         if (err != SSZ_SUCCESS)
         {
             return err;

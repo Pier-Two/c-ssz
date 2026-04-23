@@ -141,6 +141,54 @@ static inline bool ssz_internal_get_bit_le(const uint8_t *bits_le, uint64_t bit_
     return (bits_le[byte_index] & bit_mask) != 0u;
 }
 
+static inline bool ssz_internal_pointer_is_aligned(const void *ptr, size_t alignment)
+{
+    bool aligned = false;
+
+    if (ptr == NULL)
+    {
+        aligned = true;
+    }
+    else if (alignment == 0u)
+    {
+        aligned = false;
+    }
+    else
+    {
+        aligned = (((uintptr_t)ptr % (uintptr_t)alignment) == 0u);
+    }
+
+    return aligned;
+}
+
+static inline ssz_error_t ssz_internal_validate_chunk_pointer(const ssz_chunk_t *chunk)
+{
+    if (chunk == NULL)
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if (!ssz_internal_pointer_is_aligned(chunk, SSZ_CHUNK_ALIGNMENT))
+    {
+        return SSZ_ERR_ALIGNMENT_INVALID;
+    }
+    return SSZ_SUCCESS;
+}
+
+static inline ssz_error_t ssz_internal_validate_chunk_array(
+    const ssz_chunk_t *chunks,
+    size_t chunk_count)
+{
+    if ((chunk_count != 0u) && (chunks == NULL))
+    {
+        return SSZ_ERR_INVALID_ARGUMENT;
+    }
+    if ((chunk_count != 0u) && !ssz_internal_pointer_is_aligned(chunks, SSZ_CHUNK_ALIGNMENT))
+    {
+        return SSZ_ERR_ALIGNMENT_INVALID;
+    }
+    return SSZ_SUCCESS;
+}
+
 static inline const ssz_hash_fn_t *ssz_internal_resolve_hash_fn(const ssz_hash_fn_t *hash_fn)
 {
     const ssz_hash_fn_t *resolved_hash_fn = ssz_hash_default();

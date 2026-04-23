@@ -29,7 +29,7 @@ HTML_OUTPUT            = docs/doxygen
 # Preprocessor — expand macros so #define aliases are visible.
 ENABLE_PREPROCESSING   = YES
 MACRO_EXPANSION        = YES
-PREDEFINED             = SSZ_ALIGNAS(n)=
+PREDEFINED             = SSZ_ALIGNOF(type)=
 
 # Quiet mode — only show warnings (the actionable output).
 QUIET                  = YES

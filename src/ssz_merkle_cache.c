@@ -38,13 +38,28 @@ static bool ssz_merkle_cache_internal_pointer_available(const void *ptr, size_t 
     return available;
 }
 
+static bool ssz_merkle_cache_internal_chunk_buffer_aligned(
+    const ssz_chunk_t *ptr,
+    size_t chunk_count)
+{
+    return (chunk_count == 0u) ||
+           ((ptr != NULL) && ssz_internal_pointer_is_aligned(ptr, SSZ_CHUNK_ALIGNMENT));
+}
+
 static bool ssz_merkle_cache_internal_cache_is_bound(const ssz_merkle_cache_t *cache)
 {
     bool is_bound = false;
 
     if ((cache != NULL) &&
         ssz_merkle_cache_internal_struct_size_valid(cache->struct_size, sizeof(*cache)) &&
-        (cache->nodes != NULL) && (cache->zero_hashes != NULL))
+        (cache->nodes != NULL) && (cache->zero_hashes != NULL) &&
+        ssz_internal_pointer_is_aligned(cache->nodes, SSZ_CHUNK_ALIGNMENT) &&
+        ssz_internal_pointer_is_aligned(cache->zero_hashes, SSZ_CHUNK_ALIGNMENT) &&
+        ssz_merkle_cache_internal_chunk_buffer_aligned(
+            cache->gather_pairs,
+            cache->gather_pair_capacity * 2u) &&
+        ((cache->gather_hashes == NULL) ||
+         ssz_internal_pointer_is_aligned(cache->gather_hashes, SSZ_CHUNK_ALIGNMENT)))
     {
         is_bound = true;
     }
@@ -596,6 +611,10 @@ static ssz_error_t ssz_merkle_cache_internal_set_leaf(
     if ((cache == NULL) || (leaf == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (!ssz_internal_pointer_is_aligned(leaf, SSZ_CHUNK_ALIGNMENT))
+    {
+        err = SSZ_ERR_ALIGNMENT_INVALID;
     }
     else if (leaf_index >= cache->mutable_leaf_capacity)
     {
@@ -1356,6 +1375,12 @@ static ssz_error_t ssz_merkle_cache_internal_validate_storage(
     {
         err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
+    else if (!ssz_merkle_cache_internal_chunk_buffer_aligned(
+                 storage->nodes,
+                 requirements->nodes_count))
+    {
+        err = SSZ_ERR_ALIGNMENT_INVALID;
+    }
     else if (
         !ssz_merkle_cache_internal_pointer_available(
             storage->leaf_dirty_bits,
@@ -1401,6 +1426,14 @@ static ssz_error_t ssz_merkle_cache_internal_validate_storage(
         err = SSZ_ERR_BUFFER_TOO_SMALL;
     }
     else if (
+        (requirements->gather_pairs_count != 0u) &&
+        !ssz_merkle_cache_internal_chunk_buffer_aligned(
+            storage->gather_pairs,
+            requirements->gather_pairs_count))
+    {
+        err = SSZ_ERR_ALIGNMENT_INVALID;
+    }
+    else if (
         (requirements->gather_hashes_count != 0u) &&
         (!ssz_merkle_cache_internal_pointer_available(
              storage->gather_hashes,
@@ -1408,6 +1441,14 @@ static ssz_error_t ssz_merkle_cache_internal_validate_storage(
          (storage->gather_hashes_count < requirements->gather_hashes_count)))
     {
         err = SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+    else if (
+        (requirements->gather_hashes_count != 0u) &&
+        !ssz_merkle_cache_internal_chunk_buffer_aligned(
+            storage->gather_hashes,
+            requirements->gather_hashes_count))
+    {
+        err = SSZ_ERR_ALIGNMENT_INVALID;
     }
     else
     {
@@ -1825,6 +1866,12 @@ static ssz_error_t ssz_merkle_cache_internal_validate_sync_opts(
         {
             err = SSZ_ERR_BUFFER_TOO_SMALL;
         }
+        else if (!ssz_merkle_cache_internal_chunk_buffer_aligned(
+                     opts->workspace->root_batch_roots,
+                     (size_t)element_count))
+        {
+            err = SSZ_ERR_ALIGNMENT_INVALID;
+        }
         else
         {
             err = SSZ_SUCCESS;
@@ -2103,6 +2150,10 @@ ssz_error_t ssz_merkle_cache_data_root(ssz_merkle_cache_t *cache, ssz_chunk_t *o
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
+    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    {
+        err = SSZ_ERR_ALIGNMENT_INVALID;
+    }
     else
     {
         err = ssz_merkle_cache_internal_compute_data_root_if_needed(cache);
@@ -2126,6 +2177,10 @@ ssz_error_t ssz_merkle_cache_root(ssz_merkle_cache_t *cache, ssz_chunk_t *out_ro
     if (!ssz_merkle_cache_internal_cache_is_bound(cache) || (out_root == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    {
+        err = SSZ_ERR_ALIGNMENT_INVALID;
     }
     else
     {
@@ -2192,6 +2247,10 @@ ssz_error_t ssz_merkle_cache_update_root_range(
     else if ((root_count != 0u) && (roots == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (!ssz_merkle_cache_internal_chunk_buffer_aligned(roots, (size_t)root_count))
+    {
+        err = SSZ_ERR_ALIGNMENT_INVALID;
     }
     else if (ssz_internal_add_overflow_u64(start_index, root_count, &end_index))
     {
@@ -2784,6 +2843,12 @@ static ssz_error_t ssz_merkle_cache_internal_sync_composite_run(
                 (size_t)run_len))
         {
             err = SSZ_ERR_BUFFER_TOO_SMALL;
+        }
+        else if (!ssz_merkle_cache_internal_chunk_buffer_aligned(
+                     opts->workspace->root_batch_roots,
+                     (size_t)run_len))
+        {
+            err = SSZ_ERR_ALIGNMENT_INVALID;
         }
         else
         {

@@ -27,6 +27,10 @@ Full support for all SSZ types defined in the specification:
 Container operations use [`ssz_container_schema_t`](include/ssz_types.h) to describe field layouts.
 See [`ssz_serialize.h`](include/ssz_serialize.h) and [`ssz_deserialize.h`](include/ssz_deserialize.h).
 
+`ssz_chunk_t` uses standard word alignment, so caller-owned chunk buffers may be allocated with
+ordinary `malloc`/`calloc`/`realloc`. Public APIs reject deliberately misaligned chunk pointers with
+`SSZ_ERR_ALIGNMENT_INVALID`.
+
 ### Merkleization
 
 Complete hash tree root computation for all SSZ types, including:
@@ -34,7 +38,9 @@ Complete hash tree root computation for all SSZ types, including:
 - Standard `merkleize` with chunk limits
 - `mix_in_length`, `mix_in_selector`, `mix_in_active_fields`
 
-All merkleization functions use an iterative implementation with caller-provided scratch buffers. See [`ssz_merkle.h`](include/ssz_merkle.h).
+All merkleization functions use an iterative implementation with caller-provided scratch buffers.
+Any scratch `ssz_chunk_t` storage must satisfy `SSZ_CHUNK_ALIGNMENT`. See
+[`ssz_merkle.h`](include/ssz_merkle.h).
 
 ### Merkle Proofs
 
@@ -49,7 +55,11 @@ See [`ssz_proof.h`](include/ssz_proof.h).
 
 ### Incremental Merkle Cache
 
-A persistent Merkle tree cache that supports incremental updates. When leaves change, only the affected paths from modified leaves to the root are rehashed. The cache uses zero dynamic allocation -- all memory is caller-provided via typed buffers.
+A persistent Merkle tree cache that supports incremental updates. When leaves change, only the
+affected paths from modified leaves to the root are rehashed. The cache uses zero dynamic
+allocation -- all memory is caller-provided via typed buffers. Standard
+`malloc`/`calloc`/`realloc` storage is valid for `ssz_chunk_t` buffers, and deliberately misaligned
+chunk pointers are rejected at the API boundary with `SSZ_ERR_ALIGNMENT_INVALID`.
 
 - `ssz_merkle_cache_requirements` / `ssz_merkle_cache_bind` / `ssz_merkle_cache_migrate_into`
 - Leaf updates, range zeroing, packed byte sync, bitvector/bitlist sync
