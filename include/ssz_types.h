@@ -29,7 +29,11 @@ extern "C"
 #endif
 #endif
 
-#define SSZ_CHUNK_ALIGNMENT SSZ_ALIGNOF(uint64_t)
+#if UINTPTR_MAX > UINT32_MAX
+#define SSZ_CHUNK_ALIGNMENT 8u
+#else
+#define SSZ_CHUNK_ALIGNMENT 4u
+#endif
 
 /*
  * `ssz_chunk_t` is intentionally word-aligned rather than over-aligned. This
@@ -38,7 +42,7 @@ extern "C"
  */
 typedef struct
 {
-    SSZ_ALIGNAS(SSZ_ALIGNOF(uint64_t)) uint8_t bytes[SSZ_BYTES_PER_CHUNK];
+    SSZ_ALIGNAS(SSZ_CHUNK_ALIGNMENT) uint8_t bytes[SSZ_BYTES_PER_CHUNK];
 } ssz_chunk_t;
 
 typedef uint64_t ssz_gindex_t;

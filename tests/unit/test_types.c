@@ -45,7 +45,7 @@ static bool test_type_constants(void)
     ASSERT_TRUE(SSZ_BITS_PER_BYTE == 8u);
     ASSERT_TRUE(SSZ_NO_LIMIT == UINT64_MAX);
     ASSERT_TRUE(sizeof(ssz_chunk_t) == SSZ_BYTES_PER_CHUNK);
-    ASSERT_TRUE(SSZ_CHUNK_ALIGNMENT == (size_t)SSZ_ALIGNOF(uint64_t));
+    ASSERT_TRUE(SSZ_CHUNK_ALIGNMENT == sizeof(uintptr_t));
     ASSERT_TRUE(SSZ_CHUNK_ALIGNMENT > 1u);
 
     ASSERT_TRUE(SSZ_VERSION_MAJOR == 0u);

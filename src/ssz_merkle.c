@@ -150,16 +150,23 @@ static ssz_error_t ssz_internal_read_codec_leaf(
 
 static ssz_error_t ssz_internal_validate_scratch(const ssz_merkle_scratch_t *scratch)
 {
+    ssz_error_t err = SSZ_SUCCESS;
+
     if ((scratch != NULL) && (scratch->chunk_count != 0u) && (scratch->chunks == NULL))
     {
-        return SSZ_ERR_INVALID_ARGUMENT;
+        err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    if ((scratch != NULL) && (scratch->chunk_count != 0u) &&
-        !ssz_internal_pointer_is_aligned(scratch->chunks, SSZ_CHUNK_ALIGNMENT))
+    else if ((scratch != NULL) && (scratch->chunk_count != 0u) &&
+             !ssz_internal_pointer_is_aligned(scratch->chunks, SSZ_CHUNK_ALIGNMENT))
     {
-        return SSZ_ERR_ALIGNMENT_INVALID;
+        err = SSZ_ERR_ALIGNMENT_INVALID;
     }
-    return SSZ_SUCCESS;
+    else
+    {
+        err = SSZ_SUCCESS;
+    }
+
+    return err;
 }
 
 static bool ssz_internal_scratch_is_invalid(const ssz_merkle_scratch_t *scratch)
@@ -1012,6 +1019,10 @@ static ssz_error_t ssz_internal_merkleize_reader(
         {
             effective_width = limit;
         }
+        else
+        {
+            /* intentionally empty */
+        }
 
         if (err == SSZ_SUCCESS)
         {
@@ -1233,7 +1244,7 @@ ssz_error_t ssz_hash_tree_root_uint128(
     {
         err = ssz_internal_validate_chunk_pointer(out_root);
     }
-    if (err == SSZ_SUCCESS && (value_len != 16u))
+    if ((err == SSZ_SUCCESS) && (value_len != 16u))
     {
         err = SSZ_ERR_ENCODING_INVALID;
     }
@@ -1241,6 +1252,10 @@ ssz_error_t ssz_hash_tree_root_uint128(
     {
         (void)memset(out_root->bytes, 0, SSZ_BYTES_PER_CHUNK);
         (void)memcpy(out_root->bytes, value, 16u);
+    }
+    else
+    {
+        /* intentionally empty */
     }
 
     return err;
@@ -1268,6 +1283,10 @@ ssz_error_t ssz_hash_tree_root_uint256(
     else if (err == SSZ_SUCCESS)
     {
         (void)memcpy(out_root->bytes, value, SSZ_BYTES_PER_CHUNK);
+    }
+    else
+    {
+        /* intentionally empty */
     }
 
     return err;
