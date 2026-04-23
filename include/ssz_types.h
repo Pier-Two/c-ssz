@@ -17,27 +17,29 @@ extern "C"
 #define SSZ_NO_LIMIT                UINT64_MAX
 
 #if defined(_MSC_VER)
+#define SSZ_ALIGNAS(n) __declspec(align(n))
 #define SSZ_ALIGNOF(type) __alignof(type)
 #else
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+#define SSZ_ALIGNAS(n) _Alignas(n)
 #define SSZ_ALIGNOF(type) _Alignof(type)
 #else
+#define SSZ_ALIGNAS(n) __attribute__((aligned(n)))
 #define SSZ_ALIGNOF(type) __alignof__(type)
 #endif
 #endif
+
+#define SSZ_CHUNK_ALIGNMENT SSZ_ALIGNOF(uint64_t)
 
 /*
  * `ssz_chunk_t` is intentionally word-aligned rather than over-aligned. This
  * keeps standard `malloc`/`calloc`/`realloc` storage valid while still letting
  * the library reject manually misaligned chunk pointers at API boundaries.
  */
-typedef union
+typedef struct
 {
-    uint8_t bytes[SSZ_BYTES_PER_CHUNK];
-    uint64_t words[SSZ_BYTES_PER_CHUNK / sizeof(uint64_t)];
+    SSZ_ALIGNAS(SSZ_ALIGNOF(uint64_t)) uint8_t bytes[SSZ_BYTES_PER_CHUNK];
 } ssz_chunk_t;
-
-#define SSZ_CHUNK_ALIGNMENT ((size_t)SSZ_ALIGNOF(ssz_chunk_t))
 
 typedef uint64_t ssz_gindex_t;
 

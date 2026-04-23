@@ -141,6 +141,12 @@ static inline bool ssz_internal_get_bit_le(const uint8_t *bits_le, uint64_t bit_
     return (bits_le[byte_index] & bit_mask) != 0u;
 }
 
+static inline bool ssz_internal_pointer_is_aligned(const void *ptr, size_t alignment);
+static inline ssz_error_t ssz_internal_validate_chunk_pointer(const ssz_chunk_t *chunk);
+static inline ssz_error_t ssz_internal_validate_chunk_array(
+    const ssz_chunk_t *chunks,
+    size_t chunk_count);
+
 static inline bool ssz_internal_pointer_is_aligned(const void *ptr, size_t alignment)
 {
     bool aligned = false;
