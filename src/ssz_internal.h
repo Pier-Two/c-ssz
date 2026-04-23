@@ -141,26 +141,27 @@ static inline bool ssz_internal_get_bit_le(const uint8_t *bits_le, uint64_t bit_
     return (bits_le[byte_index] & bit_mask) != 0u;
 }
 
-#define ssz_internal_pointer_is_aligned(ptr, alignment)                                           \
-    (((ptr) == NULL) ? true                                                                       \
-                     : (((alignment) != 0u) &&                                                    \
-                        ((((uintptr_t)(const void *)(ptr)) % (uintptr_t)(alignment)) == 0u)))
-
 static inline ssz_error_t ssz_internal_validate_chunk_pointer(const ssz_chunk_t *chunk)
 {
     ssz_error_t err = SSZ_SUCCESS;
+    uintptr_t address = 0u;
+    const ssz_chunk_t *chunk_value = chunk;
 
     if (chunk == NULL)
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(chunk, SSZ_CHUNK_ALIGNMENT))
-    {
-        err = SSZ_ERR_ALIGNMENT_INVALID;
-    }
     else
     {
-        err = SSZ_SUCCESS;
+        (void)memcpy(&address, (const void *)&chunk_value, sizeof(chunk_value));
+        if ((address % (uintptr_t)SSZ_CHUNK_ALIGNMENT) != 0u)
+        {
+            err = SSZ_ERR_ALIGNMENT_INVALID;
+        }
+        else
+        {
+            err = SSZ_SUCCESS;
+        }
     }
 
     return err;
@@ -176,9 +177,9 @@ static inline ssz_error_t ssz_internal_validate_chunk_array(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if ((chunk_count != 0u) && !ssz_internal_pointer_is_aligned(chunks, SSZ_CHUNK_ALIGNMENT))
+    else if (chunk_count != 0u)
     {
-        err = SSZ_ERR_ALIGNMENT_INVALID;
+        err = ssz_internal_validate_chunk_pointer(chunks);
     }
     else
     {

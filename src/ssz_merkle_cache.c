@@ -42,8 +42,7 @@ static bool ssz_merkle_cache_internal_chunk_buffer_aligned(
     const ssz_chunk_t *ptr,
     size_t chunk_count)
 {
-    return (chunk_count == 0u) ||
-           ((ptr != NULL) && ssz_internal_pointer_is_aligned(ptr, SSZ_CHUNK_ALIGNMENT));
+    return ssz_internal_validate_chunk_array(ptr, chunk_count) == SSZ_SUCCESS;
 }
 
 static bool ssz_merkle_cache_internal_cache_is_bound(const ssz_merkle_cache_t *cache)
@@ -53,13 +52,13 @@ static bool ssz_merkle_cache_internal_cache_is_bound(const ssz_merkle_cache_t *c
     if ((cache != NULL) &&
         ssz_merkle_cache_internal_struct_size_valid(cache->struct_size, sizeof(*cache)) &&
         (cache->nodes != NULL) && (cache->zero_hashes != NULL) &&
-        ssz_internal_pointer_is_aligned(cache->nodes, SSZ_CHUNK_ALIGNMENT) &&
-        ssz_internal_pointer_is_aligned(cache->zero_hashes, SSZ_CHUNK_ALIGNMENT) &&
+        (ssz_internal_validate_chunk_pointer(cache->nodes) == SSZ_SUCCESS) &&
+        (ssz_internal_validate_chunk_pointer(cache->zero_hashes) == SSZ_SUCCESS) &&
         ssz_merkle_cache_internal_chunk_buffer_aligned(
             cache->gather_pairs,
             cache->gather_pair_capacity * 2u) &&
         ((cache->gather_hashes == NULL) ||
-         ssz_internal_pointer_is_aligned(cache->gather_hashes, SSZ_CHUNK_ALIGNMENT)))
+         (ssz_internal_validate_chunk_pointer(cache->gather_hashes) == SSZ_SUCCESS)))
     {
         is_bound = true;
     }
@@ -612,7 +611,7 @@ static ssz_error_t ssz_merkle_cache_internal_set_leaf(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(leaf, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(leaf) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -2150,7 +2149,7 @@ ssz_error_t ssz_merkle_cache_data_root(ssz_merkle_cache_t *cache, ssz_chunk_t *o
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -2178,7 +2177,7 @@ ssz_error_t ssz_merkle_cache_root(ssz_merkle_cache_t *cache, ssz_chunk_t *out_ro
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }

@@ -29,7 +29,7 @@ extern "C"
 #endif
 #endif
 
-#if UINTPTR_MAX > UINT32_MAX
+#if defined(UINTPTR_MAX) && defined(UINT32_MAX) && (UINTPTR_MAX > UINT32_MAX)
 #define SSZ_CHUNK_ALIGNMENT 8u
 #else
 #define SSZ_CHUNK_ALIGNMENT 4u

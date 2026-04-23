@@ -67,7 +67,7 @@ static ssz_error_t ssz_internal_sha256_64_batch_default(
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (!ssz_internal_pointer_is_aligned(out, SSZ_CHUNK_ALIGNMENT))
+    if (ssz_internal_validate_chunk_pointer(out) != SSZ_SUCCESS)
     {
         return SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -222,7 +222,7 @@ ssz_error_t ssz_hash_2to1_batch_raw(
     {
         return SSZ_ERR_INVALID_ARGUMENT;
     }
-    if (!ssz_internal_pointer_is_aligned(out, SSZ_CHUNK_ALIGNMENT))
+    if (ssz_internal_validate_chunk_pointer(out) != SSZ_SUCCESS)
     {
         return SSZ_ERR_ALIGNMENT_INVALID;
     }

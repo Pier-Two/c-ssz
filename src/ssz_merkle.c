@@ -59,7 +59,7 @@ static ssz_error_t ssz_internal_read_chunk_leaf(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_leaf, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_leaf) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -67,7 +67,7 @@ static ssz_error_t ssz_internal_read_chunk_leaf(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(reader->chunks, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_array(reader->chunks, reader->count) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -92,7 +92,7 @@ static ssz_error_t ssz_internal_read_bytes_leaf(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_leaf, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_leaf) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -136,7 +136,7 @@ static ssz_error_t ssz_internal_read_codec_leaf(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_leaf, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_leaf) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -157,7 +157,8 @@ static ssz_error_t ssz_internal_validate_scratch(const ssz_merkle_scratch_t *scr
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
     else if ((scratch != NULL) && (scratch->chunk_count != 0u) &&
-             !ssz_internal_pointer_is_aligned(scratch->chunks, SSZ_CHUNK_ALIGNMENT))
+             (ssz_internal_validate_chunk_array(scratch->chunks, scratch->chunk_count) !=
+              SSZ_SUCCESS))
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -397,7 +398,7 @@ static ssz_error_t ssz_internal_merkleize_reader_fast(
     {
         ret = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         ret = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -615,7 +616,7 @@ static ssz_error_t ssz_internal_merkleize_full_range_iter(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -801,7 +802,7 @@ static ssz_error_t ssz_internal_merkleize_subtree_iter(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -985,7 +986,7 @@ static ssz_error_t ssz_internal_merkleize_reader(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -997,7 +998,8 @@ static ssz_error_t ssz_internal_merkleize_reader(
         if ((err == SSZ_SUCCESS) &&
             (source->kind == SSZ_INTERNAL_LEAF_SOURCE_CHUNKS) &&
             (source->chunk_reader.count != 0u) &&
-            !ssz_internal_pointer_is_aligned(source->chunk_reader.chunks, SSZ_CHUNK_ALIGNMENT))
+            (ssz_internal_validate_chunk_array(source->chunk_reader.chunks, source->chunk_reader.count) !=
+             SSZ_SUCCESS))
         {
             err = SSZ_ERR_ALIGNMENT_INVALID;
         }
@@ -1324,7 +1326,7 @@ ssz_error_t ssz_hash_tree_root_bitvector(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -1389,7 +1391,7 @@ ssz_error_t ssz_hash_tree_root_bitlist(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -1462,7 +1464,7 @@ ssz_error_t ssz_hash_tree_root_vector_fixed(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -1514,7 +1516,7 @@ ssz_error_t ssz_hash_tree_root_vector_composite(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -1586,7 +1588,7 @@ ssz_error_t ssz_hash_tree_root_list_fixed(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -1665,7 +1667,7 @@ ssz_error_t ssz_hash_tree_root_list_composite(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -1713,7 +1715,7 @@ ssz_error_t ssz_hash_tree_root_list_roots(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -1751,7 +1753,7 @@ ssz_error_t ssz_hash_tree_root_union(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS)
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -1834,8 +1836,8 @@ ssz_error_t ssz_mix_in_length(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(root, SSZ_CHUNK_ALIGNMENT) ||
-             !ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if ((ssz_internal_validate_chunk_pointer(root) != SSZ_SUCCESS) ||
+             (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS))
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -1881,8 +1883,8 @@ ssz_error_t ssz_mix_in_selector(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(root, SSZ_CHUNK_ALIGNMENT) ||
-             !ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if ((ssz_internal_validate_chunk_pointer(root) != SSZ_SUCCESS) ||
+             (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS))
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
@@ -1910,8 +1912,8 @@ ssz_error_t ssz_mix_in_active_fields(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
-    else if (!ssz_internal_pointer_is_aligned(root, SSZ_CHUNK_ALIGNMENT) ||
-             !ssz_internal_pointer_is_aligned(out_root, SSZ_CHUNK_ALIGNMENT))
+    else if ((ssz_internal_validate_chunk_pointer(root) != SSZ_SUCCESS) ||
+             (ssz_internal_validate_chunk_pointer(out_root) != SSZ_SUCCESS))
     {
         err = SSZ_ERR_ALIGNMENT_INVALID;
     }
