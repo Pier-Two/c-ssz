@@ -1,9 +1,3 @@
-/* Required for posix_memalign in C99 mode */
-#if !defined(_POSIX_C_SOURCE) || (_POSIX_C_SOURCE < 200112L)
-#undef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200112L
-#endif
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -172,67 +166,31 @@ static void *alloc_zeroed(size_t count, size_t element_size)
     return ptr;
 }
 
-static void *alloc_aligned32_zeroed(size_t count, size_t element_size)
+static ssz_chunk_t *misaligned_chunk_ptr(void *storage)
 {
-    void *ptr = NULL;
-    size_t total = count * element_size;
-
-    if (total != 0u)
-    {
-        /* Round up to multiple of 32 for alignment requirement */
-        total = (total + 31u) & ~(size_t)31u;
-#if defined(_MSC_VER)
-        ptr = _aligned_malloc(total, 32u);
-#elif defined(_POSIX_C_SOURCE) || defined(__APPLE__) || defined(__linux__)
-        if (posix_memalign(&ptr, 32u, total) != 0)
-        {
-            ptr = NULL;
-        }
-#else
-        ptr = malloc(total + 32u + sizeof(void *));
-        if (ptr != NULL)
-        {
-            uintptr_t raw = (uintptr_t)ptr;
-            uintptr_t aligned = (raw + sizeof(void *) + 31u) & ~(uintptr_t)31u;
-            ((void **)aligned)[-1] = ptr;
-            ptr = (void *)aligned;
-        }
-#endif
-        if (ptr != NULL)
-        {
-            (void)memset(ptr, 0, total);
-        }
-    }
-
-    return ptr;
-}
-
-static void free_aligned32(void *ptr)
-{
-#if defined(_MSC_VER)
-    _aligned_free(ptr);
-#else
-    free(ptr);
-#endif
+    uintptr_t base = (uintptr_t)storage;
+    uintptr_t aligned = (base + (uintptr_t)(SSZ_CHUNK_ALIGNMENT - 1u)) &
+                        ~((uintptr_t)SSZ_CHUNK_ALIGNMENT - 1u);
+    return (ssz_chunk_t *)(void *)(aligned + 1u);
 }
 
 static void cache_fixture_cleanup(cache_fixture_t *fixture)
 {
     if (fixture != NULL)
     {
-        free_aligned32(fixture->nodes);
+        free(fixture->nodes);
         free(fixture->leaf_dirty_bits);
         free(fixture->leaf_dirty_word_idx);
         free(fixture->parent_dirty_bits[0]);
         free(fixture->parent_dirty_bits[1]);
         free(fixture->parent_dirty_word_idx[0]);
         free(fixture->parent_dirty_word_idx[1]);
-        free_aligned32(fixture->gather_pairs);
-        free_aligned32(fixture->gather_hashes);
+        free(fixture->gather_pairs);
+        free(fixture->gather_hashes);
         free(fixture->gather_parent_indices);
         free(fixture->token_values);
         free(fixture->token_valid_bits);
-        free_aligned32(fixture->root_batch_roots);
+        free(fixture->root_batch_roots);
         (void)memset(fixture, 0, sizeof(*fixture));
     }
     else
@@ -300,7 +258,7 @@ static ssz_error_t cache_fixture_init(
 
     if (err == SSZ_SUCCESS)
     {
-        fixture->nodes = alloc_aligned32_zeroed(fixture->requirements.nodes_count, sizeof(*fixture->nodes));
+        fixture->nodes = alloc_zeroed(fixture->requirements.nodes_count, sizeof(*fixture->nodes));
         fixture->leaf_dirty_bits =
             alloc_zeroed(fixture->requirements.leaf_dirty_words, sizeof(*fixture->leaf_dirty_bits));
         fixture->leaf_dirty_word_idx = alloc_zeroed(
@@ -318,15 +276,16 @@ static ssz_error_t cache_fixture_init(
         fixture->parent_dirty_word_idx[1] = alloc_zeroed(
             fixture->requirements.parent_dirty_words,
             sizeof(*fixture->parent_dirty_word_idx[1]));
-        fixture->gather_pairs =
-            alloc_aligned32_zeroed(fixture->requirements.gather_pairs_count, sizeof(*fixture->gather_pairs));
-        fixture->gather_hashes = alloc_aligned32_zeroed(
+        fixture->gather_pairs = alloc_zeroed(
+            fixture->requirements.gather_pairs_count,
+            sizeof(*fixture->gather_pairs));
+        fixture->gather_hashes = alloc_zeroed(
             fixture->requirements.gather_hashes_count,
             sizeof(*fixture->gather_hashes));
         fixture->gather_parent_indices = alloc_zeroed(
             fixture->requirements.gather_parent_indices_count,
             sizeof(*fixture->gather_parent_indices));
-        fixture->root_batch_roots = alloc_aligned32_zeroed(
+        fixture->root_batch_roots = alloc_zeroed(
             fixture->requirements.root_batch_roots_count,
             sizeof(*fixture->root_batch_roots));
 
@@ -1074,6 +1033,112 @@ static bool test_multi_word_dirty_triggers_qsort(void)
     return true;
 }
 
+static bool test_alignment_rejection_paths(void)
+{
+    cache_fixture_t fixture;
+    const ssz_merkle_cache_config_t cfg = make_cache_config(0u, 4u, 0u, 0u, false, NULL);
+    const ssz_chunk_t leaf = make_chunk(0x5Au);
+    composite_ctx_t composite = {
+        .roots = &leaf,
+        .tokens = NULL,
+        .count = 1u,
+        .fail_member = UINT64_MAX,
+        .fail_err = SSZ_SUCCESS,
+        .root_calls = 0u,
+        .token_calls = 0u,
+        .batch_calls = 0u,
+    };
+    const ssz_member_codec_t codec = {
+        .ctx = &composite,
+        .write = NULL,
+        .read = NULL,
+        .root = composite_root,
+    };
+    ssz_merkle_cache_storage_t storage;
+    ssz_merkle_cache_t cache;
+    ssz_merkle_cache_sync_composite_opts_t opts;
+    uint8_t out_raw[sizeof(ssz_chunk_t) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t roots_raw[sizeof(ssz_chunk_t) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t *nodes_raw = NULL;
+    uint8_t *gather_pairs_raw = NULL;
+    uint8_t *gather_hashes_raw = NULL;
+    uint8_t *workspace_raw = NULL;
+
+    ASSERT_TRUE(SSZ_CHUNK_ALIGNMENT > 1u);
+    ASSERT_ERR(cache_fixture_init(&fixture, &cfg, false), SSZ_SUCCESS);
+
+    nodes_raw = (uint8_t *)alloc_zeroed(
+        (fixture.requirements.nodes_count * sizeof(ssz_chunk_t)) + SSZ_CHUNK_ALIGNMENT,
+        1u);
+    ASSERT_TRUE(nodes_raw != NULL);
+    storage = fixture.storage;
+    storage.nodes = misaligned_chunk_ptr(nodes_raw);
+    ASSERT_ERR(ssz_merkle_cache_bind(&cfg, &storage, &cache), SSZ_ERR_ALIGNMENT_INVALID);
+
+    if (fixture.requirements.gather_pairs_count != 0u)
+    {
+        gather_pairs_raw = (uint8_t *)alloc_zeroed(
+            (fixture.requirements.gather_pairs_count * sizeof(ssz_chunk_t)) + SSZ_CHUNK_ALIGNMENT,
+            1u);
+        ASSERT_TRUE(gather_pairs_raw != NULL);
+        storage = fixture.storage;
+        storage.gather_pairs = misaligned_chunk_ptr(gather_pairs_raw);
+        ASSERT_ERR(ssz_merkle_cache_bind(&cfg, &storage, &cache), SSZ_ERR_ALIGNMENT_INVALID);
+    }
+
+    if (fixture.requirements.gather_hashes_count != 0u)
+    {
+        gather_hashes_raw = (uint8_t *)alloc_zeroed(
+            (fixture.requirements.gather_hashes_count * sizeof(ssz_chunk_t)) + SSZ_CHUNK_ALIGNMENT,
+            1u);
+        ASSERT_TRUE(gather_hashes_raw != NULL);
+        storage = fixture.storage;
+        storage.gather_hashes = misaligned_chunk_ptr(gather_hashes_raw);
+        ASSERT_ERR(ssz_merkle_cache_bind(&cfg, &storage, &cache), SSZ_ERR_ALIGNMENT_INVALID);
+    }
+
+    ASSERT_ERR(ssz_merkle_cache_data_root(&fixture.cache, misaligned_chunk_ptr(out_raw)),
+               SSZ_ERR_ALIGNMENT_INVALID);
+    ASSERT_ERR(ssz_merkle_cache_root(&fixture.cache, misaligned_chunk_ptr(out_raw)),
+               SSZ_ERR_ALIGNMENT_INVALID);
+
+    (void)memcpy((void *)misaligned_chunk_ptr(roots_raw), &leaf, sizeof(leaf));
+    ASSERT_ERR(ssz_merkle_cache_update_root_range(
+                   &fixture.cache,
+                   0u,
+                   (const ssz_chunk_t *)(const void *)misaligned_chunk_ptr(roots_raw),
+                   1u),
+               SSZ_ERR_ALIGNMENT_INVALID);
+
+    if (fixture.requirements.root_batch_roots_count != 0u)
+    {
+        workspace_raw = (uint8_t *)alloc_zeroed(
+            (fixture.requirements.root_batch_roots_count * sizeof(ssz_chunk_t)) +
+                SSZ_CHUNK_ALIGNMENT,
+            1u);
+        ASSERT_TRUE(workspace_raw != NULL);
+        fixture.workspace.root_batch_roots = misaligned_chunk_ptr(workspace_raw);
+        opts = make_composite_opts(&composite, NULL, composite_root_batch, &fixture.workspace);
+
+        ASSERT_ERR(ssz_merkle_cache_sync_composite(
+                       &fixture.cache,
+                       1u,
+                       cfg.leaf_limit,
+                       &codec,
+                       &opts),
+                   SSZ_ERR_ALIGNMENT_INVALID);
+
+        fixture.workspace.root_batch_roots = fixture.root_batch_roots;
+    }
+
+    free(nodes_raw);
+    free(gather_pairs_raw);
+    free(gather_hashes_raw);
+    free(workspace_raw);
+    cache_fixture_cleanup(&fixture);
+    return true;
+}
+
 int main(void)
 {
     const test_case_t tests[] = {
@@ -1091,6 +1156,7 @@ int main(void)
         {"cached_vs_stateless_equivalence", test_cached_vs_stateless_equivalence},
         {"zero_range_and_logical_length_changes", test_zero_range_and_logical_length_changes},
         {"multi_word_dirty_triggers_qsort", test_multi_word_dirty_triggers_qsort},
+        {"alignment_rejection_paths", test_alignment_rejection_paths},
     };
 
     for (size_t i = 0u; i < (sizeof(tests) / sizeof(tests[0])); i++)

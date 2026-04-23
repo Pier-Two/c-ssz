@@ -41,6 +41,11 @@ extern "C"
         size_t root_batch_roots_count;
     } ssz_merkle_cache_requirements_t;
 
+    /*
+     * Caller-owned chunk buffers must be aligned to `SSZ_CHUNK_ALIGNMENT`.
+     * Standard `malloc`/`calloc`/`realloc` storage is sufficient; deliberately
+     * misaligned pointers are rejected with `SSZ_ERR_ALIGNMENT_INVALID`.
+     */
     typedef struct
     {
         size_t struct_size;
@@ -66,6 +71,10 @@ extern "C"
         size_t token_valid_words;
     } ssz_merkle_cache_storage_t;
 
+    /*
+     * Workspace chunk buffers follow the same alignment contract as
+     * `ssz_merkle_cache_storage_t`.
+     */
     typedef struct
     {
         size_t struct_size;

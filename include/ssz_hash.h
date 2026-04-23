@@ -11,6 +11,10 @@ extern "C"
 {
 #endif
 
+/* Any caller-provided `ssz_chunk_t *` buffer passed to this API surface must
+   be aligned to `SSZ_CHUNK_ALIGNMENT`. Misaligned buffers are rejected with
+   `SSZ_ERR_ALIGNMENT_INVALID`. */
+
 ssz_error_t ssz_hash_sha256(const uint8_t *data, size_t data_len, uint8_t out[32]);
 
 ssz_error_t ssz_hash_2to1(

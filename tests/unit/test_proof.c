@@ -62,6 +62,14 @@ static ssz_chunk_t make_chunk(uint8_t seed)
     return chunk;
 }
 
+static ssz_chunk_t *misaligned_chunk_ptr(void *storage)
+{
+    uintptr_t base = (uintptr_t)storage;
+    uintptr_t aligned = (base + (uintptr_t)(SSZ_CHUNK_ALIGNMENT - 1u)) &
+                        ~((uintptr_t)SSZ_CHUNK_ALIGNMENT - 1u);
+    return (ssz_chunk_t *)(void *)(aligned + 1u);
+}
+
 static ssz_error_t build_merkle_tree_8(const ssz_chunk_t leaves[8], ssz_chunk_t tree[16])
 {
     ssz_error_t err = SSZ_SUCCESS;
@@ -1445,6 +1453,51 @@ static bool test_helper_indices_descending_sort(void)
     return true;
 }
 
+static bool test_proof_alignment_error_paths(void)
+{
+    const ssz_chunk_t leaf = make_chunk(0x11u);
+    const ssz_chunk_t proof[1] = {make_chunk(0x22u)};
+    const ssz_chunk_t expected_root = make_chunk(0x33u);
+    ssz_gindex_t scratch_indices[4] = {0u};
+    ssz_chunk_t out_root = make_chunk(0x44u);
+    uint8_t leaf_raw[sizeof(ssz_chunk_t) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t expected_raw[sizeof(ssz_chunk_t) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t scratch_raw[(sizeof(ssz_chunk_t) * 2u) + SSZ_CHUNK_ALIGNMENT] = {0u};
+
+    ASSERT_TRUE(SSZ_CHUNK_ALIGNMENT > 1u);
+
+    (void)memcpy((void *)misaligned_chunk_ptr(leaf_raw), &leaf, sizeof(leaf));
+    (void)memcpy((void *)misaligned_chunk_ptr(expected_raw), &expected_root, sizeof(expected_root));
+
+    ASSERT_ERR(ssz_calculate_merkle_root((const ssz_chunk_t *)(const void *)misaligned_chunk_ptr(leaf_raw),
+                                         proof,
+                                         1u,
+                                         2u,
+                                         NULL,
+                                         &out_root),
+               SSZ_ERR_ALIGNMENT_INVALID);
+    ASSERT_ERR(ssz_verify_merkle_proof(&leaf,
+                                       proof,
+                                       1u,
+                                       2u,
+                                       (const ssz_chunk_t *)(const void *)misaligned_chunk_ptr(expected_raw),
+                                       NULL),
+               SSZ_ERR_ALIGNMENT_INVALID);
+    ASSERT_ERR(ssz_calculate_multi_merkle_root(&leaf,
+                                               (const ssz_gindex_t[]){1u},
+                                               1u,
+                                               NULL,
+                                               0u,
+                                               scratch_indices,
+                                               misaligned_chunk_ptr(scratch_raw),
+                                               2u,
+                                               NULL,
+                                               &out_root),
+               SSZ_ERR_ALIGNMENT_INVALID);
+
+    return true;
+}
+
 int main(void)
 {
     const test_case_t tests[] = {
@@ -1472,6 +1525,7 @@ int main(void)
         {"proof_hash_and_verify_error_paths", test_proof_hash_and_verify_error_paths},
         {"multiproof_additional_error_paths", test_multiproof_additional_error_paths},
         {"helper_indices_descending_sort", test_helper_indices_descending_sort},
+        {"proof_alignment_error_paths", test_proof_alignment_error_paths},
     };
 
     size_t passed = 0u;

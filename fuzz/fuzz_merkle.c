@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "ssz.h"
 
@@ -142,6 +143,14 @@ static void fuzz_fill_chunks(fuzz_input_t *input, ssz_chunk_t *chunks, size_t ch
     }
 }
 
+static ssz_chunk_t *fuzz_misaligned_chunk_ptr(void *storage)
+{
+    uintptr_t base = (uintptr_t)storage;
+    uintptr_t aligned = (base + (uintptr_t)(SSZ_CHUNK_ALIGNMENT - 1u)) &
+                        ~((uintptr_t)SSZ_CHUNK_ALIGNMENT - 1u);
+    return (ssz_chunk_t *)(void *)(aligned + 1u);
+}
+
 static ssz_error_t fuzz_member_root(const void *ctx, uint64_t member_id, ssz_chunk_t *out_root)
 {
     const fuzz_root_ctx_t *state = (const fuzz_root_ctx_t *)ctx;
@@ -261,6 +270,8 @@ static void fuzz_cover_merkle_errors(void)
     ssz_chunk_t roots[4] = {{{0u}}};
     ssz_chunk_t out_root;
     ssz_chunk_t root = {{0u}};
+    uint8_t misaligned_root_raw[sizeof(ssz_chunk_t) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t misaligned_scratch_raw[(sizeof(ssz_chunk_t) * 2u) + SSZ_CHUNK_ALIGNMENT] = {0u};
 
     fuzz_test_root_ctx_t root_ctx_ok = {
         .mode = 0u,
@@ -490,6 +501,30 @@ static void fuzz_cover_merkle_errors(void)
         ssz_hash_default(),
         &out_root);
     (void)ssz_mix_in_active_fields(&root, NULL, 1u, ssz_hash_default(), &out_root);
+
+    if (SSZ_CHUNK_ALIGNMENT > 1u)
+    {
+        const ssz_merkle_scratch_t misaligned_scratch = {
+            .chunks = fuzz_misaligned_chunk_ptr(misaligned_scratch_raw),
+            .chunk_count = 2u,
+        };
+
+        (void)memcpy((void *)fuzz_misaligned_chunk_ptr(misaligned_root_raw), &root, sizeof(root));
+        (void)ssz_hash_tree_root_uint64(7u, fuzz_misaligned_chunk_ptr(misaligned_root_raw));
+        (void)ssz_merkleize((const ssz_chunk_t *)(const void *)
+                                fuzz_misaligned_chunk_ptr(misaligned_root_raw),
+                            1u,
+                            SSZ_NO_LIMIT,
+                            ssz_hash_default(),
+                            &out_root);
+        (void)(ssz_merkleize)(roots, 1u, SSZ_NO_LIMIT, &misaligned_scratch, ssz_hash_default(), &out_root);
+        (void)ssz_mix_in_length((const ssz_chunk_t *)(const void *)
+                                    fuzz_misaligned_chunk_ptr(misaligned_root_raw),
+                                (const uint8_t[32]){0u},
+                                32u,
+                                ssz_hash_default(),
+                                &out_root);
+    }
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)

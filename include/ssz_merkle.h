@@ -14,6 +14,9 @@ extern "C"
 
 #define SSZ_MERKLE_SCRATCH_MAX_CHUNKS 131072u
 
+    /* `chunks` must be aligned to `SSZ_CHUNK_ALIGNMENT` when `chunk_count` is
+       non-zero. Misaligned chunk storage is rejected with
+       `SSZ_ERR_ALIGNMENT_INVALID`. */
     typedef struct
     {
         ssz_chunk_t *chunks;

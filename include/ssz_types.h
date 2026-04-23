@@ -18,17 +18,31 @@ extern "C"
 
 #if defined(_MSC_VER)
 #define SSZ_ALIGNAS(n) __declspec(align(n))
+#define SSZ_ALIGNOF(type) __alignof(type)
 #else
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 #define SSZ_ALIGNAS(n) _Alignas(n)
+#define SSZ_ALIGNOF(type) _Alignof(type)
 #else
 #define SSZ_ALIGNAS(n) __attribute__((aligned(n)))
+#define SSZ_ALIGNOF(type) __alignof__(type)
 #endif
 #endif
 
+#if defined(UINTPTR_MAX) && defined(UINT32_MAX) && (UINTPTR_MAX > UINT32_MAX)
+#define SSZ_CHUNK_ALIGNMENT 8u
+#else
+#define SSZ_CHUNK_ALIGNMENT 4u
+#endif
+
+/*
+ * `ssz_chunk_t` is intentionally word-aligned rather than over-aligned. This
+ * keeps standard `malloc`/`calloc`/`realloc` storage valid while still letting
+ * the library reject manually misaligned chunk pointers at API boundaries.
+ */
 typedef struct
 {
-    SSZ_ALIGNAS(32) uint8_t bytes[32];
+    SSZ_ALIGNAS(SSZ_CHUNK_ALIGNMENT) uint8_t bytes[SSZ_BYTES_PER_CHUNK];
 } ssz_chunk_t;
 
 typedef uint64_t ssz_gindex_t;
@@ -49,6 +63,7 @@ typedef enum
     SSZ_ERR_SELECTOR_INVALID,
     SSZ_ERR_GINDEX_INVALID,
     SSZ_ERR_PROOF_INVALID,
+    SSZ_ERR_ALIGNMENT_INVALID,
     SSZ_ERR_HASH_FAILURE
 } ssz_error_t;
 

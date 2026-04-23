@@ -73,6 +73,14 @@ static ssz_chunk_t make_chunk(uint8_t seed)
     return chunk;
 }
 
+static ssz_chunk_t *misaligned_chunk_ptr(void *storage)
+{
+    uintptr_t base = (uintptr_t)storage;
+    uintptr_t aligned = (base + (uintptr_t)(SSZ_CHUNK_ALIGNMENT - 1u)) &
+                        ~((uintptr_t)SSZ_CHUNK_ALIGNMENT - 1u);
+    return (ssz_chunk_t *)(void *)(aligned + 1u);
+}
+
 typedef struct
 {
     uint8_t fill;
@@ -830,6 +838,41 @@ static bool test_hash_2to1_batch_inplace_error_paths(void)
     return true;
 }
 
+static bool test_hash_alignment_error_paths(void)
+{
+    const ssz_chunk_t right = make_chunk(0x21u);
+    ssz_chunk_t out = make_chunk(0x41u);
+    uint8_t left_raw[sizeof(ssz_chunk_t) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t pairs_raw[(sizeof(ssz_chunk_t) * 2u) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t nodes_raw[(sizeof(ssz_chunk_t) * 2u) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t out_raw[sizeof(ssz_chunk_t) + SSZ_CHUNK_ALIGNMENT] = {0u};
+    uint8_t pairs64[(size_t)SSZ_BYTES_PER_CHUNK * 2u] = {0u};
+
+    ASSERT_TRUE(SSZ_CHUNK_ALIGNMENT > 1u);
+
+    ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(),
+                             (const ssz_chunk_t *)(const void *)misaligned_chunk_ptr(left_raw),
+                             &right,
+                             &out),
+               SSZ_ERR_ALIGNMENT_INVALID);
+    ASSERT_ERR(ssz_hash_2to1_batch(ssz_hash_default(),
+                                   (const ssz_chunk_t *)(const void *)misaligned_chunk_ptr(pairs_raw),
+                                   1u,
+                                   &out),
+               SSZ_ERR_ALIGNMENT_INVALID);
+    ASSERT_ERR(ssz_hash_2to1_batch_raw(
+                   ssz_hash_default(),
+                   pairs64,
+                   1u,
+                   misaligned_chunk_ptr(out_raw)),
+               SSZ_ERR_ALIGNMENT_INVALID);
+    ASSERT_ERR(
+        ssz_hash_2to1_batch_inplace(ssz_hash_default(), misaligned_chunk_ptr(nodes_raw), 1u),
+        SSZ_ERR_ALIGNMENT_INVALID);
+
+    return true;
+}
+
 static bool test_hash_2to1_batch_falls_back_to_hash_2to1_provider(void)
 {
     const ssz_chunk_t pairs[4] = {
@@ -930,6 +973,7 @@ int main(void)
         {"hash_2to1_batch_raw_paths", test_hash_2to1_batch_raw_paths},
         {"hash_2to1_batch_inplace_cases", test_hash_2to1_batch_inplace_cases},
         {"hash_2to1_batch_inplace_error_paths", test_hash_2to1_batch_inplace_error_paths},
+        {"hash_alignment_error_paths", test_hash_alignment_error_paths},
         {"hash_2to1_batch_falls_back_to_hash_2to1_provider", test_hash_2to1_batch_falls_back_to_hash_2to1_provider},
         {"hash_internal_sha256_batch_default_defensive_paths", test_hash_internal_sha256_batch_default_defensive_paths},
 #if !defined(_WIN32)

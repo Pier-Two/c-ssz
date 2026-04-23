@@ -406,6 +406,9 @@ const char *ssz_error_string(ssz_error_t error)
         case SSZ_ERR_PROOF_INVALID:
             error_string = "SSZ_ERR_PROOF_INVALID";
             break;
+        case SSZ_ERR_ALIGNMENT_INVALID:
+            error_string = "SSZ_ERR_ALIGNMENT_INVALID";
+            break;
         case SSZ_ERR_HASH_FAILURE:
             error_string = "SSZ_ERR_HASH_FAILURE";
             break;

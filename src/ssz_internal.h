@@ -141,6 +141,54 @@ static inline bool ssz_internal_get_bit_le(const uint8_t *bits_le, uint64_t bit_
     return (bits_le[byte_index] & bit_mask) != 0u;
 }
 
+static inline ssz_error_t ssz_internal_validate_chunk_pointer(const ssz_chunk_t *chunk)
+{
+    ssz_error_t err = SSZ_SUCCESS;
+    uintptr_t address = 0u;
+    const ssz_chunk_t *chunk_value = chunk;
+
+    if (chunk == NULL)
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else
+    {
+        (void)memcpy(&address, (const void *)&chunk_value, sizeof(chunk_value));
+        if ((address % (uintptr_t)SSZ_CHUNK_ALIGNMENT) != 0u)
+        {
+            err = SSZ_ERR_ALIGNMENT_INVALID;
+        }
+        else
+        {
+            err = SSZ_SUCCESS;
+        }
+    }
+
+    return err;
+}
+
+static inline ssz_error_t ssz_internal_validate_chunk_array(
+    const ssz_chunk_t *chunks,
+    size_t chunk_count)
+{
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if ((chunk_count != 0u) && (chunks == NULL))
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (chunk_count != 0u)
+    {
+        err = ssz_internal_validate_chunk_pointer(chunks);
+    }
+    else
+    {
+        err = SSZ_SUCCESS;
+    }
+
+    return err;
+}
+
 static inline const ssz_hash_fn_t *ssz_internal_resolve_hash_fn(const ssz_hash_fn_t *hash_fn)
 {
     const ssz_hash_fn_t *resolved_hash_fn = ssz_hash_default();

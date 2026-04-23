@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "ssz.h"
 
@@ -70,6 +71,14 @@ static void fuzz_fill_chunks(fuzz_input_t *input, ssz_chunk_t *chunks, size_t ch
     {
         fuzz_fill_bytes(input, chunks[i].bytes, SSZ_BYTES_PER_CHUNK);
     }
+}
+
+static ssz_chunk_t *fuzz_misaligned_chunk_ptr(void *storage)
+{
+    uintptr_t base = (uintptr_t)storage;
+    uintptr_t aligned = (base + (uintptr_t)(SSZ_CHUNK_ALIGNMENT - 1u)) &
+                        ~((uintptr_t)SSZ_CHUNK_ALIGNMENT - 1u);
+    return (ssz_chunk_t *)(void *)(aligned + 1u);
 }
 
 static ssz_error_t fuzz_custom_hash(
@@ -360,6 +369,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 
             ssz_chunk_t pairs[2] = {left, right};
             ssz_chunk_t batch_out[1] = {{{0u}}};
+            const uint8_t zero_pairs64[(size_t)SSZ_BYTES_PER_CHUNK * 2u] = {0u};
+            uint8_t misaligned_raw[(sizeof(ssz_chunk_t) * 2u) + SSZ_CHUNK_ALIGNMENT] = {0u};
+            uint8_t misaligned_out_raw[sizeof(ssz_chunk_t) + SSZ_CHUNK_ALIGNMENT] = {0u};
 
             (void)ssz_hash_2to1(ssz_hash_default(), NULL, &right, &out);
             (void)ssz_hash_2to1(ssz_hash_default(), &left, NULL, &out);
@@ -375,6 +387,20 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
                 (SIZE_MAX / 2u) + 1u,
                 batch_out);
 #endif
+            if (SSZ_CHUNK_ALIGNMENT > 1u)
+            {
+                (void)memcpy((void *)fuzz_misaligned_chunk_ptr(misaligned_raw), &left, sizeof(left));
+                (void)ssz_hash_2to1(ssz_hash_default(),
+                                    (const ssz_chunk_t *)(const void *)
+                                        fuzz_misaligned_chunk_ptr(misaligned_raw),
+                                    &right,
+                                    &out);
+                (void)ssz_hash_2to1_batch_raw(
+                    ssz_hash_default(),
+                    zero_pairs64,
+                    1u,
+                    fuzz_misaligned_chunk_ptr(misaligned_out_raw));
+            }
             break;
         }
     }
