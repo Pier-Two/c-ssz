@@ -91,6 +91,22 @@ static ssz_error_t ssz_internal_deserialize_variable_sequence(
     return err;
 }
 
+static ssz_error_t ssz_internal_validate_boolean_bytes(const uint8_t *in, size_t in_len)
+{
+    ssz_error_t err = SSZ_SUCCESS;
+
+    for (size_t i = 0u; i < in_len; i++)
+    {
+        if (in[i] > 1u)
+        {
+            err = SSZ_ERR_ENCODING_INVALID;
+            break;
+        }
+    }
+
+    return err;
+}
+
 ssz_error_t ssz_deserialize_uint8(const uint8_t *in, size_t in_len, uint8_t *out_value)
 {
     ssz_error_t err = SSZ_SUCCESS;
@@ -439,6 +455,44 @@ ssz_error_t ssz_deserialize_vector_fixed(
     return err;
 }
 
+ssz_error_t ssz_deserialize_vector_boolean(
+    const uint8_t *in,
+    size_t in_len,
+    uint64_t element_count,
+    uint8_t *out_values,
+    size_t out_values_len)
+{
+    size_t required = 0u;
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if (element_count == 0u)
+    {
+        err = SSZ_ERR_SCHEMA_INVALID;
+    }
+    else if (!ssz_internal_u64_to_size(element_count, &required))
+    {
+        err = SSZ_ERR_OVERFLOW;
+    }
+    else if ((in == NULL) || (in_len != required))
+    {
+        err = SSZ_ERR_ENCODING_INVALID;
+    }
+    else if ((required != 0u) && ((out_values == NULL) || (out_values_len < required)))
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+    else
+    {
+        err = ssz_internal_validate_boolean_bytes(in, required);
+        if (err == SSZ_SUCCESS)
+        {
+            (void)memcpy(out_values, in, required);
+        }
+    }
+
+    return err;
+}
+
 ssz_error_t ssz_deserialize_vector_variable(
     const uint8_t *in,
     size_t in_len,
@@ -511,6 +565,48 @@ ssz_error_t ssz_deserialize_list_fixed(
                 (void)memcpy(out_elements, in, in_len);
             }
             *out_element_count = (uint64_t)count;
+        }
+    }
+
+    return err;
+}
+
+ssz_error_t ssz_deserialize_list_boolean(
+    const uint8_t *in,
+    size_t in_len,
+    uint64_t element_limit,
+    uint8_t *out_values,
+    size_t out_values_len,
+    uint64_t *out_element_count)
+{
+    ssz_error_t err = SSZ_SUCCESS;
+
+    if (out_element_count == NULL)
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if ((element_limit != SSZ_NO_LIMIT) && ((uint64_t)in_len > element_limit))
+    {
+        err = SSZ_ERR_LIMIT_EXCEEDED;
+    }
+    else if ((in == NULL) && (in_len != 0u))
+    {
+        err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if ((in_len != 0u) && ((out_values == NULL) || (out_values_len < in_len)))
+    {
+        err = SSZ_ERR_BUFFER_TOO_SMALL;
+    }
+    else
+    {
+        err = ssz_internal_validate_boolean_bytes(in, in_len);
+        if (err == SSZ_SUCCESS)
+        {
+            if (in_len != 0u)
+            {
+                (void)memcpy(out_values, in, in_len);
+            }
+            *out_element_count = (uint64_t)in_len;
         }
     }
 

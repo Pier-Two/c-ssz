@@ -477,6 +477,36 @@ static bool test_hash_2to1_batch_cases(void)
     return true;
 }
 
+static bool test_hash_2to1_batch_exact_inplace_and_partial_overlap(void)
+{
+    ssz_chunk_t inplace_nodes[4] = {
+        make_chunk(0x01u), make_chunk(0x11u),
+        make_chunk(0x21u), make_chunk(0x31u),
+    };
+    ssz_chunk_t overlap_nodes[4];
+    ssz_chunk_t overlap_original[4];
+    ssz_chunk_t expected[2];
+
+    memcpy(overlap_nodes, inplace_nodes, sizeof(overlap_nodes));
+    memcpy(overlap_original, inplace_nodes, sizeof(overlap_original));
+
+    ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &inplace_nodes[0], &inplace_nodes[1], &expected[0]),
+               SSZ_SUCCESS);
+    ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &inplace_nodes[2], &inplace_nodes[3], &expected[1]),
+               SSZ_SUCCESS);
+
+    ASSERT_ERR(ssz_hash_2to1_batch(ssz_hash_default(), inplace_nodes, 2u, inplace_nodes), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(inplace_nodes[0].bytes, expected[0].bytes, SSZ_BYTES_PER_CHUNK);
+    ASSERT_MEM_EQ(inplace_nodes[1].bytes, expected[1].bytes, SSZ_BYTES_PER_CHUNK);
+
+    ASSERT_ERR(
+        ssz_hash_2to1_batch(ssz_hash_default(), overlap_nodes, 2u, &overlap_nodes[2]),
+        SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_MEM_EQ(overlap_nodes, overlap_original, sizeof(overlap_nodes));
+
+    return true;
+}
+
 static bool test_hash_2to1_null_hash_fn_fallback(void)
 {
     const ssz_chunk_t left = make_chunk(0x70u);
@@ -962,6 +992,8 @@ int main(void)
         {"hash_internal_copy_sha256_and_zero_hashes_match_public",
          test_hash_internal_copy_sha256_and_zero_hashes_match_public},
         {"hash_2to1_batch_cases", test_hash_2to1_batch_cases},
+        {"hash_2to1_batch_exact_inplace_and_partial_overlap",
+         test_hash_2to1_batch_exact_inplace_and_partial_overlap},
         {"hash_internal_copy_portable_entry_points_match_public",
          test_hash_internal_copy_portable_entry_points_match_public},
         {"hash_2to1_null_hash_fn_fallback", test_hash_2to1_null_hash_fn_fallback},

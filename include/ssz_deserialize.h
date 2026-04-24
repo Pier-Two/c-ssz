@@ -35,6 +35,9 @@ extern "C"
         size_t out_bits_le_len,
         uint64_t *out_bit_len);
 
+    /* Raw fixed-width vector decoding. For Vector[boolean, N], use
+       ssz_deserialize_vector_boolean so every element is checked for the
+       canonical 0x00/0x01 encoding. */
     ssz_error_t ssz_deserialize_vector_fixed(
         const uint8_t *in,
         size_t in_len,
@@ -43,6 +46,14 @@ extern "C"
         uint8_t *out_elements,
         size_t out_elements_len);
 
+    /* Decode Vector[boolean, N] and reject any non-canonical boolean byte. */
+    ssz_error_t ssz_deserialize_vector_boolean(
+        const uint8_t *in,
+        size_t in_len,
+        uint64_t element_count,
+        uint8_t *out_values,
+        size_t out_values_len);
+
     ssz_error_t ssz_deserialize_vector_variable(
         const uint8_t *in,
         size_t in_len,
@@ -50,6 +61,9 @@ extern "C"
         size_t min_element_size,
         ssz_member_codec_t *codec);
 
+    /* Raw fixed-width list decoding. For List[boolean, N], use
+       ssz_deserialize_list_boolean so every element is checked for the
+       canonical 0x00/0x01 encoding. */
     ssz_error_t ssz_deserialize_list_fixed(
         const uint8_t *in,
         size_t in_len,
@@ -57,6 +71,15 @@ extern "C"
         size_t element_size,
         uint8_t *out_elements,
         size_t out_elements_len,
+        uint64_t *out_element_count);
+
+    /* Decode List[boolean, N] and reject any non-canonical boolean byte. */
+    ssz_error_t ssz_deserialize_list_boolean(
+        const uint8_t *in,
+        size_t in_len,
+        uint64_t element_limit,
+        uint8_t *out_values,
+        size_t out_values_len,
         uint64_t *out_element_count);
 
     ssz_error_t ssz_deserialize_list_variable(

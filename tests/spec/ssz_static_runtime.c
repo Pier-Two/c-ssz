@@ -1335,7 +1335,14 @@ static ssz_error_t ssz_static_validate_vector(
             }
             else
             {
-                err = ssz_deserialize_vector_fixed(input, byte_len, type->param, elem_size, copy, total_len);
+                if (elem_type->kind == SSZ_STATIC_SCHEMA_KIND_BOOL)
+                {
+                    err = ssz_deserialize_vector_boolean(input, byte_len, type->param, copy, total_len);
+                }
+                else
+                {
+                    err = ssz_deserialize_vector_fixed(input, byte_len, type->param, elem_size, copy, total_len);
+                }
             }
         }
 
@@ -1442,7 +1449,14 @@ static ssz_error_t ssz_static_validate_list(
         }
         else
         {
-            err = ssz_deserialize_list_fixed(input, byte_len, type->param, elem_size, copy, byte_len, &count);
+            if (elem_type->kind == SSZ_STATIC_SCHEMA_KIND_BOOL)
+            {
+                err = ssz_deserialize_list_boolean(input, byte_len, type->param, copy, byte_len, &count);
+            }
+            else
+            {
+                err = ssz_deserialize_list_fixed(input, byte_len, type->param, elem_size, copy, byte_len, &count);
+            }
         }
 
         if ((err == SSZ_SUCCESS) && ssz_static_kind_is_basic(elem_type->kind))
