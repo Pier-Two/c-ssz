@@ -271,19 +271,7 @@ static ssz_error_t deserialize_vector_checked(
     {
         return SSZ_ERR_ENCODING_INVALID;
     }
-
-    for (size_t i = 0u; i < expected_len; i++)
-    {
-        uint8_t value = 0u;
-        ssz_error_t err = ssz_deserialize_boolean(serialized + i, 1u, &value);
-        if (err != SSZ_SUCCESS)
-        {
-            return err;
-        }
-        out[i] = value;
-    }
-
-    return SSZ_SUCCESS;
+    return ssz_deserialize_vector_boolean(serialized, serialized_len, length, out, expected_len);
 }
 
 static void run_valid_case(spec_report_t *report, const char *suite_dir, const char *case_name)

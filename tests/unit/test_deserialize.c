@@ -447,6 +447,53 @@ static bool test_deserialize_boolean_canonical_enforcement(void)
     return true;
 }
 
+static bool test_deserialize_boolean_collection_canonical_enforcement(void)
+{
+    const uint8_t valid_vector[3] = {0x00u, 0x01u, 0x00u};
+    const uint8_t invalid_vector[3] = {0x00u, 0x02u, 0x01u};
+    const uint8_t valid_list[2] = {0x01u, 0x00u};
+    const uint8_t invalid_list[2] = {0x01u, 0xFFu};
+    uint8_t out[3] = {0u};
+    uint64_t count = 0u;
+
+    ASSERT_ERR(
+        ssz_deserialize_vector_boolean(valid_vector, sizeof(valid_vector), 3u, out, sizeof(out)),
+        SSZ_SUCCESS);
+    ASSERT_MEM_EQ(out, valid_vector, sizeof(valid_vector));
+
+    memset(out, 0xA5, sizeof(out));
+    ASSERT_ERR(
+        ssz_deserialize_vector_boolean(invalid_vector, sizeof(invalid_vector), 3u, out, sizeof(out)),
+        SSZ_ERR_ENCODING_INVALID);
+    ASSERT_MEM_EQ(out, ((const uint8_t[3]){0xA5u, 0xA5u, 0xA5u}), sizeof(out));
+
+    ASSERT_ERR(
+        ssz_deserialize_list_boolean(valid_list, sizeof(valid_list), 2u, out, sizeof(out), &count),
+        SSZ_SUCCESS);
+    ASSERT_TRUE(count == 2u);
+    ASSERT_MEM_EQ(out, valid_list, sizeof(valid_list));
+
+    memset(out, 0x5A, sizeof(out));
+    count = 99u;
+    ASSERT_ERR(
+        ssz_deserialize_list_boolean(
+            invalid_list,
+            sizeof(invalid_list),
+            2u,
+            out,
+            sizeof(out),
+            &count),
+        SSZ_ERR_ENCODING_INVALID);
+    ASSERT_TRUE(count == 99u);
+    ASSERT_MEM_EQ(out, ((const uint8_t[3]){0x5Au, 0x5Au, 0x5Au}), sizeof(out));
+
+    count = 99u;
+    ASSERT_ERR(ssz_deserialize_list_boolean(NULL, 0u, SSZ_NO_LIMIT, NULL, 0u, &count), SSZ_SUCCESS);
+    ASSERT_TRUE(count == 0u);
+
+    return true;
+}
+
 static bool test_deserialize_fixed_width_short_inputs(void)
 {
     const uint8_t in_u8[1] = {0xABu};
@@ -1481,6 +1528,15 @@ static bool test_deserialize_collection_error_paths(void)
     ASSERT_ERR(
         ssz_deserialize_vector_fixed((const uint8_t[2]){0x11u, 0x22u}, 2u, 2u, 1u, out, 1u),
         SSZ_ERR_BUFFER_TOO_SMALL);
+    ASSERT_ERR(
+        ssz_deserialize_vector_boolean((const uint8_t[1]){0x00u}, 1u, 0u, out, sizeof(out)),
+        SSZ_ERR_SCHEMA_INVALID);
+    ASSERT_ERR(
+        ssz_deserialize_vector_boolean((const uint8_t[2]){0x00u, 0x01u}, 2u, 1u, out, sizeof(out)),
+        SSZ_ERR_ENCODING_INVALID);
+    ASSERT_ERR(
+        ssz_deserialize_vector_boolean((const uint8_t[2]){0x00u, 0x01u}, 2u, 2u, out, 1u),
+        SSZ_ERR_BUFFER_TOO_SMALL);
 
     ASSERT_ERR(
         ssz_deserialize_list_fixed(
@@ -1524,6 +1580,18 @@ static bool test_deserialize_collection_error_paths(void)
             out,
             1u,
             &out_count),
+        SSZ_ERR_BUFFER_TOO_SMALL);
+    ASSERT_ERR(
+        ssz_deserialize_list_boolean((const uint8_t[1]){0x00u}, 1u, SSZ_NO_LIMIT, out, sizeof(out), NULL),
+        SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(
+        ssz_deserialize_list_boolean((const uint8_t[2]){0x00u, 0x01u}, 2u, 1u, out, sizeof(out), &out_count),
+        SSZ_ERR_LIMIT_EXCEEDED);
+    ASSERT_ERR(
+        ssz_deserialize_list_boolean(NULL, 1u, SSZ_NO_LIMIT, out, sizeof(out), &out_count),
+        SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_ERR(
+        ssz_deserialize_list_boolean((const uint8_t[2]){0x00u, 0x01u}, 2u, SSZ_NO_LIMIT, out, 1u, &out_count),
         SSZ_ERR_BUFFER_TOO_SMALL);
 
     ASSERT_ERR(
@@ -2020,6 +2088,8 @@ int main(void)
         {"deserialize_basic_round_trips", test_deserialize_basic_round_trips},
         {"deserialize_boolean_canonical_enforcement",
          test_deserialize_boolean_canonical_enforcement},
+        {"deserialize_boolean_collection_canonical_enforcement",
+         test_deserialize_boolean_collection_canonical_enforcement},
         {"deserialize_fixed_width_short_inputs", test_deserialize_fixed_width_short_inputs},
         {"deserialize_fixed_width_overlong_inputs", test_deserialize_fixed_width_overlong_inputs},
         {"deserialize_bitvector_padding_validation", test_deserialize_bitvector_padding_validation},

@@ -100,6 +100,44 @@ static ssz_error_t ssz_internal_normalize_hash_error(ssz_error_t err)
     return SSZ_ERR_HASH_FAILURE;
 }
 
+static uintptr_t ssz_internal_pointer_address(const void *ptr)
+{
+    uintptr_t address = 0u;
+    const void *ptr_value = ptr;
+
+    (void)memcpy(&address, (const void *)&ptr_value, sizeof(ptr_value));
+    return address;
+}
+
+static bool ssz_internal_byte_ranges_overlap(
+    const void *left,
+    size_t left_len,
+    const void *right,
+    size_t right_len)
+{
+    bool overlap = false;
+
+    if ((left_len != 0u) && (right_len != 0u))
+    {
+        uintptr_t left_begin = ssz_internal_pointer_address(left);
+        uintptr_t right_begin = ssz_internal_pointer_address(right);
+
+        if (((uintmax_t)left_len > (uintmax_t)(UINTPTR_MAX - left_begin)) ||
+            ((uintmax_t)right_len > (uintmax_t)(UINTPTR_MAX - right_begin)))
+        {
+            overlap = true;
+        }
+        else
+        {
+            uintptr_t left_end = left_begin + (uintptr_t)left_len;
+            uintptr_t right_end = right_begin + (uintptr_t)right_len;
+            overlap = (left_begin < right_end) && (right_begin < left_end);
+        }
+    }
+
+    return overlap;
+}
+
 ssz_error_t ssz_hash_sha256(const uint8_t *data, size_t data_len, uint8_t out[32])
 {
     if (out == NULL)
@@ -395,6 +433,30 @@ ssz_error_t ssz_hash_2to1_batch(
         return err;
     }
 
+    if (pair_count != 0u)
+    {
+        size_t pairs_bytes_len = 0u;
+        size_t out_bytes_len = 0u;
+
+        if (ssz_internal_mul_overflow_size(
+                pair_count,
+                (size_t)SSZ_BYTES_PER_CHUNK * 2u,
+                &pairs_bytes_len) ||
+            ssz_internal_mul_overflow_size(pair_count, SSZ_BYTES_PER_CHUNK, &out_bytes_len))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+
+        if (ssz_internal_byte_ranges_overlap(pairs, pairs_bytes_len, out, out_bytes_len))
+        {
+            if (ssz_internal_pointer_address(pairs) == ssz_internal_pointer_address(out))
+            {
+                return ssz_hash_2to1_batch_inplace(resolved, out, pair_count);
+            }
+            return SSZ_ERR_INVALID_ARGUMENT;
+        }
+    }
+
     if (resolved->hash_2to1_batch != NULL)
     {
         err = resolved->hash_2to1_batch(resolved->ctx, pairs, pair_count, out);
@@ -403,24 +465,7 @@ ssz_error_t ssz_hash_2to1_batch(
 
     if ((resolved->hash_2to1 == NULL) && (pair_count != 0u))
     {
-        size_t pairs_bytes_len = 0u;
-        size_t out_bytes_len = 0u;
-        bool overlap = true;
-
-        if (!ssz_internal_mul_overflow_size(pair_count, (size_t)SSZ_BYTES_PER_CHUNK * 2u, &pairs_bytes_len) &&
-            !ssz_internal_mul_overflow_size(pair_count, SSZ_BYTES_PER_CHUNK, &out_bytes_len))
-        {
-            const uint8_t *pairs_begin = (const uint8_t *)pairs;
-            const uint8_t *pairs_end = pairs_begin + pairs_bytes_len;
-            uint8_t *out_begin = (uint8_t *)out;
-            uint8_t *out_end = out_begin + out_bytes_len;
-            overlap = (out_begin < pairs_end) && (pairs_begin < out_end);
-        }
-
-        if (!overlap)
-        {
-            return ssz_hash_2to1_batch_raw(resolved, (const uint8_t *)pairs, pair_count, out);
-        }
+        return ssz_hash_2to1_batch_raw(resolved, (const uint8_t *)pairs, pair_count, out);
     }
 
     for (size_t i = 0u; i < pair_count; i++)

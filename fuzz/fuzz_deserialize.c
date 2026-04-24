@@ -297,6 +297,10 @@ static void fuzz_cover_deserialize_errors(void)
     (void)ssz_deserialize_vector_fixed(in, 4u, 65536u, 65537u, out_bits, sizeof(out_bits));
     (void)ssz_deserialize_vector_fixed(NULL, 4u, 1u, 4u, out_bits, sizeof(out_bits));
     (void)ssz_deserialize_vector_fixed(in, 4u, 1u, 4u, NULL, 0u);
+    (void)ssz_deserialize_vector_boolean(bad_bool, sizeof(bad_bool), 1u, out_bits, sizeof(out_bits));
+    (void)ssz_deserialize_vector_boolean(in, 4u, 0u, out_bits, sizeof(out_bits));
+    (void)ssz_deserialize_vector_boolean(NULL, 1u, 1u, out_bits, sizeof(out_bits));
+    (void)ssz_deserialize_vector_boolean(in, 1u, 1u, NULL, 0u);
 
     (void)ssz_deserialize_vector_variable(in, 0u, 0u, 0u, &codec);
     (void)ssz_deserialize_vector_variable(in, 1u, 0u, 0u, &codec);
@@ -327,6 +331,11 @@ static void fuzz_cover_deserialize_errors(void)
         sizeof(out_bits),
         &out_element_count);
     (void)ssz_deserialize_list_fixed(in, 4u, SSZ_NO_LIMIT, 2u, NULL, 0u, &out_element_count);
+    (void)ssz_deserialize_list_boolean(bad_bool, sizeof(bad_bool), SSZ_NO_LIMIT, out_bits, sizeof(out_bits), &out_element_count);
+    (void)ssz_deserialize_list_boolean(in, 4u, 1u, out_bits, sizeof(out_bits), &out_element_count);
+    (void)ssz_deserialize_list_boolean(NULL, 1u, SSZ_NO_LIMIT, out_bits, sizeof(out_bits), &out_element_count);
+    (void)ssz_deserialize_list_boolean(in, 1u, SSZ_NO_LIMIT, NULL, 0u, &out_element_count);
+    (void)ssz_deserialize_list_boolean(in, 1u, SSZ_NO_LIMIT, out_bits, sizeof(out_bits), NULL);
 
     (void)ssz_deserialize_list_variable(in, 4u, SSZ_NO_LIMIT, 0u, &codec, NULL);
     (void)ssz_deserialize_list_variable(in, 4u, SSZ_NO_LIMIT, 0u, NULL, &out_element_count);
