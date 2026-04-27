@@ -23,6 +23,7 @@ jobs:
 
       - name: Install clang
         run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
           sudo apt-get update
           sudo apt-get install -y clang llvm
 
@@ -196,6 +197,7 @@ jobs:
 
       - name: Install clang and multilib toolchain
         run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
           sudo dpkg --add-architecture i386
           sudo apt-get update
           sudo apt-get install -y clang llvm gcc-multilib g++-multilib libssl-dev:i386

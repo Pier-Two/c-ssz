@@ -21,6 +21,7 @@ jobs:
 
       - name: Install cppcheck from source (for full MISRA addon support)
         run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
           sudo apt-get update
           sudo apt-get install -y cmake g++ libpcre3-dev
           cd /tmp
