@@ -2275,9 +2275,9 @@ ssz_error_t ssz_merkle_cache_update_root_range(
     }
     else if (root_count == 0u)
     {
-        return SSZ_SUCCESS;
+        err = SSZ_SUCCESS;
     }
-    else if ((root_count != 0u) && (roots == NULL))
+    else if (roots == NULL)
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
@@ -2294,7 +2294,7 @@ ssz_error_t ssz_merkle_cache_update_root_range(
         err = ssz_merkle_cache_internal_ensure_capacity_for_count(cache, end_index);
     }
 
-    if (err == SSZ_SUCCESS)
+    if ((err == SSZ_SUCCESS) && (root_count != 0u))
     {
         for (uint64_t i = 0u; (i < root_count) && (err == SSZ_SUCCESS); i++)
         {
@@ -2316,7 +2316,7 @@ ssz_error_t ssz_merkle_cache_update_root_range(
         /* intentionally empty */
     }
 
-    if (err == SSZ_SUCCESS)
+    if ((err == SSZ_SUCCESS) && (root_count != 0u))
     {
         if (end_index > cache->leaf_count)
         {
