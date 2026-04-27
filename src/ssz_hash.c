@@ -153,15 +153,10 @@ ssz_error_t ssz_hash_sha256(const uint8_t *data, size_t data_len, uint8_t out[32
         return SSZ_ERR_OVERFLOW;
     }
 
-    /* Provide a valid pointer for zero-length input to avoid passing NULL into
-       SHA256, which triggers a pedantic UBSan finding (NULL + 0 is technically
-       undefined in C even though no memory is accessed). */
-    {
-        uint8_t empty = 0u;
-        const uint8_t *src = (data != NULL) ? data : &empty;
-        SHA256(src, data_len, out);
-        SSZ_MSAN_UNPOISON(out, SHA256_DIGEST_LENGTH);
-    }
+    uint8_t empty = 0u;
+    const uint8_t *src = (data != NULL) ? data : &empty;
+    SHA256(src, data_len, out);
+    SSZ_MSAN_UNPOISON(out, SHA256_DIGEST_LENGTH);
 
     return SSZ_SUCCESS;
 }
@@ -183,8 +178,6 @@ static const ssz_hash_fn_t ssz_internal_default_hash_fn = {
     .ctx = NULL,
 };
 
-/* This shared table is reached through public Merkle APIs, so first-use
-   initialization must be serialized across threads. */
 static ssz_chunk_t ssz_internal_default_zero_hashes[64];
 
 static void ssz_internal_init_default_zero_hashes(void)
