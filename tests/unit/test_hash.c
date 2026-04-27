@@ -537,6 +537,26 @@ static bool test_hash_2to1_default_contiguous_fast_path_with_output_after_pair(v
     return true;
 }
 
+static bool test_hash_2to1_adjacent_input_separate_output(void)
+{
+    ssz_chunk_t pair[2] = {
+        make_chunk(0x00u),
+        make_chunk(0x20u),
+    };
+    ssz_chunk_t out;
+    uint8_t concat[64] = {0u};
+    uint8_t expected_bytes[32] = {0u};
+
+    memcpy(concat, pair[0].bytes, SSZ_BYTES_PER_CHUNK);
+    memcpy(concat + SSZ_BYTES_PER_CHUNK, pair[1].bytes, SSZ_BYTES_PER_CHUNK);
+    ASSERT_ERR(ssz_hash_sha256(concat, sizeof(concat), expected_bytes), SSZ_SUCCESS);
+
+    ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &pair[0], &pair[1], &out), SSZ_SUCCESS);
+    ASSERT_MEM_EQ(out.bytes, expected_bytes, SSZ_BYTES_PER_CHUNK);
+
+    return true;
+}
+
 static bool test_hash_internal_copy_portable_entry_points_match_public(void)
 {
     const ssz_hash_fn_t *copy_default = call_internal_copy_ssz_hash_default();
@@ -795,6 +815,69 @@ static bool test_hash_2to1_batch_raw_paths(void)
     return true;
 }
 
+static bool test_hash_2to1_batch_raw_rejects_overlap(void)
+{
+    ssz_chunk_t buf[4];
+    ssz_chunk_t buf_original[4];
+
+    for (size_t i = 0u; i < 4u; i++)
+    {
+        for (size_t j = 0u; j < SSZ_BYTES_PER_CHUNK; j++)
+        {
+            buf[i].bytes[j] = (uint8_t)((i * SSZ_BYTES_PER_CHUNK) + j + 1u);
+        }
+    }
+    memcpy(buf_original, buf, sizeof(buf));
+
+    ASSERT_ERR(
+        ssz_hash_2to1_batch_raw(ssz_hash_default(), (const uint8_t *)buf, 2u, &buf[2]),
+        SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_MEM_EQ(buf, buf_original, sizeof(buf));
+
+    ASSERT_ERR(
+        ssz_hash_2to1_batch_raw(ssz_hash_default(), (const uint8_t *)buf, 2u, buf),
+        SSZ_ERR_INVALID_ARGUMENT);
+    ASSERT_MEM_EQ(buf, buf_original, sizeof(buf));
+
+    {
+        hash_behavior_t custom_behavior = {
+            .fill = 0x55u,
+            .err = SSZ_SUCCESS,
+        };
+        const ssz_hash_fn_t custom_hash = {
+            .hash = mock_hash,
+            .hash_2to1 = NULL,
+            .hash_2to1_batch = NULL,
+            .ctx = &custom_behavior,
+        };
+
+        ASSERT_ERR(
+            ssz_hash_2to1_batch_raw(&custom_hash, (const uint8_t *)buf, 2u, &buf[2]),
+            SSZ_ERR_INVALID_ARGUMENT);
+        ASSERT_MEM_EQ(buf, buf_original, sizeof(buf));
+    }
+
+    {
+        ssz_chunk_t pairs[4];
+        ssz_chunk_t out[2];
+        ssz_chunk_t expected[2];
+
+        memcpy(pairs, buf_original, sizeof(pairs));
+
+        ASSERT_ERR(
+            ssz_hash_2to1_batch_raw(ssz_hash_default(), (const uint8_t *)pairs, 2u, out),
+            SSZ_SUCCESS);
+        ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &pairs[0], &pairs[1], &expected[0]),
+                   SSZ_SUCCESS);
+        ASSERT_ERR(ssz_hash_2to1(ssz_hash_default(), &pairs[2], &pairs[3], &expected[1]),
+                   SSZ_SUCCESS);
+        ASSERT_MEM_EQ(out[0].bytes, expected[0].bytes, SSZ_BYTES_PER_CHUNK);
+        ASSERT_MEM_EQ(out[1].bytes, expected[1].bytes, SSZ_BYTES_PER_CHUNK);
+    }
+
+    return true;
+}
+
 static bool test_hash_2to1_batch_inplace_cases(void)
 {
     ssz_chunk_t nodes_default[4] = {
@@ -999,10 +1082,13 @@ int main(void)
         {"hash_2to1_null_hash_fn_fallback", test_hash_2to1_null_hash_fn_fallback},
         {"hash_2to1_default_contiguous_fast_path_with_output_after_pair",
          test_hash_2to1_default_contiguous_fast_path_with_output_after_pair},
+        {"hash_2to1_adjacent_input_separate_output",
+         test_hash_2to1_adjacent_input_separate_output},
         {"hash_sha256_error_paths", test_hash_sha256_error_paths},
         {"hash_2to1_custom_provider_and_error_normalization", test_hash_2to1_custom_provider_and_error_normalization},
         {"hash_2to1_batch_error_paths", test_hash_2to1_batch_error_paths},
         {"hash_2to1_batch_raw_paths", test_hash_2to1_batch_raw_paths},
+        {"hash_2to1_batch_raw_rejects_overlap", test_hash_2to1_batch_raw_rejects_overlap},
         {"hash_2to1_batch_inplace_cases", test_hash_2to1_batch_inplace_cases},
         {"hash_2to1_batch_inplace_error_paths", test_hash_2to1_batch_inplace_error_paths},
         {"hash_alignment_error_paths", test_hash_alignment_error_paths},

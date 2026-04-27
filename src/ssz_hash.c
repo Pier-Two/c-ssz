@@ -273,6 +273,26 @@ ssz_error_t ssz_hash_2to1_batch_raw(
         return SSZ_ERR_OVERFLOW;
     }
 
+    if (pair_count != 0u)
+    {
+        size_t pairs_bytes_len = 0u;
+        size_t out_bytes_len = 0u;
+
+        if (ssz_internal_mul_overflow_size(
+                pair_count,
+                (size_t)SSZ_BYTES_PER_CHUNK * 2u,
+                &pairs_bytes_len) ||
+            ssz_internal_mul_overflow_size(pair_count, SSZ_BYTES_PER_CHUNK, &out_bytes_len))
+        {
+            return SSZ_ERR_OVERFLOW;
+        }
+
+        if (ssz_internal_byte_ranges_overlap(pairs64, pairs_bytes_len, out, out_bytes_len))
+        {
+            return SSZ_ERR_INVALID_ARGUMENT;
+        }
+    }
+
     if (resolved == &ssz_internal_default_hash_fn)
     {
         return ssz_internal_sha256_64_batch_default(pairs64, pair_count, out);
@@ -376,11 +396,13 @@ ssz_error_t ssz_hash_2to1(
     {
         const uint8_t *left_bytes = left->bytes;
         const uint8_t *right_bytes = right->bytes;
-        uint8_t *out_bytes = out->bytes;
 
         if ((right_bytes == left_bytes + SSZ_BYTES_PER_CHUNK) &&
-            ((out_bytes + SSZ_BYTES_PER_CHUNK <= left_bytes) ||
-             (out_bytes >= left_bytes + ((size_t)SSZ_BYTES_PER_CHUNK * 2u))))
+            !ssz_internal_byte_ranges_overlap(
+                left_bytes,
+                (size_t)SSZ_BYTES_PER_CHUNK * 2u,
+                out->bytes,
+                SSZ_BYTES_PER_CHUNK))
         {
             return ssz_internal_sha256_64_batch_default(left_bytes, 1u, out);
         }
