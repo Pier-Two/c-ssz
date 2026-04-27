@@ -231,6 +231,11 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
             (void)ssz_hash_sha256(NULL, 0u, out);
             (void)ssz_hash_sha256(NULL, 1u, out);
             (void)ssz_hash_sha256(input.ptr, data_len, NULL);
+            const ssz_hash_fn_t *default_hash = ssz_hash_default();
+            if ((default_hash != NULL) && (default_hash->hash != NULL))
+            {
+                (void)default_hash->hash(default_hash->ctx, input.ptr, data_len, out);
+            }
 #if SIZE_MAX > UINT32_MAX
             (void)ssz_hash_sha256(input.ptr, (size_t)UINT32_MAX + 1u, out);
 #endif
