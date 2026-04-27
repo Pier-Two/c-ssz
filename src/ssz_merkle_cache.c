@@ -1727,7 +1727,18 @@ static ssz_error_t ssz_merkle_cache_internal_migrate_nodes(
             {
                 dst_level_nodes = &dst->nodes[dst->level_offsets[level]];
 
-                if (src_width_sz != 0u)
+                if (level > src->depth)
+                {
+                    const ssz_chunk_t *child_level_nodes =
+                        &dst->nodes[dst->level_offsets[level - 1u]];
+
+                    err = ssz_hash_2to1_batch(
+                        dst->hash_fn,
+                        child_level_nodes,
+                        dst_width_sz,
+                        dst_level_nodes);
+                }
+                else if (src_width_sz != 0u)
                 {
                     (void)memcpy(
                         dst_level_nodes,
@@ -1739,9 +1750,20 @@ static ssz_error_t ssz_merkle_cache_internal_migrate_nodes(
                     /* intentionally empty */
                 }
 
-                for (size_t i = src_width_sz; i < dst_width_sz; i++)
+                if (err != SSZ_SUCCESS)
                 {
-                    dst_level_nodes[i] = dst->zero_hashes[level];
+                    /* propagate error */
+                }
+                else if (level <= src->depth)
+                {
+                    for (size_t i = src_width_sz; i < dst_width_sz; i++)
+                    {
+                        dst_level_nodes[i] = dst->zero_hashes[level];
+                    }
+                }
+                else
+                {
+                    /* rebuilt from the destination child level */
                 }
             }
         }
@@ -2105,10 +2127,18 @@ ssz_error_t ssz_merkle_cache_migrate_into(
 
     if (err == SSZ_SUCCESS)
     {
-        out_cache->cached_data_root = src->cached_data_root;
-        out_cache->cached_root = src->cached_root;
-        out_cache->data_root_valid = src->data_root_valid;
-        out_cache->final_root_valid = src->final_root_valid;
+        if (src->depth == out_cache->depth)
+        {
+            out_cache->cached_data_root = src->cached_data_root;
+            out_cache->cached_root = src->cached_root;
+            out_cache->data_root_valid = src->data_root_valid;
+            out_cache->final_root_valid = src->final_root_valid;
+        }
+        else
+        {
+            out_cache->data_root_valid = false;
+            out_cache->final_root_valid = false;
+        }
         out_cache->needs_resync = src->needs_resync;
     }
     else
@@ -2242,6 +2272,10 @@ ssz_error_t ssz_merkle_cache_update_root_range(
     if (!ssz_merkle_cache_internal_cache_is_bound(cache))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
+    }
+    else if (root_count == 0u)
+    {
+        return SSZ_SUCCESS;
     }
     else if ((root_count != 0u) && (roots == NULL))
     {
