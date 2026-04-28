@@ -1114,11 +1114,7 @@ static ssz_error_t ssz_merkle_cache_internal_recompute_data_root(ssz_merkle_cach
 
             if (err == SSZ_SUCCESS)
             {
-                if (current_is_leaf)
-                {
-                    ssz_merkle_cache_internal_dirty_set_clear(&leaf_set);
-                }
-                else if (current_scratch != NULL)
+                if (!current_is_leaf && (current_scratch != NULL))
                 {
                     ssz_merkle_cache_internal_dirty_set_clear(current_scratch);
                 }
@@ -1136,6 +1132,11 @@ static ssz_error_t ssz_merkle_cache_internal_recompute_data_root(ssz_merkle_cach
             {
                 /* intentionally empty */
             }
+        }
+
+        if (err == SSZ_SUCCESS)
+        {
+            ssz_merkle_cache_internal_dirty_set_clear(&leaf_set);
         }
 
         if (current_scratch != NULL)

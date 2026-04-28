@@ -420,6 +420,32 @@ static ssz_error_t counting_hash(
 
 typedef struct
 {
+    size_t hash_calls;
+    size_t fail_on_call;
+} retry_hash_ctx_t;
+
+static ssz_error_t retry_hash(
+    const void *ctx,
+    const uint8_t *data,
+    size_t data_len,
+    uint8_t out[32])
+{
+    retry_hash_ctx_t *retry = (retry_hash_ctx_t *)ctx;
+
+    if (retry != NULL)
+    {
+        retry->hash_calls++;
+        if ((retry->fail_on_call != 0u) && (retry->hash_calls == retry->fail_on_call))
+        {
+            return SSZ_ERR_HASH_FAILURE;
+        }
+    }
+
+    return ssz_hash_sha256(data, data_len, out);
+}
+
+typedef struct
+{
     const ssz_chunk_t *roots;
     const uint64_t *tokens;
     uint64_t count;
@@ -616,6 +642,52 @@ static bool test_unchanged_query_returns_o1_cached_result(void)
     ASSERT_TRUE(counter.hash_calls == 0u);
 
     cache_fixture_cleanup(&fixture);
+    return true;
+}
+
+static bool retry_data_root_after_hash_failure(uint64_t leaf_limit, size_t fail_on_call)
+{
+    retry_hash_ctx_t retry = {0u, 0u};
+    const ssz_hash_fn_t hash_fn = {
+        .hash = retry_hash,
+        .hash_2to1 = NULL,
+        .hash_2to1_batch = NULL,
+        .ctx = &retry,
+    };
+    const ssz_merkle_cache_config_t cfg =
+        make_cache_config(0u, leaf_limit, 0u, 0u, false, &hash_fn);
+    cache_fixture_t fixture;
+    ssz_chunk_t leaf = make_chunk(0x42u);
+    ssz_chunk_t first;
+    ssz_chunk_t second;
+    ssz_chunk_t expected;
+
+    ASSERT_ERR(cache_fixture_init(&fixture, &cfg, false), SSZ_SUCCESS);
+    ASSERT_ERR(ssz_merkle_cache_update_root_range(&fixture.cache, 0u, &leaf, 1u), SSZ_SUCCESS);
+
+    retry.hash_calls = 0u;
+    retry.fail_on_call = 0u;
+    ASSERT_ERR(ssz_merkleize(&leaf, 1u, leaf_limit, &hash_fn, &expected), SSZ_SUCCESS);
+
+    retry.hash_calls = 0u;
+    retry.fail_on_call = fail_on_call;
+    ASSERT_ERR(ssz_merkle_cache_data_root(&fixture.cache, &first), SSZ_ERR_HASH_FAILURE);
+    ASSERT_TRUE(retry.hash_calls == fail_on_call);
+
+    retry.hash_calls = 0u;
+    retry.fail_on_call = 0u;
+    ASSERT_ERR(ssz_merkle_cache_data_root(&fixture.cache, &second), SSZ_SUCCESS);
+    ASSERT_TRUE(retry.hash_calls != 0u);
+    ASSERT_CHUNK_EQ(second, expected);
+
+    cache_fixture_cleanup(&fixture);
+    return true;
+}
+
+static bool test_data_root_retry_after_hash_failure(void)
+{
+    ASSERT_TRUE(retry_data_root_after_hash_failure(4u, 2u));
+    ASSERT_TRUE(retry_data_root_after_hash_failure(8u, 3u));
     return true;
 }
 
@@ -1147,6 +1219,7 @@ int main(void)
         {"multiple_scattered_leaf_updates_and_root_correctness",
          test_multiple_scattered_leaf_updates_and_root_correctness},
         {"unchanged_query_returns_o1_cached_result", test_unchanged_query_returns_o1_cached_result},
+        {"data_root_retry_after_hash_failure", test_data_root_retry_after_hash_failure},
         {"sync_packed_bytes_correctness", test_sync_packed_bytes_correctness},
         {"bitvector_and_bitlist_tail_validation", test_bitvector_and_bitlist_tail_validation},
         {"composite_sync_safe_fallback", test_composite_sync_safe_fallback},

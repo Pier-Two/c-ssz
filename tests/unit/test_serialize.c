@@ -1104,6 +1104,81 @@ static bool test_serialize_fixed_collection_error_paths(void)
     return true;
 }
 
+static bool test_serialize_fixed_collection_uint32_bound(void)
+{
+#if SIZE_MAX > UINT32_MAX
+    const uint8_t element = 0x11u;
+    size_t out_len = 0u;
+
+    ASSERT_ERR(
+        ssz_serialize_vector_fixed(
+            &element,
+            ((uint64_t)UINT32_MAX) + 1u,
+            1u,
+            NULL,
+            0u,
+            &out_len),
+        SSZ_ERR_OVERFLOW);
+
+    ASSERT_ERR(
+        ssz_serialize_list_fixed(
+            &element,
+            ((uint64_t)UINT32_MAX) + 1u,
+            SSZ_NO_LIMIT,
+            1u,
+            NULL,
+            0u,
+            &out_len),
+        SSZ_ERR_OVERFLOW);
+#endif
+
+    return true;
+}
+
+static bool test_serialize_variable_collection_offset_table_bound(void)
+{
+#if SIZE_MAX > UINT32_MAX
+    size_t out_len = 0u;
+    const size_t lengths[1] = {0u};
+    const ssz_error_t errors[1] = {SSZ_ERR_TYPE_MISMATCH};
+    scripted_write_ctx_t vector_ctx = {
+        .lengths = lengths,
+        .errors = errors,
+        .step_count = 1u,
+        .step_index = 0u,
+        .fill = 0u,
+    };
+    scripted_write_ctx_t list_ctx = {
+        .lengths = lengths,
+        .errors = errors,
+        .step_count = 1u,
+        .step_index = 0u,
+        .fill = 0u,
+    };
+    ssz_member_codec_t vector_codec = make_scripted_codec(&vector_ctx);
+    ssz_member_codec_t list_codec = make_scripted_codec(&list_ctx);
+    const uint64_t element_count = (((uint64_t)UINT32_MAX) / SSZ_BYTES_PER_LENGTH_OFFSET) + 1u;
+
+    ASSERT_ERR(
+        ssz_serialize_vector_variable(element_count, &vector_codec, NULL, 0u, &out_len),
+        SSZ_ERR_OVERFLOW);
+    ASSERT_TRUE(vector_ctx.step_index == 0u);
+
+    ASSERT_ERR(
+        ssz_serialize_list_variable(
+            element_count,
+            SSZ_NO_LIMIT,
+            &list_codec,
+            NULL,
+            0u,
+            &out_len),
+        SSZ_ERR_OVERFLOW);
+    ASSERT_TRUE(list_ctx.step_index == 0u);
+#endif
+
+    return true;
+}
+
 static bool test_serialize_vector_variable_error_paths(void)
 {
     uint8_t out[16] = {0u};
@@ -2448,6 +2523,10 @@ int main(void)
         {"serialize_bitvector_and_bitlist_error_paths",
          test_serialize_bitvector_and_bitlist_error_paths},
         {"serialize_fixed_collection_error_paths", test_serialize_fixed_collection_error_paths},
+        {"serialize_fixed_collection_uint32_bound",
+         test_serialize_fixed_collection_uint32_bound},
+        {"serialize_variable_collection_offset_table_bound",
+         test_serialize_variable_collection_offset_table_bound},
         {"serialize_vector_variable_error_paths", test_serialize_vector_variable_error_paths},
         {"serialize_list_variable_error_paths", test_serialize_list_variable_error_paths},
         {"serialize_list_variable_out_buffer_edge_paths",
