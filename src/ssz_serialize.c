@@ -297,6 +297,10 @@ ssz_error_t ssz_serialize_vector_fixed(
     {
         err = SSZ_ERR_OVERFLOW;
     }
+    else if (required > UINT32_MAX)
+    {
+        err = SSZ_ERR_OVERFLOW;
+    }
     else if ((required != 0u) && (elements == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
@@ -340,6 +344,10 @@ ssz_error_t ssz_serialize_vector_variable(
                  (size_t)element_count,
                  SSZ_BYTES_PER_LENGTH_OFFSET,
                  &fixed_region))
+    {
+        err = SSZ_ERR_OVERFLOW;
+    }
+    else if (fixed_region > UINT32_MAX)
     {
         err = SSZ_ERR_OVERFLOW;
     }
@@ -438,6 +446,10 @@ ssz_error_t ssz_serialize_list_fixed(
     {
         err = SSZ_ERR_OVERFLOW;
     }
+    else if (required > UINT32_MAX)
+    {
+        err = SSZ_ERR_OVERFLOW;
+    }
     else if ((required != 0u) && (elements == NULL))
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
@@ -481,6 +493,10 @@ ssz_error_t ssz_serialize_list_variable(
                  (size_t)element_count,
                  SSZ_BYTES_PER_LENGTH_OFFSET,
                  &fixed_region))
+    {
+        err = SSZ_ERR_OVERFLOW;
+    }
+    else if (fixed_region > UINT32_MAX)
     {
         err = SSZ_ERR_OVERFLOW;
     }
