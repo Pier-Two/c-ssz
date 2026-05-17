@@ -1,0 +1,8 @@
+-Q . SSZFormal
+-arg -w
+-arg -notation-overridden,-deprecated-from-Coq
+
+clight/ssz_endian.v
+model/ssz_endian_model.v
+spec/ssz_endian_spec.v
+verif/verif_ssz_endian.v
