@@ -32,8 +32,8 @@ cd c-ssz/formal
 
 This regenerates the Clight translation of every `../src/*.c` listed in
 [_CoqProject](_CoqProject), compiles the models, specifications, and proofs,
-and exits zero only if every theorem closes with no `Admitted`, `admit`, or
-`Axiom`.
+and exits zero only if every theorem closes without proof stubs or extra
+assumptions.
 
 ## Layout
 
@@ -43,7 +43,6 @@ and exits zero only if every theorem closes with no `Admitted`, `admit`, or
 | [model/](model/) | Pure Coq reference models for the SSZ contract |
 | [spec/](spec/) | VST function specifications |
 | [verif/](verif/) | VST proofs, one file per implementation file |
-| [findings/](findings/) | Triage notes produced by failed or completed proofs |
 | [scripts/clightgen.sh](scripts/clightgen.sh) | Regenerates Clight from `../src/` |
 | [scripts/verify.sh](scripts/verify.sh) | Single end to end entry point |
 | [scripts/triage.sh](scripts/triage.sh) | Helper for classifying proof failures |
@@ -53,7 +52,7 @@ and exits zero only if every theorem closes with no `Admitted`, `admit`, or
 The **Spec** column has a ✅ when a VST function specification exists in
 [spec/](spec/) and references a Coq reference model in [model/](model/). The
 **Verification** column has a ✅ when a `semax_body` proof in [verif/](verif/)
-closes with no `Admitted`, `admit`, or `Axiom`.
+closes without proof stubs or extra assumptions.
 
 ### ssz_deserialize.c
 
@@ -85,11 +84,11 @@ closes with no `Admitted`, `admit`, or `Axiom`.
 | Function | Spec | Verification |
 | --- | :---: | :---: |
 | ssz_internal_write_u16_le | ✅ | ✅ |
-| ssz_internal_write_u32_le |   |   |
-| ssz_internal_write_u64_le |   |   |
+| ssz_internal_write_u32_le | ✅ | ✅ |
+| ssz_internal_write_u64_le | ✅ | ✅ |
 | ssz_internal_read_u16_le | ✅ | ✅ |
-| ssz_internal_read_u32_le |   |   |
-| ssz_internal_read_u64_le |   |   |
+| ssz_internal_read_u32_le | ✅ | ✅ |
+| ssz_internal_read_u64_le | ✅ | ✅ |
 
 ### ssz_hash.c
 
@@ -299,8 +298,3 @@ closes with no `Admitted`, `admit`, or `Axiom`.
 | ssz_is_zero_container |   |   |
 | ssz_is_zero_union |   |   |
 | ssz_error_string |   |   |
-
-## Findings
-
-Triage notes for completed or stuck proofs live in [findings/](findings/). The
-current set of findings is in [findings/TEMPLATE.md](findings/TEMPLATE.md).
