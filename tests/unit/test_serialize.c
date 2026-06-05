@@ -973,7 +973,7 @@ static bool test_serialize_bitvector_and_bitlist_error_paths(void)
             out,
             sizeof(out),
             &out_len),
-        SSZ_ERR_OVERFLOW);
+        SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(
         ssz_serialize_bitvector(NULL, 0u, 8u, out, sizeof(out), &out_len),
         SSZ_ERR_INVALID_ARGUMENT);
@@ -991,7 +991,7 @@ static bool test_serialize_bitvector_and_bitlist_error_paths(void)
             out,
             sizeof(out),
             &out_len),
-        SSZ_ERR_OVERFLOW);
+        SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(
         ssz_serialize_bitlist(NULL, 0u, 1u, SSZ_NO_LIMIT, out, sizeof(out), &out_len),
         SSZ_ERR_INVALID_ARGUMENT);

@@ -31,3 +31,10 @@ clightgen \
   -I"${CSSZ_ROOT}/src" \
   "${CSSZ_ROOT}/src/ssz_endian.c" \
   -o "${FORMAL_DIR}/clight/ssz_endian.v"
+
+clightgen \
+  -normalize \
+  -I"${CSSZ_ROOT}/include" \
+  -I"${CSSZ_ROOT}/src" \
+  "${CSSZ_ROOT}/src/ssz_serialize.c" \
+  -o "${FORMAL_DIR}/clight/ssz_serialize.v"

@@ -264,14 +264,14 @@ closes without proof stubs or extra assumptions.
 
 | Function | Spec | Verification |
 | --- | :---: | :---: |
-| ssz_internal_prepare_output |   |   |
-| ssz_serialize_uint8 |   |   |
-| ssz_serialize_uint16 |   |   |
-| ssz_serialize_uint32 |   |   |
-| ssz_serialize_uint64 |   |   |
-| ssz_serialize_uint128 |   |   |
-| ssz_serialize_uint256 |   |   |
-| ssz_serialize_boolean |   |   |
+| ssz_internal_prepare_output | ✅ | ✅ |
+| ssz_serialize_uint8 | ✅ | ✅ |
+| ssz_serialize_uint16 | ✅ | ✅ |
+| ssz_serialize_uint32 | ✅ | ✅ |
+| ssz_serialize_uint64 | ✅ | ✅ |
+| ssz_serialize_uint128 | ✅ | ✅ |
+| ssz_serialize_uint256 | ✅ | ✅ |
+| ssz_serialize_boolean | ✅ | ✅ |
 | ssz_serialize_bitvector |   |   |
 | ssz_serialize_bitlist |   |   |
 | ssz_serialize_vector_fixed |   |   |

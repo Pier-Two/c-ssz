@@ -551,12 +551,41 @@ static bool test_container_error_and_early_return_paths(void)
     return true;
 }
 
+static bool test_bits_to_bytes_uint64_boundary(void)
+{
+    const uint64_t bit_count = UINT64_MAX;
+    const uint64_t expected_u64 = (UINT64_MAX / 8u) + 1u;
+    size_t out = 0u;
+
+    if (expected_u64 <= (uint64_t)SIZE_MAX)
+    {
+        ASSERT_TRUE(ssz_internal_bits_to_bytes(bit_count, &out));
+        ASSERT_SIZE_EQ(out, (size_t)expected_u64);
+        ASSERT_TRUE(ssz_internal_bits_to_bytes(bit_count, NULL));
+
+        out = 0u;
+        ASSERT_TRUE(ssz_types_internal_bits_to_bytes(bit_count, &out));
+        ASSERT_SIZE_EQ(out, (size_t)expected_u64);
+        ASSERT_TRUE(ssz_types_internal_bits_to_bytes(bit_count, NULL));
+    }
+    else
+    {
+        ASSERT_FALSE(ssz_internal_bits_to_bytes(bit_count, &out));
+        ASSERT_FALSE(ssz_internal_bits_to_bytes(bit_count, NULL));
+        ASSERT_FALSE(ssz_types_internal_bits_to_bytes(bit_count, &out));
+        ASSERT_FALSE(ssz_types_internal_bits_to_bytes(bit_count, NULL));
+    }
+
+    return true;
+}
+
 int main(void)
 {
     const test_case_t tests[] = {
         {"capture_member_error_paths", test_capture_member_error_paths},
         {"member_is_default_error_paths", test_member_is_default_error_paths},
         {"container_error_and_early_return_paths", test_container_error_and_early_return_paths},
+        {"bits_to_bytes_uint64_boundary", test_bits_to_bytes_uint64_boundary},
     };
 
     for (size_t i = 0u; i < (sizeof(tests) / sizeof(tests[0])); i++)

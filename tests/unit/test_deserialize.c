@@ -1353,7 +1353,7 @@ static bool test_deserialize_bitfield_error_paths(void)
             UINT64_MAX,
             out_bits,
             sizeof(out_bits)),
-        SSZ_ERR_OVERFLOW);
+        SSZ_ERR_ENCODING_INVALID);
     ASSERT_ERR(
         ssz_deserialize_bitvector(NULL, 1u, 8u, out_bits, sizeof(out_bits)),
         SSZ_ERR_ENCODING_INVALID);

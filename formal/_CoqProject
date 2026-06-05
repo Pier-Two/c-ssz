@@ -3,6 +3,10 @@
 -arg -notation-overridden,-deprecated-from-Coq
 
 clight/ssz_endian.v
+clight/ssz_serialize.v
 model/ssz_endian_model.v
+model/ssz_serialize_model.v
 spec/ssz_endian_spec.v
+spec/ssz_serialize_spec.v
 verif/verif_ssz_endian.v
+verif/verif_ssz_serialize.v

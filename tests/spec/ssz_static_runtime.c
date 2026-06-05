@@ -78,15 +78,14 @@ static bool ssz_static_u64_to_size(uint64_t value, size_t *out)
 
 static bool ssz_static_bits_to_bytes(uint64_t bit_count, size_t *out_bytes)
 {
-    bool converted = false;
+    uint64_t bytes_u64 = bit_count / 8u;
 
-    if (bit_count <= (UINT64_MAX - 7u))
+    if ((bit_count % 8u) != 0u)
     {
-        uint64_t bytes_u64 = (bit_count + 7u) / 8u;
-        converted = ssz_static_u64_to_size(bytes_u64, out_bytes);
+        bytes_u64++;
     }
 
-    return converted;
+    return ssz_static_u64_to_size(bytes_u64, out_bytes);
 }
 
 static const ssz_static_schema_type_t *ssz_static_type_at(uint32_t type_index)

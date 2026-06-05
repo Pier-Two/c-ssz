@@ -122,16 +122,14 @@ static inline bool ssz_internal_u64_to_size(uint64_t value, size_t *out)
 
 static inline bool ssz_internal_bits_to_bytes(uint64_t bit_count, size_t *out_bytes)
 {
-    uint64_t bytes_u64 = 0u;
-    bool converted = false;
+    uint64_t bytes_u64 = bit_count / 8u;
 
-    if (!ssz_internal_add_overflow_u64(bit_count, 7u, &bytes_u64))
+    if ((bit_count % 8u) != 0u)
     {
-        bytes_u64 /= 8u;
-        converted = ssz_internal_u64_to_size(bytes_u64, out_bytes);
+        bytes_u64++;
     }
 
-    return converted;
+    return ssz_internal_u64_to_size(bytes_u64, out_bytes);
 }
 
 static inline bool ssz_internal_get_bit_le(const uint8_t *bits_le, uint64_t bit_index)
