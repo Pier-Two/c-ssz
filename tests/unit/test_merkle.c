@@ -11,6 +11,13 @@ static const ssz_merkle_scratch_t g_test_merkle_scratch = {
     .chunk_count = SSZ_MERKLE_SCRATCH_MAX_CHUNKS,
 };
 
+static ssz_error_t expected_uint64_max_bit_count_error(ssz_error_t size_t_fit_error)
+{
+    const uint64_t byte_count = (UINT64_MAX / UINT64_C(8)) + UINT64_C(1);
+
+    return (byte_count > (uint64_t)SIZE_MAX) ? SSZ_ERR_OVERFLOW : size_t_fit_error;
+}
+
 #define ssz_hash_tree_root_bitvector(bits_le, bits_le_len, bit_count, hash_fn, out_root) \
     ssz_hash_tree_root_bitvector(                                                        \
         (bits_le),                                                                       \
@@ -753,7 +760,7 @@ static bool test_merkle_additional_error_paths(void)
         SSZ_ERR_SCHEMA_INVALID);
     ASSERT_ERR(
         ssz_hash_tree_root_bitvector(&one_byte, 1u, UINT64_MAX, NULL, &root),
-        SSZ_ERR_INVALID_ARGUMENT);
+        expected_uint64_max_bit_count_error(SSZ_ERR_INVALID_ARGUMENT));
     ASSERT_ERR(ssz_hash_tree_root_bitvector(NULL, 0u, 8u, NULL, &root), SSZ_ERR_INVALID_ARGUMENT);
     ASSERT_ERR(
         ssz_hash_tree_root_bitvector(((const uint8_t[2]){0xFFu, 0xC0u}), 2u, 10u, NULL, &root),
@@ -772,7 +779,7 @@ static bool test_merkle_additional_error_paths(void)
         SSZ_ERR_LIMIT_EXCEEDED);
     ASSERT_ERR(
         ssz_hash_tree_root_bitlist(&one_byte, 1u, UINT64_MAX, SSZ_NO_LIMIT, NULL, &root),
-        SSZ_ERR_INVALID_ARGUMENT);
+        expected_uint64_max_bit_count_error(SSZ_ERR_INVALID_ARGUMENT));
     ASSERT_ERR(
         ssz_hash_tree_root_bitlist(NULL, 0u, 1u, SSZ_NO_LIMIT, NULL, &root),
         SSZ_ERR_INVALID_ARGUMENT);
