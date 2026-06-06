@@ -1342,8 +1342,14 @@ ssz_error_t ssz_hash_tree_root_bitvector(
     {
         err = SSZ_ERR_INVALID_ARGUMENT;
     }
+    else if (ssz_internal_add_overflow_u64(bit_count, 255u, &chunk_limit))
+    {
+        err = SSZ_ERR_OVERFLOW;
+    }
     else
     {
+        chunk_limit /= 256u;
+
         if ((bit_count % 8u) != 0u)
         {
             uint8_t mask = (uint8_t)((1u << (bit_count % 8u)) - 1u);
@@ -1353,13 +1359,8 @@ ssz_error_t ssz_hash_tree_root_bitvector(
             }
         }
 
-        if ((err == SSZ_SUCCESS) && ssz_internal_add_overflow_u64(bit_count, 255u, &chunk_limit))
-        {
-            err = SSZ_ERR_OVERFLOW;
-        }
         if (err == SSZ_SUCCESS)
         {
-            chunk_limit /= 256u;
             err = ssz_internal_merkleize_packed_bytes(
                 bits_le,
                 bitfield_bytes,

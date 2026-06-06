@@ -345,7 +345,7 @@ static void fuzz_cover_merkle_errors(void)
     (void)ssz_hash_tree_root_bitlist(bits_ok, 1u, 8u, SSZ_NO_LIMIT, ssz_hash_default(), NULL);
     (void)ssz_hash_tree_root_bitlist(
         bits_ok,
-        SIZE_MAX,
+        sizeof(bits_ok),
         UINT64_MAX,
         SSZ_NO_LIMIT,
         ssz_hash_default(),

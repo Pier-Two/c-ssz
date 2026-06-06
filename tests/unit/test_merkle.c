@@ -767,6 +767,9 @@ static bool test_merkle_additional_error_paths(void)
         SSZ_ERR_ENCODING_INVALID);
 #if SIZE_MAX > UINT32_MAX
     ASSERT_ERR(
+        ssz_hash_tree_root_bitvector(&one_byte, SIZE_MAX, UINT64_MAX, NULL, &root),
+        SSZ_ERR_OVERFLOW);
+    ASSERT_ERR(
         ssz_hash_tree_root_bitvector(&one_byte, SIZE_MAX, UINT64_MAX - 15u, NULL, &root),
         SSZ_ERR_OVERFLOW);
 #endif
