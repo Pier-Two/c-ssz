@@ -187,15 +187,14 @@ static inline bool ssz_types_internal_u64_to_size(uint64_t value, size_t *out)
 
 static inline bool ssz_types_internal_bits_to_bytes(uint64_t bit_count, size_t *out_bytes)
 {
-    bool converted = false;
+    uint64_t bytes_u64 = bit_count / 8u;
 
-    if (bit_count <= (UINT64_MAX - 7u))
+    if ((bit_count % 8u) != 0u)
     {
-        uint64_t bytes_u64 = (bit_count + 7u) / 8u;
-        converted = ssz_types_internal_u64_to_size(bytes_u64, out_bytes);
+        bytes_u64++;
     }
 
-    return converted;
+    return ssz_types_internal_u64_to_size(bytes_u64, out_bytes);
 }
 
 static inline bool ssz_types_internal_bytes_are_zero(const uint8_t *bytes, size_t byte_count)
