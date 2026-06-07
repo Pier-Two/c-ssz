@@ -775,7 +775,8 @@ Definition serialize_output_pre
       (data_at_ sh_len tulong out_len * valid_pointer out)%logic
   | Serialize_output_buffer out out_len sh_len sh_out =>
       (data_at_ sh_len tulong out_len *
-       data_at_ sh_out (tarray tuchar required) out)%logic
+       data_at_ sh_out (tarray tuchar required) out *
+       valid_pointer out)%logic
   end.
 
 Definition serialize_output_result
@@ -797,7 +798,8 @@ Definition serialize_output_post
   | Serialize_output_buffer out out_len sh_len sh_out =>
       (data_at sh_len tulong (Vlong (Int64.repr required)) out_len *
        data_at sh_out (tarray tuchar required)
-         (map Vubyte contents) out)%logic
+         (map Vubyte contents) out *
+       valid_pointer out)%logic
   end.
 
 Inductive serialize_bitvector_case : Type :=
@@ -963,6 +965,8 @@ Definition serialize_bitvector_prop (c : serialize_bitvector_case) : Prop :=
 
 Definition serialize_bitvector_pre (c : serialize_bitvector_case) : mpred :=
   match c with
+  | Serialize_bitvector_bits_short bits_le _ _ _ _ _ =>
+      valid_pointer bits_le
   | Serialize_bitvector_padding_invalid bits_le _ _ sh_bits
       bytes _ bit_count _ =>
       data_at sh_bits (tarray tuchar (ssz_bits_to_bytes bit_count))
@@ -998,6 +1002,8 @@ Definition serialize_bitvector_result (c : serialize_bitvector_case) : Z :=
 
 Definition serialize_bitvector_post (c : serialize_bitvector_case) : mpred :=
   match c with
+  | Serialize_bitvector_bits_short bits_le _ _ _ _ _ =>
+      valid_pointer bits_le
   | Serialize_bitvector_padding_invalid bits_le _ _ sh_bits
       bytes _ bit_count _ =>
       data_at sh_bits (tarray tuchar (ssz_bits_to_bytes bit_count))
@@ -1314,6 +1320,7 @@ Definition ssz_serialize_bitlist_spec : ident * funspec :=
 Definition Gprog : funspecs :=
   ltac:(with_library prog
     [ssz_memcpy_spec;
+     ssz_internal_bits_to_bytes_spec;
      ssz_internal_prepare_output_spec;
      ssz_internal_write_u16_le_spec;
      ssz_internal_write_u32_le_spec;
@@ -1324,4 +1331,5 @@ Definition Gprog : funspecs :=
      ssz_serialize_uint64_spec;
      ssz_serialize_uint128_spec;
      ssz_serialize_uint256_spec;
-     ssz_serialize_boolean_spec]).
+     ssz_serialize_boolean_spec;
+     ssz_serialize_bitvector_spec]).

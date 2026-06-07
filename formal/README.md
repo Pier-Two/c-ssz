@@ -272,7 +272,7 @@ closes without proof stubs or extra assumptions.
 | ssz_serialize_uint128 | ✅ | ✅ |
 | ssz_serialize_uint256 | ✅ | ✅ |
 | ssz_serialize_boolean | ✅ | ✅ |
-| ssz_serialize_bitvector |   |   |
+| ssz_serialize_bitvector | ✅ | ✅ |
 | ssz_serialize_bitlist |   |   |
 | ssz_serialize_vector_fixed |   |   |
 | ssz_serialize_vector_variable |   |   |

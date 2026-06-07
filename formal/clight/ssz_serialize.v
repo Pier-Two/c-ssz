@@ -133,7 +133,6 @@ Definition _root : ident := $"root".
 Definition _schema : ident := $"schema".
 Definition _selector : ident := $"selector".
 Definition _ssz_internal_add_overflow_size : ident := $"ssz_internal_add_overflow_size".
-Definition _ssz_internal_add_overflow_u64 : ident := $"ssz_internal_add_overflow_u64".
 Definition _ssz_internal_bits_to_bytes : ident := $"ssz_internal_bits_to_bytes".
 Definition _ssz_internal_mul_overflow_size : ident := $"ssz_internal_mul_overflow_size".
 Definition _ssz_internal_prepare_output : ident := $"ssz_internal_prepare_output".
@@ -281,29 +280,6 @@ Definition f_ssz_internal_mul_overflow_size := {|
     (Sreturn (Some (Etempvar _overflow tbool)))))
 |}.
 
-Definition f_ssz_internal_add_overflow_u64 := {|
-  fn_return := tbool;
-  fn_callconv := cc_default;
-  fn_params := ((_a, tulong) :: (_b, tulong) :: (_out, (tptr tulong)) :: nil);
-  fn_vars := nil;
-  fn_temps := ((_overflow, tbool) :: nil);
-  fn_body :=
-(Ssequence
-  (Sset _overflow (Ecast (Econst_int (Int.repr 0) tint) tbool))
-  (Ssequence
-    (Sifthenelse (Ebinop Ogt (Etempvar _a tulong)
-                   (Ebinop Osub (Econst_long (Int64.repr (-1)) tulong)
-                     (Etempvar _b tulong) tulong) tint)
-      (Sset _overflow (Ecast (Econst_int (Int.repr 1) tint) tbool))
-      (Sifthenelse (Ebinop One (Etempvar _out (tptr tulong))
-                     (Ecast (Econst_int (Int.repr 0) tint) (tptr tvoid))
-                     tint)
-        (Sassign (Ederef (Etempvar _out (tptr tulong)) tulong)
-          (Ebinop Oadd (Etempvar _a tulong) (Etempvar _b tulong) tulong))
-        Sskip))
-    (Sreturn (Some (Etempvar _overflow tbool)))))
-|}.
-
 Definition f_ssz_internal_u64_to_size := {|
   fn_return := tbool;
   fn_callconv := cc_default;
@@ -333,43 +309,30 @@ Definition f_ssz_internal_bits_to_bytes := {|
   fn_return := tbool;
   fn_callconv := cc_default;
   fn_params := ((_bit_count, tulong) :: (_out_bytes, (tptr tulong)) :: nil);
-  fn_vars := ((_bytes_u64, tulong) :: nil);
-  fn_temps := ((_converted, tbool) :: (_t'2, tbool) :: (_t'1, tbool) ::
-               (_t'4, tulong) :: (_t'3, tulong) :: nil);
+  fn_vars := nil;
+  fn_temps := ((_bytes_u64, tulong) :: (_t'1, tbool) :: nil);
   fn_body :=
 (Ssequence
-  (Sassign (Evar _bytes_u64 tulong) (Econst_int (Int.repr 0) tuint))
+  (Sset _bytes_u64
+    (Ebinop Odiv (Etempvar _bit_count tulong) (Econst_int (Int.repr 8) tuint)
+      tulong))
   (Ssequence
-    (Sset _converted (Ecast (Econst_int (Int.repr 0) tint) tbool))
+    (Sifthenelse (Ebinop One
+                   (Ebinop Omod (Etempvar _bit_count tulong)
+                     (Econst_int (Int.repr 8) tuint) tulong)
+                   (Econst_int (Int.repr 0) tuint) tint)
+      (Sset _bytes_u64
+        (Ebinop Oadd (Etempvar _bytes_u64 tulong)
+          (Econst_int (Int.repr 1) tint) tulong))
+      Sskip)
     (Ssequence
-      (Ssequence
-        (Scall (Some _t'2)
-          (Evar _ssz_internal_add_overflow_u64 (Tfunction
-                                                 (tulong :: tulong ::
-                                                  (tptr tulong) :: nil) tbool
-                                                 cc_default))
-          ((Etempvar _bit_count tulong) :: (Econst_int (Int.repr 7) tuint) ::
-           (Eaddrof (Evar _bytes_u64 tulong) (tptr tulong)) :: nil))
-        (Sifthenelse (Eunop Onotbool (Etempvar _t'2 tbool) tint)
-          (Ssequence
-            (Ssequence
-              (Sset _t'4 (Evar _bytes_u64 tulong))
-              (Sassign (Evar _bytes_u64 tulong)
-                (Ebinop Odiv (Etempvar _t'4 tulong)
-                  (Econst_int (Int.repr 8) tuint) tulong)))
-            (Ssequence
-              (Ssequence
-                (Sset _t'3 (Evar _bytes_u64 tulong))
-                (Scall (Some _t'1)
-                  (Evar _ssz_internal_u64_to_size (Tfunction
-                                                    (tulong ::
-                                                     (tptr tulong) :: nil)
-                                                    tbool cc_default))
-                  ((Etempvar _t'3 tulong) ::
-                   (Etempvar _out_bytes (tptr tulong)) :: nil)))
-              (Sset _converted (Ecast (Etempvar _t'1 tbool) tbool))))
-          Sskip))
-      (Sreturn (Some (Etempvar _converted tbool))))))
+      (Scall (Some _t'1)
+        (Evar _ssz_internal_u64_to_size (Tfunction
+                                          (tulong :: (tptr tulong) :: nil)
+                                          tbool cc_default))
+        ((Etempvar _bytes_u64 tulong) ::
+         (Etempvar _out_bytes (tptr tulong)) :: nil))
+      (Sreturn (Some (Etempvar _t'1 tbool))))))
 |}.
 
 Definition f_ssz_internal_selector_allowed := {|
@@ -3905,7 +3868,6 @@ Definition global_definitions : list (ident * globdef fundef type) :=
      cc_default)) ::
  (_ssz_internal_add_overflow_size, Gfun(Internal f_ssz_internal_add_overflow_size)) ::
  (_ssz_internal_mul_overflow_size, Gfun(Internal f_ssz_internal_mul_overflow_size)) ::
- (_ssz_internal_add_overflow_u64, Gfun(Internal f_ssz_internal_add_overflow_u64)) ::
  (_ssz_internal_u64_to_size, Gfun(Internal f_ssz_internal_u64_to_size)) ::
  (_ssz_internal_bits_to_bytes, Gfun(Internal f_ssz_internal_bits_to_bytes)) ::
  (_ssz_internal_selector_allowed, Gfun(Internal f_ssz_internal_selector_allowed)) ::
